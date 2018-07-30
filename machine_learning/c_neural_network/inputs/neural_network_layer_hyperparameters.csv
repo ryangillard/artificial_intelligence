@@ -1,0 +1,5 @@
+number_of_neurons,activation_type,activation_function_alpha,kernel_weight_initialization_type,kernel_weight_initialization_parameter0,kernel_weight_initialization_parameter1,kernel_weight_initialization_parameter2,kernel_l1_regularization_strength,kernel_l2_regularization_strength,bias_weight_initialization_type,bias_weight_initialization_parameter0,bias_weight_initialization_parameter1,bias_l1_regularization_strength,bias_l2_regularization_strength,dropout_probability,batch_norm_flag,batch_norm_after_activation_flag,batch_norm_momentum,batch_norm_moving_mean_initializer,batch_norm_moving_variance_initializer,batch_norm_beta_initializer,batch_norm_gamma_initializer
+784,-1,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,0,0
+256,3,0,4,0,0.1,0,0,0,0,0,0,0,0,0.9,1,1,0.9,0,1,0,1
+32,3,0,4,0,0.1,0,0,0,0,0,0,0,0,0.9,1,1,0.9,0,1,0,1
+10,7,0,4,0,0.1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0

@@ -1,0 +1,2 @@
+loss_function_type,classification_threshold,alpha_forgiveness_rate,beta_false_negatives_cost,gamma_false_positives_cost,train_percent,valid_percent,train_steps,eval_steps,batch_size,learning_rate,clip_norm,optimizer,optimizer_parameter0,optimizer_parameter1,optimizer_parameter2,optimizer_parameter3,optimizer_parameter4
+1,0.5,1,1,1,0.8,0.1,1000,50,32,0.1,0,0,0.9,0.99,0,0,0

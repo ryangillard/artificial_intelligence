@@ -1,0 +1,143 @@
+set term jpeg size 1920, 1200
+set output "/home/gillardrs/chess/chessboard.jpeg"
+#    Draw an 8 x 8 checkerboard of white and black squares.
+
+#
+#  Our plot is in the range 0 <= x <= 9, 0 <= y <= 9:
+#
+set xrange [ -0.5 : 8.5 ]
+set yrange [ -0.5 : 8.5 ]
+#
+#  We don't want a legend box to appear listing the data
+#  we are displaying.
+#
+set nokey
+#  Suppress the display of tics and labels along the axes.
+#
+unset tics
+#
+#  Make X and Y axes the same length.
+#
+set size ratio 1
+#
+#  Define 64 white and black boxes, tediously, by listing
+#  their lower left and upper right corners.
+#
+set object rectangle from 0,0 to 1,1 fc rgb "black"
+set object rectangle from 1,0 to 2,1 fc rgb "white"
+set object rectangle from 2,0 to 3,1 fc rgb "black"
+set object rectangle from 3,0 to 4,1 fc rgb "white"
+set object rectangle from 4,0 to 5,1 fc rgb "black"
+set object rectangle from 5,0 to 6,1 fc rgb "white"
+set object rectangle from 6,0 to 7,1 fc rgb "black"
+set object rectangle from 7,0 to 8,1 fc rgb "white"
+
+set object rectangle from 0,1 to 1,2 fc rgb "white"
+set object rectangle from 1,1 to 2,2 fc rgb "black"
+set object rectangle from 2,1 to 3,2 fc rgb "white"
+set object rectangle from 3,1 to 4,2 fc rgb "black"
+set object rectangle from 4,1 to 5,2 fc rgb "white"
+set object rectangle from 5,1 to 6,2 fc rgb "black"
+set object rectangle from 6,1 to 7,2 fc rgb "white"
+set object rectangle from 7,1 to 8,2 fc rgb "black"
+
+set object rectangle from 0,2 to 1,3 fc rgb "black"
+set object rectangle from 1,2 to 2,3 fc rgb "white"
+set object rectangle from 2,2 to 3,3 fc rgb "black"
+set object rectangle from 3,2 to 4,3 fc rgb "white"
+set object rectangle from 4,2 to 5,3 fc rgb "black"
+set object rectangle from 5,2 to 6,3 fc rgb "white"
+set object rectangle from 6,2 to 7,3 fc rgb "black"
+set object rectangle from 7,2 to 8,3 fc rgb "white"
+
+set object rectangle from 0,3 to 1,4 fc rgb "white"
+set object rectangle from 1,3 to 2,4 fc rgb "black"
+set object rectangle from 2,3 to 3,4 fc rgb "white"
+set object rectangle from 3,3 to 4,4 fc rgb "black"
+set object rectangle from 4,3 to 5,4 fc rgb "white"
+set object rectangle from 5,3 to 6,4 fc rgb "black"
+set object rectangle from 6,3 to 7,4 fc rgb "white"
+set object rectangle from 7,3 to 8,4 fc rgb "black"
+
+set object rectangle from 0,4 to 1,5 fc rgb "black"
+set object rectangle from 1,4 to 2,5 fc rgb "white"
+set object rectangle from 2,4 to 3,5 fc rgb "black"
+set object rectangle from 3,4 to 4,5 fc rgb "white"
+set object rectangle from 4,4 to 5,5 fc rgb "black"
+set object rectangle from 5,4 to 6,5 fc rgb "white"
+set object rectangle from 6,4 to 7,5 fc rgb "black"
+set object rectangle from 7,4 to 8,5 fc rgb "white"
+
+set object rectangle from 0,5 to 1,6 fc rgb "white"
+set object rectangle from 1,5 to 2,6 fc rgb "black"
+set object rectangle from 2,5 to 3,6 fc rgb "white"
+set object rectangle from 3,5 to 4,6 fc rgb "black"
+set object rectangle from 4,5 to 5,6 fc rgb "white"
+set object rectangle from 5,5 to 6,6 fc rgb "black"
+set object rectangle from 6,5 to 7,6 fc rgb "white"
+set object rectangle from 7,5 to 8,6 fc rgb "black"
+
+set object rectangle from 0,6 to 1,7 fc rgb "black"
+set object rectangle from 1,6 to 2,7 fc rgb "white"
+set object rectangle from 2,6 to 3,7 fc rgb "black"
+set object rectangle from 3,6 to 4,7 fc rgb "white"
+set object rectangle from 4,6 to 5,7 fc rgb "black"
+set object rectangle from 5,6 to 6,7 fc rgb "white"
+set object rectangle from 6,6 to 7,7 fc rgb "black"
+set object rectangle from 7,6 to 8,7 fc rgb "white"
+
+set object rectangle from 0,7 to 1,8 fc rgb "white"
+set object rectangle from 1,7 to 2,8 fc rgb "black"
+set object rectangle from 2,7 to 3,8 fc rgb "white"
+set object rectangle from 3,7 to 4,8 fc rgb "black"
+set object rectangle from 4,7 to 5,8 fc rgb "white"
+set object rectangle from 5,7 to 6,8 fc rgb "black"
+set object rectangle from 6,7 to 7,8 fc rgb "white"
+set object rectangle from 7,7 to 8,8 fc rgb "black"
+
+set label 1 "1" at -0.4,0.4 font "Times New Roman,40"
+set label 2 "2" at -0.4,1.4 font "Times New Roman,40"
+set label 3 "3" at -0.4,2.4 font "Times New Roman,40"
+set label 4 "4" at -0.4,3.4 font "Times New Roman,40"
+set label 5 "5" at -0.4,4.4 font "Times New Roman,40"
+set label 6 "6" at -0.4,5.4 font "Times New Roman,40"
+set label 7 "7" at -0.4,6.4 font "Times New Roman,40"
+set label 8 "8" at -0.4,7.4 font "Times New Roman,40"
+
+set label 9 "1" at 8.2,0.4 font "Times New Roman,40"
+set label 10 "2" at 8.2,1.4 font "Times New Roman,40"
+set label 11 "3" at 8.2,2.4 font "Times New Roman,40"
+set label 12 "4" at 8.2,3.4 font "Times New Roman,40"
+set label 13 "5" at 8.2,4.4 font "Times New Roman,40"
+set label 14 "6" at 8.2,5.4 font "Times New Roman,40"
+set label 15 "7" at 8.2,6.4 font "Times New Roman,40"
+set label 16 "8" at 8.2,7.4 font "Times New Roman,40"
+
+set label 17 "a" at 0.4,8.15 font "Times New Roman,40"
+set label 18 "b" at 1.4,8.15 font "Times New Roman,40"
+set label 19 "c" at 2.4,8.15 font "Times New Roman,40"
+set label 20 "d" at 3.4,8.15 font "Times New Roman,40"
+set label 21 "e" at 4.4,8.15 font "Times New Roman,40"
+set label 22 "f" at 5.4,8.15 font "Times New Roman,40"
+set label 23 "g" at 6.4,8.15 font "Times New Roman,40"
+set label 24 "h" at 7.4,8.15 font "Times New Roman,40"
+
+set label 25 "a" at 0.4,-0.35 font "Times New Roman,40"
+set label 26 "b" at 1.4,-0.35 font "Times New Roman,40"
+set label 27 "c" at 2.4,-0.35 font "Times New Roman,40"
+set label 28 "d" at 3.4,-0.35 font "Times New Roman,40"
+set label 29 "e" at 4.4,-0.35 font "Times New Roman,40"
+set label 30 "f" at 5.4,-0.35 font "Times New Roman,40"
+set label 31 "g" at 6.4,-0.35 font "Times New Roman,40"
+set label 32 "h" at 7.4,-0.35 font "Times New Roman,40"
+
+plot "/home/gillardrs/chess/plotscripts/blackpieces,blacksquares.txt" using 1:2 with circles lt rgb "white",	\
+"/home/gillardrs/chess/plotscripts/blackpieces,blacksquares.txt" using ($1+0.02):($2-0.07):3 w labels font "Times New Roman,32" tc rgb "white",	\
+"/home/gillardrs/chess/plotscripts/blackpieces,whitesquares.txt" using 1:2 with circles lt -1 fill solid,	\
+"/home/gillardrs/chess/plotscripts/blackpieces,whitesquares.txt" using ($1+0.02):($2-0.07):3 w labels font "Times New Roman,32" tc rgb "white",	\
+"/home/gillardrs/chess/plotscripts/whitepieces,blacksquares.txt" using 1:2 with circles lt rgb "white" fill solid,	\
+"/home/gillardrs/chess/plotscripts/whitepieces,blacksquares.txt" using ($1+0.02):($2-0.07):3 w labels font "Times New Roman,32",	\
+"/home/gillardrs/chess/plotscripts/whitepieces,whitesquares.txt" using 1:2 with circles lt -1,	\
+"/home/gillardrs/chess/plotscripts/whitepieces,whitesquares.txt" using ($1+0.02):($2-0.07):3 w labels font "Times New Roman,32"
+
+quit
