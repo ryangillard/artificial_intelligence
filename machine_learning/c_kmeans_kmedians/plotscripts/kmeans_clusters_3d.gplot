@@ -1,0 +1,16 @@
+t=system("cat outputs/iteration.txt")
+c=system("cat outputs/kmeans_cost.txt")
+#set term jpeg size 1920, 1200
+#set output "plots/kmeans_clusters_".t.".jpeg"
+set term wxt persist
+set size ratio -1
+set palette model RGB
+#set cbrange [0:6]
+unset colorbox
+unset key
+set xlabel "x"
+set ylabel "y"
+set zlabel "z"
+set title "Cost = ".c."
+
+splot "outputs/kmeans_clusters.txt" u 1:2:3:4 lt 1 palette,"outputs/kmeans_centroids.txt" u 1:2:3:4 lt 2 lw 5 palette
