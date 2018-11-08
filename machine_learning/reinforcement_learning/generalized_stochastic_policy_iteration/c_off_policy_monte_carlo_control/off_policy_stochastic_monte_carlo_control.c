@@ -555,7 +555,7 @@ void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, uns
 			{
 				max_action_count++;
 			}
-		} // end of k loop
+		} // end of j loop
 
 		/* Apportion policy probability across ties equally for state-action pairs that have the same value and zero otherwise */
 		max_policy_apportioned_probability_per_action = 1.0 / max_action_count;
