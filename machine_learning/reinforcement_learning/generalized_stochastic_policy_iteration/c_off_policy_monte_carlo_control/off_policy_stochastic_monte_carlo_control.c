@@ -561,14 +561,14 @@ void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, uns
 		max_policy_apportioned_probability_per_action = 1.0 / max_action_count;
 		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
 		{
-				if (state_action_value_function[state_index][j] == max_state_action_value)
-				{
-					target_policy[state_index][j] = max_policy_apportioned_probability_per_action;
-				}
-				else
-				{
-					target_policy[state_index][j] = 0.0;
-				}
+			if (state_action_value_function[state_index][j] == max_state_action_value)
+			{
+				target_policy[state_index][j] = max_policy_apportioned_probability_per_action;
+			}
+			else
+			{
+				target_policy[state_index][j] = 0.0;
+			}
 		} // end of j loop
 		
 		/* Check to see if behavior action from episode is the same as target action */
