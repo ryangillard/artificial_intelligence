@@ -187,7 +187,7 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	/* Get the state-action-successor state rewards */
-	double*** state_action_successor_state_rewards;
+    double*** state_action_successor_state_rewards;
 	
 	FILE* infile_state_action_successor_state_rewards = fopen("inputs/state_action_successor_state_rewards.txt", "r");
 	state_action_successor_state_rewards = malloc(sizeof(double**) * number_of_non_terminal_states);
@@ -480,14 +480,14 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 	{
 		/* Get reward */
 		probability = UnifRand();
-		for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
+		for (j = 0; j < number_of_state_action_successor_states[state_index][action_index]; j++)
 		{
-			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
+			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
 			{
-				successor_state_transition_index = i;
-				break; // break i loop since we found our index
+				successor_state_transition_index = j;
+				break; // break j loop since we found our index
 			}
-		} // end of i loop
+		} // end of j loop
 		
 		/* Get reward from state and action */
 		reward = state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
@@ -515,7 +515,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 				if (probability <= policy_cumulative_sum[next_state_index][j])
 				{
 					next_action_index = j;
-					break; // break i loop since we found our index
+					break; // break j loop since we found our index
 				}
 			} // end of j loop
 			

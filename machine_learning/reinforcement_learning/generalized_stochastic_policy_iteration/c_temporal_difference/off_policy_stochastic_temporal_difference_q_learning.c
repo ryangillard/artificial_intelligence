@@ -481,25 +481,25 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		EpsilonGreedyPolicyFromStateActionFunction(number_of_actions_per_non_terminal_state, state_action_value_function, epsilon, state_index, policy, policy_cumulative_sum);
 		
 		/* Find which action using probability */
-		for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
+		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
 		{
-			if (probability <= policy_cumulative_sum[state_index][i])
+			if (probability <= policy_cumulative_sum[state_index][j])
 			{
-				action_index = i;
-				break; // break i loop since we found our index
+				action_index = j;
+				break; // break j loop since we found our index
 			}
-		} // end of i loop
+		} // end of j loop
 		
 		/* Get reward */
 		probability = UnifRand();
-		for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
+		for (j = 0; j < number_of_state_action_successor_states[state_index][action_index]; j++)
 		{
-			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
+			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
 			{
-				successor_state_transition_index = i;
-				break; // break i loop since we found our index
+				successor_state_transition_index = j;
+				break; // break j loop since we found our index
 			}
-		} // end of i loop
+		} // end of j loop
 		
 		/* Get reward from state and action */
 		reward = state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
