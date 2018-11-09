@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	/* Create target policy array */
+	/* Create policy array */
 	double** policy;
 	policy = malloc(sizeof(double*) * number_of_non_terminal_states);
 	for (i = 0; i < number_of_non_terminal_states; i++)
@@ -247,11 +247,11 @@ int main(int argc, char* argv[])
 		policy[i] = malloc(sizeof(double) * number_of_actions_per_non_terminal_state[i]);
 		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
 		{
-			policy[i][j] = 1.0 / number_of_actions_per_non_terminal_state[i]; // greedy target policy
+			policy[i][j] = 1.0 / number_of_actions_per_non_terminal_state[i];
 		} // end of j loop
 	} // end of i loop
 	
-	/* Create behavior policy cumulative sum array */
+	/* Create policy cumulative sum array */
 	double** policy_cumulative_sum;
 	policy_cumulative_sum = malloc(sizeof(double*) * number_of_non_terminal_states);
 	for (i = 0; i < number_of_non_terminal_states; i++)
