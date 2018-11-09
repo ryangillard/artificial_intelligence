@@ -456,20 +456,20 @@ int PolicyImprovement(unsigned int number_of_non_terminal_states, unsigned int* 
 		/* Apportion policy probability across ties equally for state-action pairs that have the same value and zero otherwise */
 		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
 		{
-				if (policy[i][j] == max_policy_value)
-				{
-					policy[i][j] = 1.0 / max_policy_count;
-				}
-				else
-				{
-					policy[i][j] = 0.0;
-				}
-			
-				/* If policy has changed from old policy */
-				if (policy[i][j] != old_policy[i][j])
-				{
-					policy_stable = 0;
-				}
+			if (policy[i][j] == max_policy_value)
+			{
+				policy[i][j] = 1.0 / max_policy_count;
+			}
+			else
+			{
+				policy[i][j] = 0.0;
+			}
+
+			/* If policy has changed from old policy */
+			if (policy[i][j] != old_policy[i][j])
+			{
+				policy_stable = 0;
+			}
 		} // end of j loop
 	} // end of i loop
 	
