@@ -187,8 +187,6 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	/* Get the state-action-successor state rewards */
-	double minimum_reward = DBL_MAX;
-	
 	double*** state_action_successor_state_rewards;
 	
 	FILE* infile_state_action_successor_state_rewards = fopen("inputs/state_action_successor_state_rewards.txt", "r");
