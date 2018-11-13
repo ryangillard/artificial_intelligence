@@ -3,6 +3,8 @@
 #include <math.h>
 #include <float.h>
 
+double EPS = DBL_EPSILON * 10;
+
 /*********************************************************************************************************/
 /********************************************** STRUCTURES ***********************************************/
 /*********************************************************************************************************/
@@ -20,6 +22,9 @@ struct Episode
 
 /* This function generates episodes */
 unsigned int GenerateEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int maximum_episode_length, double** behavior_policy, double** behavior_policy_cumulative_sum, struct Episode* episode_log);
+
+/* This function selects a policy greedily from the state-action-value function */
+double GreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int state_index, double** policy);
 
 /* This function loops through episodes in reverse order and updates the target policy */
 void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double** weights_cumulative_sum, double** target_policy, double** behavior_policy, double discounting_factor_gamma, struct Episode* episode_log, unsigned int episode_length);
@@ -514,12 +519,51 @@ unsigned int GenerateEpisode(unsigned int number_of_non_terminal_states, unsigne
 	return step_count;
 } // end of GenerateEpisode function
 
+/* This function selects a policy greedily from the state-action-value function */
+double GreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int state_index, double** policy)
+{
+	unsigned int i;
+	unsigned int max_action_count = 1;
+	double max_state_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0;
+	
+	/* Update policy greedily from state-value function */
+	for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
+	{
+		/* Save max state action value and find the number of actions that have the same max state action value */
+		if (fabs(state_action_value_function[state_index][i] - max_state_action_value) <= EPS)
+		{
+			max_action_count++;
+		}
+		else if (state_action_value_function[state_index][i] > max_state_action_value)
+		{
+			max_state_action_value = state_action_value_function[state_index][i];
+			max_action_count = 1;
+		}
+	} // end of i loop
+	
+	/* Apportion policy probability across ties equally for state-action pairs that have the same value and zero otherwise */
+	max_policy_apportioned_probability_per_action = 1.0 / max_action_count;
+	for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
+	{
+		if (fabs(state_action_value_function[state_index][i] - max_state_action_value) <= EPS)
+		{
+			policy[state_index][i] = max_policy_apportioned_probability_per_action;
+		}
+		else
+		{
+			policy[state_index][i] = 0.0;
+		}
+	} // end of i loop
+	
+	return max_policy_apportioned_probability_per_action;
+} // end of GreedyPolicyFromStateActionFunction function
+
 /* This function loops through episodes in reverse order and updates the target policy */
 void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double** weights_cumulative_sum, double** target_policy, double** behavior_policy, double discounting_factor_gamma, struct Episode* episode_log, unsigned int episode_length)
 {
 	int i, j;
-	unsigned int state_index, action_index, max_action_count = 1;
-	double expected_return = 0.0, weight = 1.0, max_state_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0;
+	unsigned int state_index, action_index;
+	double expected_return = 0.0, weight = 1.0, max_policy_apportioned_probability_per_action;
 		
 	/* Loop through episode steps in reverse order */
 	for (i = episode_length - 1; i >= 0; i--)
@@ -537,40 +581,10 @@ void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, uns
 		{
 			state_action_value_function[state_index][action_index] += weight / weights_cumulative_sum[state_index][action_index] * (expected_return - state_action_value_function[state_index][action_index]);
 		}
-			
-		/* Take argmax of state-action-value function to update target policy */
-		max_state_action_value = -DBL_MAX;
-		max_action_count = 0;
-	
-		/* Update policy greedily from state-value function */
-		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
-		{
-			/* Save max state action value and find the number of actions that have the same max state action value */
-			if (state_action_value_function[state_index][j] > max_state_action_value)
-			{
-				max_state_action_value = state_action_value_function[state_index][j];
-				max_action_count = 1;
-			}
-			else if (state_action_value_function[state_index][j] == max_state_action_value)
-			{
-				max_action_count++;
-			}
-		} // end of j loop
-
-		/* Apportion policy probability across ties equally for state-action pairs that have the same value and zero otherwise */
-		max_policy_apportioned_probability_per_action = 1.0 / max_action_count;
-		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
-		{
-			if (state_action_value_function[state_index][j] == max_state_action_value)
-			{
-				target_policy[state_index][j] = max_policy_apportioned_probability_per_action;
-			}
-			else
-			{
-				target_policy[state_index][j] = 0.0;
-			}
-		} // end of j loop
 		
+		/* Choose policy for chosen state by greedily choosing from the state-action-value function */
+		max_policy_apportioned_probability_per_action = GreedyPolicyFromStateActionFunction(number_of_actions_per_non_terminal_state, state_action_value_function, state_index, target_policy);
+			
 		/* Check to see if behavior action from episode is the same as target action */
 		if (target_policy[state_index][action_index] != max_policy_apportioned_probability_per_action)
 		{
