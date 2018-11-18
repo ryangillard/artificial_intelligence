@@ -29,10 +29,10 @@ void ReallocModelStateActionSuccessorStateArrays(unsigned int state_index, unsig
 void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup, unsigned int** model_number_of_state_action_successor_states, unsigned int*** model_state_action_successor_state_indices, double*** model_state_action_successor_state_transition_probabilities, double*** model_state_action_successor_state_transition_probabilities_cumulative_sum, double*** model_state_action_successor_state_rewards, unsigned int*** model_state_action_successor_state_number_of_visits, unsigned int** state_action_value_function_max_tie_stack, double alpha, double discounting_factor_gamma, double** state_action_value_function);
 
 /* This function reallocates more memory to the passed 3d unsigned int array */
-void Realloc3dUnsignedInt(unsigned int ****array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index);
+void Realloc3dUnsignedInt(unsigned int**** array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index);
 
 /* This function reallocates more memory to the passed 3d double array */
-void Realloc3dDouble(double ****array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index);
+void Realloc3dDouble(double**** array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index);
 
 /* This function returns a random uniform number within range [0,1] */
 double UnifRand(void);
@@ -966,10 +966,10 @@ void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int 
 } // end of ModelSimualatePlanning function
 
 /* This function reallocates more memory to the passed 3d unsigned int array */
-void Realloc3dUnsignedInt(unsigned int ****array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index)
+void Realloc3dUnsignedInt(unsigned int**** array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index)
 {
 	unsigned int i, j, k;
-	unsigned int ***temp = NULL;
+	unsigned int*** temp = NULL;
 
 	/* Malloc first dimension of temp array (row) */
 	temp = malloc(sizeof(unsigned int**) * number_of_non_terminal_states);
@@ -1057,10 +1057,10 @@ void Realloc3dUnsignedInt(unsigned int ****array3d, unsigned int number_of_non_t
 } // end of Realloc3dUnsignedInt function
 
 /* This function reallocates more memory to the passed 3d double array */
-void Realloc3dDouble(double ****array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index)
+void Realloc3dDouble(double**** array3d, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** model_number_of_state_action_successor_states, unsigned int state_index, unsigned int action_index)
 {
 	unsigned int i, j, k;
-	double ***temp = NULL;
+	double*** temp = NULL;
 
 	/* Malloc first dimension of temp array (row) */
 	temp = malloc(sizeof(double**) * number_of_non_terminal_states);
