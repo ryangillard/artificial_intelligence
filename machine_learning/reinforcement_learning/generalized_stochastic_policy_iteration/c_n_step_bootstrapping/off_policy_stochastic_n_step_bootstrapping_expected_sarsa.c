@@ -459,6 +459,8 @@ int main(int argc, char* argv[])
 	free(number_of_state_action_successor_states);
 	free(number_of_actions_per_state);
 	free(number_of_actions_per_non_terminal_state);
+	
+	return 0;
 } // end of main
 
 /*********************************************************************************************************/
@@ -532,6 +534,8 @@ void GreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_per_non
 	{
 		policy_cumulative_sum[state_index][i] = policy_cumulative_sum[state_index][i - 1] + policy[state_index][i];
 	} // end of i loop
+	
+	return;
 } // end of GreedyPolicyFromStateActionFunction function
 
 /* This function loops through episodes and updates the policy */
