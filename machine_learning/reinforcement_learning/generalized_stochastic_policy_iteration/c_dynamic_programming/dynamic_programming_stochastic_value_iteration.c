@@ -337,6 +337,8 @@ int main(int argc, char* argv[])
 	free(number_of_state_action_successor_states);
 	free(number_of_actions_per_state);
 	free(number_of_actions_per_non_terminal_state);
+	
+	return 0;
 } // end of main
 
 /*********************************************************************************************************/
@@ -440,4 +442,6 @@ void GreedyPolicySelection(unsigned int number_of_non_terminal_states, unsigned 
 			}
 		} // end of j loop
 	} // end of i loop
+	
+	return;
 } // end of GreedyPolicySelection function
