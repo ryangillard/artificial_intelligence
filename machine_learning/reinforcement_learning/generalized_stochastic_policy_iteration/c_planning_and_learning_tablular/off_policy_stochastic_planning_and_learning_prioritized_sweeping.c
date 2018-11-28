@@ -1065,6 +1065,8 @@ void ReallocModelStateActionSuccessorStateArrays(unsigned int state_index, unsig
 	Realloc3dDouble(model_state_action_successor_state_transition_probabilities_cumulative_sum, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, state_index, action_index);
 	Realloc3dDouble(model_state_action_successor_state_rewards, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, state_index, action_index);
 	Realloc3dUnsignedInt(model_state_action_successor_state_number_of_visits, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, state_index, action_index);
+	
+	return;
 } // end of ReallocModelStateActionSuccessorStateArrays function
 
 /* This function reallocates more memory to the passed 1d state predecessor state-action array */
