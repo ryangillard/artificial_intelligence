@@ -481,6 +481,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		
 		/* Get reward */
 		probability = UnifRand();
+		
 		for (j = 0; j < number_of_state_action_successor_states[state_index][action_index]; j++)
 		{
 			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
@@ -515,7 +516,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 			/* Calculate state-action-function expectation */
 			state_action_value_function[state_index][action_index] += alpha * (reward + discounting_factor_gamma * state_value_function_expected_value_on_policy - state_action_value_function[state_index][action_index]);
 			
-			/* Update state and action to next state and action */
+			/* Update state to next state */
 			state_index = next_state_index;
 		}
 	} // end of i loop
