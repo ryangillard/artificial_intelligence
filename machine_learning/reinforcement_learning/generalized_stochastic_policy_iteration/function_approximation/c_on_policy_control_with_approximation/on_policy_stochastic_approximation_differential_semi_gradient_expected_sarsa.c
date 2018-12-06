@@ -19,13 +19,13 @@ int ModuloNegativeSafe(int n, int k);
 int HashTiles(int* ints, unsigned int num_ints, long m, int increment);
 
 /* This function initializes episodes */
-unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states);
+unsigned int InitializeEpisode(unsigned int number_of_states);
 
 /* This function selects a policy with using epsilon-greedy from the state-action-value function */
 void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon);
 
 /* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, unsigned int maximum_episode_length, unsigned int state_index);
+void LoopThroughEpisode(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, unsigned int state_index);
 
 /* This function calculates the approximate state action value function w^T * x */
 double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, double* weights);
@@ -57,58 +57,30 @@ int main(int argc, char* argv[])
 	}
 	fclose(infile_number_of_states);
 	
-	/* Get number of terminal states */
-	unsigned int number_of_terminal_states = 0;
-	
-	FILE* infile_number_of_terminal_states = fopen("inputs/number_of_terminal_states.txt", "r");
-	system_return = fscanf(infile_number_of_terminal_states, "%u", &number_of_terminal_states);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/number_of_terminal_states.txt\n");
-	}
-	fclose(infile_number_of_terminal_states);
-	
-	/* Get number of non-terminal states */
-	unsigned int number_of_non_terminal_states = number_of_states - number_of_terminal_states;
-	
-	/* Get the number of actions per non-terminal state */
-	unsigned int* number_of_actions_per_non_terminal_state;
-	
-	FILE* infile_number_of_actions_per_non_terminal_state = fopen("inputs/number_of_actions_per_non_terminal_state.txt", "r");
-	number_of_actions_per_non_terminal_state = malloc(sizeof(int) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
-	{
-		system_return = fscanf(infile_number_of_actions_per_non_terminal_state, "%u", &number_of_actions_per_non_terminal_state[i]);
-		if (system_return == -1)
-		{
-			printf("Failed reading file inputs/number_of_actions_per_non_terminal_state.txt\n");
-		}
-	} // end of i loop
-	fclose(infile_number_of_actions_per_non_terminal_state);
-	
 	/* Get the number of actions per all states */
 	unsigned int* number_of_actions_per_state;
 	
+	FILE* infile_number_of_actions_per_state = fopen("inputs/number_of_actions_per_state.txt", "r");
 	number_of_actions_per_state = malloc(sizeof(int) * number_of_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	for (i = 0; i < number_of_states; i++)
 	{
-		number_of_actions_per_state[i] = number_of_actions_per_non_terminal_state[i];
+		system_return = fscanf(infile_number_of_actions_per_state, "%u", &number_of_actions_per_state[i]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/number_of_actions_per_state.txt\n");
+		}
 	} // end of i loop
-	
-	for (i = 0; i < number_of_terminal_states; i++)
-	{
-		number_of_actions_per_state[i + number_of_non_terminal_states] = 0;
-	} // end of i loop
+	fclose(infile_number_of_actions_per_state);
 	
 	/* Get the number of state-action successor states */
 	unsigned int** number_of_state_action_successor_states;
 	
 	FILE* infile_number_of_state_action_successor_states = fopen("inputs/number_of_state_action_successor_states.txt", "r");
-	number_of_state_action_successor_states = malloc(sizeof(int*) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	number_of_state_action_successor_states = malloc(sizeof(int*) * number_of_states);
+	for (i = 0; i < number_of_states; i++)
 	{
-		number_of_state_action_successor_states[i] = malloc(sizeof(int) * number_of_actions_per_non_terminal_state[i]);
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		number_of_state_action_successor_states[i] = malloc(sizeof(int) * number_of_actions_per_state[i]);
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			system_return = fscanf(infile_number_of_state_action_successor_states, "%u\t", &number_of_state_action_successor_states[i][j]);
 			if (system_return == -1)
@@ -123,11 +95,11 @@ int main(int argc, char* argv[])
 	unsigned int*** state_action_successor_state_indices;
 	
 	FILE* infile_state_action_successor_state_indices = fopen("inputs/state_action_successor_state_indices.txt", "r");
-	state_action_successor_state_indices = malloc(sizeof(unsigned int**) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	state_action_successor_state_indices = malloc(sizeof(unsigned int**) * number_of_states);
+	for (i = 0; i < number_of_states; i++)
 	{
-		state_action_successor_state_indices[i] = malloc(sizeof(unsigned int*) * number_of_actions_per_non_terminal_state[i]);
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		state_action_successor_state_indices[i] = malloc(sizeof(unsigned int*) * number_of_actions_per_state[i]);
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			state_action_successor_state_indices[i][j] = malloc(sizeof(unsigned int*) * number_of_state_action_successor_states[i][j]);
 			for (k = 0; k < number_of_state_action_successor_states[i][j]; k++)
@@ -152,11 +124,11 @@ int main(int argc, char* argv[])
 	double*** state_action_successor_state_transition_probabilities;
 	
 	FILE* infile_state_action_successor_state_transition_probabilities = fopen("inputs/state_action_successor_state_transition_probabilities.txt", "r");
-	state_action_successor_state_transition_probabilities = malloc(sizeof(double**) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	state_action_successor_state_transition_probabilities = malloc(sizeof(double**) * number_of_states);
+	for (i = 0; i < number_of_states; i++)
 	{
-		state_action_successor_state_transition_probabilities[i] = malloc(sizeof(double*) * number_of_actions_per_non_terminal_state[i]);
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		state_action_successor_state_transition_probabilities[i] = malloc(sizeof(double*) * number_of_actions_per_state[i]);
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			state_action_successor_state_transition_probabilities[i][j] = malloc(sizeof(double*) * number_of_state_action_successor_states[i][j]);
 			for (k = 0; k < number_of_state_action_successor_states[i][j]; k++)
@@ -180,11 +152,11 @@ int main(int argc, char* argv[])
 	/* Create the state-action-successor state transition probability cumulative sum array */
 	double*** state_action_successor_state_transition_probabilities_cumulative_sum;
 	
-	state_action_successor_state_transition_probabilities_cumulative_sum = malloc(sizeof(double**) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	state_action_successor_state_transition_probabilities_cumulative_sum = malloc(sizeof(double**) * number_of_states);
+	for (i = 0; i < number_of_states; i++)
 	{
-		state_action_successor_state_transition_probabilities_cumulative_sum[i] = malloc(sizeof(double*) * number_of_actions_per_non_terminal_state[i]);
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		state_action_successor_state_transition_probabilities_cumulative_sum[i] = malloc(sizeof(double*) * number_of_actions_per_state[i]);
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			state_action_successor_state_transition_probabilities_cumulative_sum[i][j] = malloc(sizeof(double*) * number_of_state_action_successor_states[i][j]);
 			
@@ -204,11 +176,11 @@ int main(int argc, char* argv[])
     double*** state_action_successor_state_rewards;
 	
 	FILE* infile_state_action_successor_state_rewards = fopen("inputs/state_action_successor_state_rewards.txt", "r");
-	state_action_successor_state_rewards = malloc(sizeof(double**) * number_of_non_terminal_states);
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	state_action_successor_state_rewards = malloc(sizeof(double**) * number_of_states);
+	for (i = 0; i < number_of_states; i++)
 	{
-		state_action_successor_state_rewards[i] = malloc(sizeof(double*) * number_of_actions_per_non_terminal_state[i]);
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		state_action_successor_state_rewards[i] = malloc(sizeof(double*) * number_of_actions_per_state[i]);
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			state_action_successor_state_rewards[i][j] = malloc(sizeof(double) * number_of_state_action_successor_states[i][j]);
 			for (k = 0; k < number_of_state_action_successor_states[i][j]; k++)
@@ -324,11 +296,11 @@ int main(int argc, char* argv[])
 	
 	/* Get max number of actions */
 	unsigned int max_number_of_actions = 0;
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	for (i = 0; i < number_of_states; i++)
 	{
-		if(number_of_actions_per_non_terminal_state[i] > max_number_of_actions)
+		if(number_of_actions_per_state[i] > max_number_of_actions)
 		{
-			max_number_of_actions = number_of_actions_per_non_terminal_state[i];
+			max_number_of_actions = number_of_actions_per_state[i];
 		}
 	} // end of i loop
 	
@@ -350,7 +322,7 @@ int main(int argc, char* argv[])
 	/*********************************************************************************************************/
 	
 	/* Set the number of episodes */
-	unsigned int number_of_episodes = 100000;
+	unsigned int number_of_episodes = 10000;
 	
 	/* Set the maximum episode length */
 	unsigned int maximum_episode_length = 200;
@@ -383,11 +355,14 @@ int main(int argc, char* argv[])
 	/* Set learning rate alpha */
 	double alpha = 0.1;
 	
+	/* Set learning rate beta */
+	double beta = 1.0;
+	
 	/* Set epsilon for our epsilon level of exploration */
 	double epsilon = 0.1;
 	
-	/* Set discounting factor gamma */
-	double discounting_factor_gamma = 1.0;
+	/* Create average reward estimate in place of the discounting factor gamma */
+	double average_reward_estimate = 0.0;
 	
 	/* Set random seed */
 	srand(0);
@@ -422,10 +397,10 @@ int main(int argc, char* argv[])
 	for (i = 0; i < number_of_episodes; i++)
 	{
 		/* Initialize episode to get initial state */
-		initial_state_index = InitializeEpisode(number_of_non_terminal_states);
+		initial_state_index = InitializeEpisode(number_of_states);
 		
 		/* Loop through episode and update the policy */
-		LoopThroughEpisode(number_of_non_terminal_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, alpha, epsilon, discounting_factor_gamma, maximum_episode_length, initial_state_index);
+		LoopThroughEpisode(number_of_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, alpha, beta, epsilon, average_reward_estimate, maximum_episode_length, initial_state_index);
 	} // end of i loop
 	
 	/*********************************************************************************************************/
@@ -478,9 +453,9 @@ int main(int argc, char* argv[])
 	free(state_double_variables);
 
 	/* Free environment arrays */
-	for (i = 0; i < number_of_non_terminal_states; i++)
+	for (i = 0; i < number_of_states; i++)
 	{
-		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
+		for (j = 0; j < number_of_actions_per_state[i]; j++)
 		{
 			free(state_action_successor_state_rewards[i][j]);
 			free(state_action_successor_state_transition_probabilities_cumulative_sum[i][j]);
@@ -499,7 +474,6 @@ int main(int argc, char* argv[])
 	free(state_action_successor_state_indices);
 	free(number_of_state_action_successor_states);
 	free(number_of_actions_per_state);
-	free(number_of_actions_per_non_terminal_state);
 	
 	return 0;
 } // end of main
@@ -605,12 +579,12 @@ int HashTiles(int* ints, unsigned int num_ints, long m, int increment)
 } // end of HashTiles function
 
 /* This function initializes episodes */
-unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states)
+unsigned int InitializeEpisode(unsigned int number_of_states)
 {
 	unsigned int initial_state_index;
 	
 	/* Initial state */
-	initial_state_index = rand() % number_of_non_terminal_states; // randomly choose an initial state from all non-terminal states
+	initial_state_index = rand() % number_of_states; // randomly choose an initial state from all states
 	
 	return initial_state_index;
 } // end of InitializeEpisode function
@@ -674,11 +648,11 @@ void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_numb
 } // end of EpsilonGreedyPolicyFromStateActionFunction function
 
 /* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, unsigned int maximum_episode_length, unsigned int state_index)
+void LoopThroughEpisode(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, unsigned int state_index)
 {
 	unsigned int i, j;
 	unsigned int action_index, successor_state_transition_index, next_state_index;
-	double probability, reward, state_value_function_expected_value_on_policy;
+	double probability, reward, delta, state_value_function_expected_value_on_policy;
 		
 	/* Loop through episode steps until termination */
 	for (i = 0; i < maximum_episode_length; i++)
@@ -720,45 +694,34 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		/* Get next state */
 		next_state_index = state_action_successor_state_indices[state_index][action_index][successor_state_transition_index];
 		
-		/* Check to see if we actioned into a terminal state */
-		if (next_state_index >= number_of_non_terminal_states)
-		{
-			/* Get tiled feature indices of state */
-			GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[state_index], number_of_state_double_variables, state_int_variables[state_index], number_of_state_int_variables, state_tile_indices);
-			
-			/* Update weights */
-			for (j = 0; j < number_of_state_tilings; j++)
-			{
-				weights[action_index * number_of_state_tiles + state_tile_indices[j]] += alpha * (reward - ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, action_index, weights)); // since this is linear grad(q(S, A, w)) = x(S, A, w) which is 1 for tiled index otherwise 0
-			} // end of j loop
-			
-			break; // episode terminated since we ended up in a terminal state
-		}
-		else
-		{
-			/* Get tiled feature indices of next state */
-			GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[next_state_index], number_of_state_double_variables, state_int_variables[next_state_index], number_of_state_int_variables, next_state_tile_indices);
-			
-			/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
-			EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
+		/* Get tiled feature indices of next state */
+		GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[next_state_index], number_of_state_double_variables, state_int_variables[next_state_index], number_of_state_int_variables, next_state_tile_indices);
+		
+		/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
+		EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
 
-			/* Get next action, using expectation value */
-			state_value_function_expected_value_on_policy = 0.0;
-			
-			for (j = 0; j < max_number_of_actions; j++)
-			{
-				state_value_function_expected_value_on_policy += policy[j] * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, next_state_tile_indices, j, weights);
-			} // end of j loop
-			
-			/* Update weights */
-			for (j = 0; j < number_of_state_tilings; j++)
-			{
-				weights[action_index * number_of_state_tiles + state_tile_indices[j]] += alpha * (reward + discounting_factor_gamma * state_value_function_expected_value_on_policy - ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, action_index, weights)); // since this is linear grad(q(S, A, w)) = x(S, A, w) which is 1 for tiled index otherwise 0
-			} // end of j loop
-			
-			/* Update state to next state */
-			state_index = next_state_index;
-		}
+		/* Get next action, using expectation value */
+		state_value_function_expected_value_on_policy = 0.0;
+		
+		for (j = 0; j < max_number_of_actions; j++)
+		{
+			state_value_function_expected_value_on_policy += policy[j] * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, next_state_tile_indices, j, weights);
+		} // end of j loop
+		
+		/* Calculate TD error delta */
+		delta = reward - average_reward_estimate + state_value_function_expected_value_on_policy - ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, action_index, weights);
+		
+		/* Update average reward estimate */
+		average_reward_estimate += beta * delta;
+		
+		/* Update weights */
+		for (j = 0; j < number_of_state_tilings; j++)
+		{
+			weights[action_index * number_of_state_tiles + state_tile_indices[j]] += alpha * delta; // since this is linear grad(q(S, A, w)) = x(S, A, w) which is 1 for tiled index otherwise 0
+		} // end of j loop
+		
+		/* Update state and action to next state and action */
+		state_index = next_state_index;
 	} // end of i loop
 	
 	return;
