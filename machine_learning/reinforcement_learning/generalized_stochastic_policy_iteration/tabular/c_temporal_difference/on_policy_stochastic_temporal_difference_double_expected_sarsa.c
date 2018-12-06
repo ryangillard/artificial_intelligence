@@ -330,7 +330,7 @@ int main(int argc, char* argv[])
 	/* Loop over episodes */
 	for (i = 0; i < number_of_episodes; i++)
 	{
-		/* Initialize episode to get initial state and action */
+		/* Initialize episode to get initial state */
 		initial_state_index = InitializeEpisode(number_of_non_terminal_states);
 		
 		/* Loop through episode and update the policy */
