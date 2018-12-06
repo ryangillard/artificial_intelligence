@@ -596,7 +596,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		{
 			break; // break episode step loop, move on to next episode
 		}
-	} // end of i loop
+	} // end of t loop
 	
 	return;
 } // end of LoopThroughEpisode function

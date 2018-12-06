@@ -422,7 +422,7 @@ int main(int argc, char* argv[])
 	for (i = 0; i < number_of_episodes; i++)
 	{
 		/* Initialize episode to get initial state and action */
-		InitializeEpisode(number_of_non_terminal_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon, &initial_state_index, & initial_action_index);
+		InitializeEpisode(number_of_non_terminal_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon, &initial_state_index, &initial_action_index);
 		
 		/* Loop through episode and update the policy */
 		LoopThroughEpisode(number_of_non_terminal_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, alpha, epsilon, discounting_factor_gamma, maximum_episode_length, initial_state_index, initial_action_index);
