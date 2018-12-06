@@ -836,13 +836,8 @@ double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings,
 	unsigned int i;
 	double approximate_state_action_value_function = 0.0;
 	
-//	printf("ApproximateStateActionValueFunction: number_of_state_tilings = %u, number_of_state_tiles = %u, action_index = %u\n", number_of_state_tilings, number_of_state_tiles, action_index);
-	
 	for (i = 0; i < number_of_state_tilings; i++)
 	{
-//		printf("ApproximateStateActionValueFunction: i = %u\n", i);
-//		printf("ApproximateStateActionValueFunction: state_tile_indices[i] = %u\n", state_tile_indices[i]);
-//		printf("ApproximateStateActionValueFunction: action_index * number_of_state_tiles + state_tile_indices[i] = %u\n", action_index * number_of_state_tiles + state_tile_indices[i]);
 		approximate_state_action_value_function += weights[action_index * number_of_state_tiles + state_tile_indices[i]];
 	} // end of i loop
 	
