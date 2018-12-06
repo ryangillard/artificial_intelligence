@@ -334,7 +334,7 @@ int main(int argc, char* argv[])
 	unsigned int max_number_of_actions = 0;
 	for (i = 0; i < number_of_non_terminal_states; i++)
 	{
-		if(number_of_actions_per_non_terminal_state[i] > max_number_of_actions)
+		if (number_of_actions_per_non_terminal_state[i] > max_number_of_actions)
 		{
 			max_number_of_actions = number_of_actions_per_non_terminal_state[i];
 		}
@@ -807,7 +807,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 					state_value_function_expected_value_on_policy += policy[i] * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, i, weights);
 				} // end of j loop
 				
-				expected_return += pow(discounting_factor_gamma, n_steps) * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, episode_log[tau_plus_n_mod_n_plus_1].action_index, weights);
+				expected_return += pow(discounting_factor_gamma, n_steps) * state_value_function_expected_value_on_policy;
 			}
 			
 			/* Spend a little memory to save computation time */

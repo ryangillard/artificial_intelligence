@@ -326,7 +326,7 @@ int main(int argc, char* argv[])
 	unsigned int max_number_of_actions = 0;
 	for (i = 0; i < number_of_non_terminal_states; i++)
 	{
-		if(number_of_actions_per_non_terminal_state[i] > max_number_of_actions)
+		if (number_of_actions_per_non_terminal_state[i] > max_number_of_actions)
 		{
 			max_number_of_actions = number_of_actions_per_non_terminal_state[i];
 		}

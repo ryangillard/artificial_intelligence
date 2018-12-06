@@ -298,7 +298,7 @@ int main(int argc, char* argv[])
 	unsigned int max_number_of_actions = 0;
 	for (i = 0; i < number_of_states; i++)
 	{
-		if(number_of_actions_per_state[i] > max_number_of_actions)
+		if (number_of_actions_per_state[i] > max_number_of_actions)
 		{
 			max_number_of_actions = number_of_actions_per_state[i];
 		}
@@ -353,10 +353,10 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	/* Set learning rate alpha */
-	double alpha = 0.1;
+	double alpha = 0.01;
 	
 	/* Set learning rate beta */
-	double beta = 1.0;
+	double beta = 0.01;
 	
 	/* Set epsilon for our epsilon level of exploration */
 	double epsilon = 0.1;
