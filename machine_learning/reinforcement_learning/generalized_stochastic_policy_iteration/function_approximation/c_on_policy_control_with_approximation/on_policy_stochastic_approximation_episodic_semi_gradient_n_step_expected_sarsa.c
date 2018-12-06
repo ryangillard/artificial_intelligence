@@ -719,7 +719,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 {
 	int t, i, tau = 0;
 	unsigned int t_mod_n_plus_1, t_plus_1_mod_n_plus_1, tau_plus_n_mod_n_plus_1, tau_mod_n_plus_1, successor_state_transition_index;
-	double probability, expected_return = 0.0;
+	double probability, state_value_function_expected_value_on_policy = 0.0, expected_return = 0.0;
 		
 	/* Loop through episode steps until termination */
 	for (t = 0; t < maximum_episode_length; t++)
@@ -795,6 +795,17 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 				
 				/* Get tiled feature indices of tau + nth state */
 				GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[episode_log[tau_plus_n_mod_n_plus_1].state_index], number_of_state_double_variables, state_int_variables[episode_log[tau_plus_n_mod_n_plus_1].state_index], number_of_state_int_variables, state_tile_indices);
+				
+				/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
+				EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
+
+				/* Calculate expected state value function from policy */
+				state_value_function_expected_value_on_policy = 0.0;
+				
+				for (i = 0; i < max_number_of_actions; i++)
+				{
+					state_value_function_expected_value_on_policy += policy[i] * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, i, weights);
+				} // end of j loop
 				
 				expected_return += pow(discounting_factor_gamma, n_steps) * ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, episode_log[tau_plus_n_mod_n_plus_1].action_index, weights);
 			}
