@@ -10,7 +10,7 @@
 /*********************************************************************************************************/
 
 /* This function gets the tile indicies for each tiling */
-void GetTileIndices(unsigned int num_tilings, unsigned int memory_size, double* doubles, unsigned int num_doubles, int* ints, unsigned int num_ints, unsigned int* tile_indices);
+void GetTileIndices(unsigned int number_of_state_tilings, unsigned int memory_size, double* doubles, unsigned int num_doubles, int* ints, unsigned int num_ints, unsigned int* tile_indices);
 
 /* This function takes the modulo of n by k even when n is negative */
 int ModuloNegativeSafe(int n, int k);
@@ -18,23 +18,35 @@ int ModuloNegativeSafe(int n, int k);
 /* This function takes an array of integers and returns the corresponding tile after hashing */
 int HashTiles(int* ints, unsigned int num_ints, long m, int increment);
 
+/* This function creates the feature vector */
+void CreateFeatureVector(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, unsigned int number_of_features, double* feature_vector);
+
+/* This function resets the feature vector */
+void ResetFeatureVector(unsigned int number_of_features, double* feature_vector);
+
 /* This function initializes episodes */
-void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int* state_tile_indices, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int number_of_features, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double epsilon, unsigned int* initial_state_index, unsigned int* initial_action_index);
+void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int* state_tile_indices, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double epsilon, unsigned int* initial_state_index, unsigned int* initial_action_index);
 
 /* This function resets the eligibility traces */
 void ResetEligbilityTraces(unsigned int number_of_features, double* eligibility_trace);
 
 /* This function selects a policy with using epsilon-greedy from the state-action-value function */
-void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon);
+void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon);
 
 /* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, unsigned int number_of_features, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double alpha, double epsilon, double discounting_factor_gamma, double trace_decay_lambda, unsigned int trace_update_type, unsigned int maximum_episode_length, unsigned int state_index, unsigned int action_index);
+void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double alpha, double epsilon, double discounting_factor_gamma, double trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index, unsigned int action_index);
+
+/* This function selects an action in state state_index */
+unsigned int SelectAction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon);
 
 /* This function observes the reward from the environment by taking action action_index in state state_index */
 double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards);
 
 /* This function calculates the approximate state action value function w^T * x */
-double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, double* weights);
+double ApproximateStateActionValueFunction(unsigned int number_of_features, double* feature_vector, double* weights);
+
+/* This function updates a dutch style eligibility trace */
+void UpdateDutchEligibilityTrace(unsigned int number_of_features, double* feature_vector, double alpha, double discounting_factor_gamma, double trace_decay_lambda, double* eligibility_trace);
 
 /* This function returns a random uniform number within range [0,1] */
 double UnifRand(void);
@@ -316,14 +328,6 @@ int main(int argc, char* argv[])
 		state_tile_indices[i] = 0;
 	} // end of i loop
 	
-	/* Create array to store next state tile indicies */
-	unsigned int* next_state_tile_indices;
-	next_state_tile_indices = malloc(sizeof(unsigned int) * number_of_state_tilings);
-	for (i = 0; i < number_of_state_tilings; i++)
-	{
-		next_state_tile_indices[i] = 0;
-	} // end of i loop
-	
 	/*********************************************************************************************************/
 	/********************************************* SETUP WEIGHTS *********************************************/
 	/*********************************************************************************************************/
@@ -341,8 +345,20 @@ int main(int argc, char* argv[])
 	/* Set the number of features */
 	unsigned int number_of_features = number_of_state_tiles * max_number_of_actions;
 	
+	/* Create our feature vector */
+	double* feature_vector;
+	feature_vector = malloc(sizeof(double) * number_of_features);
+	
+	ResetFeatureVector(number_of_features, feature_vector); // initialize all features to zero
+	
+	/* Create our next feature vector */
+	double* next_feature_vector;
+	next_feature_vector = malloc(sizeof(double) * number_of_features);
+	
+	ResetFeatureVector(number_of_features, next_feature_vector); // initialize all features to zero
+	
 	/* Create our weights */
-	double* weights;
+	double* weights; // since this is linear, there is a weight for each input feature
 	weights = malloc(sizeof(double) * number_of_features);
 	
 	/* Initialize weights to zero */
@@ -406,9 +422,6 @@ int main(int argc, char* argv[])
 	/* Set trace decay parameter lambda */
 	double trace_decay_lambda = 0.9;
 	
-	/* Set the trace update type, 0 = accumulating, 1 = replacing */
-	unsigned int trace_update_type = 1;
-	
 	/* Set random seed */
 	srand(0);
 	
@@ -431,7 +444,9 @@ int main(int argc, char* argv[])
 		
 		for (j = 0; j < max_number_of_actions; j++)
 		{
-			printf("\t%lf", ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, j, weights));
+			CreateFeatureVector(number_of_state_tilings, number_of_state_tiles, state_tile_indices, j, number_of_features, feature_vector);
+			
+			printf("\t%lf", ApproximateStateActionValueFunction(number_of_features, feature_vector, weights));
 		} // end of j loop
 		printf("\n");
 	} // end of i loop
@@ -442,10 +457,10 @@ int main(int argc, char* argv[])
 	for (i = 0; i < number_of_episodes; i++)
 	{
 		/* Initialize episode to get initial state and action */
-		InitializeEpisode(number_of_non_terminal_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, number_of_features, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, eligibility_trace, epsilon, &initial_state_index, &initial_action_index);
+		InitializeEpisode(number_of_non_terminal_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, number_of_features, feature_vector, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, eligibility_trace, epsilon, &initial_state_index, &initial_action_index);
 		
 		/* Loop through episode and update the policy */
-		LoopThroughEpisode(number_of_non_terminal_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, next_state_tile_indices, number_of_features, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, eligibility_trace, alpha, epsilon, discounting_factor_gamma, trace_decay_lambda, trace_update_type, maximum_episode_length, initial_state_index, initial_action_index);
+		LoopThroughEpisode(number_of_non_terminal_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, number_of_features, feature_vector, next_feature_vector, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, eligibility_trace, alpha, epsilon, discounting_factor_gamma, trace_decay_lambda, maximum_episode_length, initial_state_index, initial_action_index);
 	} // end of i loop
 	
 	/*********************************************************************************************************/
@@ -467,7 +482,9 @@ int main(int argc, char* argv[])
 		
 		for (j = 0; j < max_number_of_actions; j++)
 		{
-			printf("\t%lf", ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, j, weights));
+			CreateFeatureVector(number_of_state_tilings, number_of_state_tiles, state_tile_indices, j, number_of_features, feature_vector);
+			
+			printf("\t%lf", ApproximateStateActionValueFunction(number_of_features, feature_vector, weights));
 		} // end of j loop
 		printf("\n");
 	} // end of i loop
@@ -484,9 +501,10 @@ int main(int argc, char* argv[])
 	
 	/* Free weight arrays */
 	free(weights);
+	free(next_feature_vector);
+	free(feature_vector);
 	
 	/* Free tiling arrays */
-	free(next_state_tile_indices);
 	free(state_tile_indices);
 	
 	for (i = 0; i < number_of_states; i++)
@@ -530,7 +548,7 @@ int main(int argc, char* argv[])
 /*********************************************************************************************************/
 
 /* This function gets the tile indicies for each tiling */
-void GetTileIndices(unsigned int num_tilings, unsigned int memory_size, double* doubles, unsigned int num_doubles, int* ints, unsigned int num_ints, unsigned int* tile_indices)
+void GetTileIndices(unsigned int number_of_state_tilings, unsigned int memory_size, double* doubles, unsigned int num_doubles, int* ints, unsigned int num_ints, unsigned int* tile_indices)
 {
 	unsigned int i, j;
 	int qstate[MAX_NUM_VARS];
@@ -543,21 +561,21 @@ void GetTileIndices(unsigned int num_tilings, unsigned int memory_size, double* 
 		coordinates[num_doubles + 1 + i] = ints[i];
 	} // end of i loop
 
-	/* Quantize state to integers (henceforth, tile widths == num_tilings) */
+	/* Quantize state to integers (henceforth, tile widths == number_of_state_tilings) */
 	for (i = 0; i < num_doubles; i++)
 	{
-		qstate[i] = (int)floor(doubles[i] * num_tilings);
+		qstate[i] = (int)floor(doubles[i] * number_of_state_tilings);
 		base[i] = 0;
 	}
 
 	/* Compute the tile numbers */
-	for (j = 0; j < num_tilings; j++)
+	for (j = 0; j < number_of_state_tilings; j++)
 	{
 		/* Loop over each relevant dimension */
 		for (i = 0; i < num_doubles; i++)
 		{
 			/* Find coordinates of activated tile in tiling space */
-			coordinates[i] = qstate[i] - ModuloNegativeSafe(qstate[i] - base[i], num_tilings);
+			coordinates[i] = qstate[i] - ModuloNegativeSafe(qstate[i] - base[i], number_of_state_tilings);
 
 			/* Compute displacement of next tiling in quantized space */
 			base[i] += 1 + (2 * i);
@@ -625,8 +643,37 @@ int HashTiles(int* ints, unsigned int num_ints, long m, int increment)
     return(index);
 } // end of HashTiles function
 
+/* This function creates the feature vector */
+void CreateFeatureVector(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, unsigned int number_of_features, double* feature_vector)
+{
+	unsigned int i;
+	
+	/* First reset the feature vector to all zeros */
+	ResetFeatureVector(number_of_features, feature_vector);
+	
+	for (i = 0; i < number_of_state_tilings; i++)
+	{
+		feature_vector[action_index * number_of_state_tiles + state_tile_indices[i]] = 1.0;
+	} // end of i loop
+	
+	return;
+} // end of CreateFeatureVector function
+
+/* This function resets the feature vector */
+void ResetFeatureVector(unsigned int number_of_features, double* feature_vector)
+{
+	unsigned int i;
+	
+	for (i = 0; i < number_of_features; i++)
+	{
+		feature_vector[i] = 0.0;
+	} // end of i loop
+	
+	return;
+} // end of CreateFeatureVector function
+
 /* This function initializes episodes */
-void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int* state_tile_indices, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int number_of_features, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double epsilon, unsigned int* initial_state_index, unsigned int* initial_action_index)
+void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int* state_tile_indices, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double epsilon, unsigned int* initial_state_index, unsigned int* initial_action_index)
 {
 	unsigned int i;
 	double probability = 0.0;
@@ -641,20 +688,10 @@ void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int 
 	GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[(*initial_state_index)], number_of_state_double_variables, state_int_variables[(*initial_state_index)], number_of_state_int_variables, state_tile_indices);
 	
 	/* Get initial action */
-	probability = UnifRand();
+	(*initial_action_index) = SelectAction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_tile_indices, number_of_features, feature_vector, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
 	
-	/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
-	EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
-	
-	/* Find which action using probability */
-	for (i = 0; i < max_number_of_actions; i++)
-	{
-		if (probability <= policy_cumulative_sum[i])
-		{
-			(*initial_action_index) = i;
-			break; // break i loop since we found our index
-		}
-	} // end of i loop
+	/* Create feature vector x <- x(S, A) */
+	CreateFeatureVector(number_of_state_tilings, number_of_state_tiles, state_tile_indices, (*initial_action_index), number_of_features, feature_vector);
 	
 	return;
 } // end of InitializeEpisode function
@@ -673,7 +710,7 @@ void ResetEligbilityTraces(unsigned int number_of_features, double* eligibility_
 } // end of ResetEligbilityTraces function
 
 /* This function selects a policy with using epsilon-greedy from the approximate state-action-value function */
-void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon)
+void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon)
 {
 	unsigned int i, max_action_count = 1;
 	double max_state_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0, remaining_apportioned_probability_per_action = 0.0;
@@ -682,7 +719,9 @@ void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_numb
 	for (i = 0; i < max_number_of_actions; i++)
 	{
 		/* Save max state action value and find the number of actions that have the same max state action value */
-		approximate_state_action_value_function[i] = ApproximateStateActionValueFunction(number_of_state_tilings, number_of_state_tiles, state_tile_indices, i, weights);
+		CreateFeatureVector(number_of_state_tilings, number_of_state_tiles, state_tile_indices, i, number_of_features, feature_vector);
+		
+		approximate_state_action_value_function[i] = ApproximateStateActionValueFunction(number_of_features, feature_vector, weights);
 		
 		if (approximate_state_action_value_function[i] > max_state_action_value)
 		{
@@ -731,11 +770,11 @@ void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_numb
 } // end of EpsilonGreedyPolicyFromStateActionFunction function
 
 /* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int* next_state_tile_indices, unsigned int number_of_features, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double alpha, double epsilon, double discounting_factor_gamma, double trace_decay_lambda, unsigned int trace_update_type, unsigned int maximum_episode_length, unsigned int state_index, unsigned int action_index)
+void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double alpha, double epsilon, double discounting_factor_gamma, double trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index, unsigned int action_index)
 {
 	unsigned int i, j;
 	unsigned int successor_state_transition_index, next_state_index, next_action_index;
-	double probability, reward, delta;
+	double probability, reward, delta, approximate_q_old = 0.0, approximate_q = 0.0, approximate_q_prime = 0.0;
 		
 	/* Loop through episode steps until termination */
 	for (i = 0; i < maximum_episode_length; i++)
@@ -746,70 +785,57 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		/* Get next state */
 		next_state_index = state_action_successor_state_indices[state_index][action_index][successor_state_transition_index];
 		
-		/* Get tiled feature indices of state */
-		GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[state_index], number_of_state_double_variables, state_int_variables[state_index], number_of_state_int_variables, state_tile_indices);
+		/* Get tiled feature indices of next state */
+		GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[next_state_index], number_of_state_double_variables, state_int_variables[next_state_index], number_of_state_int_variables, state_tile_indices);
 		
-		/* Calculate delta */
-		delta = reward;
+		/* Get next action */
+		next_action_index = SelectAction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_tile_indices, number_of_features, next_feature_vector, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
 		
-		for (j = 0; j < number_of_state_tilings; j++)
+		/* Check to see if we actioned into a terminal state */
+		if (next_state_index >= number_of_non_terminal_states)
 		{
-			delta -= weights[action_index * number_of_state_tiles + state_tile_indices[j]];
+			/* S' is terminal, so set the next feature vector to all zeros */
+			ResetFeatureVector(number_of_features, next_feature_vector);
 			
-			/* Update eligibility trace */
-			if (trace_update_type == 1) // replacing
-			{
-				eligibility_trace[action_index * number_of_state_tiles + state_tile_indices[j]] = 1.0;
-			}
-			else // accumulating or unknown
-			{
-				eligibility_trace[action_index * number_of_state_tiles + state_tile_indices[j]] += 1.0;
-			}
+			/* Save ourselves the computation and just set approximate Q' to zero */
+			approximate_q_prime = 0.0;
+		}
+		else
+		{
+			/* Create feature vector x' <- x(S', A') */
+			CreateFeatureVector(number_of_state_tilings, number_of_state_tiles, state_tile_indices, next_action_index, number_of_features, next_feature_vector);
+			
+			/* Approximate scalar Q' */
+			approximate_q_prime = ApproximateStateActionValueFunction(number_of_features, next_feature_vector, weights);
+		}
+		
+		/* Approximate scalar Q */
+		approximate_q = ApproximateStateActionValueFunction(number_of_features, feature_vector, weights);
+		
+		/* Calculate TD error delta */
+		delta = reward + discounting_factor_gamma * approximate_q_prime - approximate_q;
+		
+		/* Update eligibility traces using dutch trace */
+		UpdateDutchEligibilityTrace(number_of_features, feature_vector, alpha, discounting_factor_gamma, trace_decay_lambda, eligibility_trace);
+
+		/* Update weights */
+		for (j = 0; j < number_of_features; j++)
+		{
+			weights[j] += alpha * (delta + approximate_q - approximate_q_old) * eligibility_trace[j] - alpha * (approximate_q - approximate_q_old) * feature_vector[j];
 		} // end of j loop
 		
 		/* Check to see if we actioned into a terminal state */
 		if (next_state_index >= number_of_non_terminal_states)
 		{
-			/* Update weights */
-			for (j = 0; j < number_of_state_tilings; j++)
-			{
-				weights[action_index * number_of_state_tiles + state_tile_indices[j]] += alpha * delta * eligibility_trace[action_index * number_of_state_tiles + state_tile_indices[j]]; // since this is linear grad(q(S, A, w)) = x(S, A, w) which is 1 for tiled index otherwise 0
-			} // end of j loop
-			
 			break; // episode terminated since we ended up in a terminal state
 		}
 		else
 		{
-			/* Get tiled feature indices of next state */
-			GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[next_state_index], number_of_state_double_variables, state_int_variables[next_state_index], number_of_state_int_variables, next_state_tile_indices);
+			approximate_q_old = approximate_q_prime;
 			
-			/* Get next action */
-			probability = UnifRand();
-			
-			/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
-			EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, next_state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
-
-			/* Find which action using probability */
-			for (j = 0; j < max_number_of_actions; j++)
-			{
-				if (probability <= policy_cumulative_sum[j])
-				{
-					next_action_index = j;
-					break; // break j loop since we found our index
-				}
-			} // end of j loop
-			
-			/* Calculate delta */
-			for (j = 0; j < number_of_state_tilings; j++)
-			{
-				delta += discounting_factor_gamma * weights[next_action_index * number_of_state_tiles + next_state_tile_indices[j]];
-			} // end of j loop
-			
-			/* Update weights and eligibility traces */
 			for (j = 0; j < number_of_features; j++)
 			{
-				weights[j] += alpha * delta * eligibility_trace[j]; // since this is linear grad(q(S, A, w)) = x(S, A, w) which is 1 for tiled index otherwise 0
-				eligibility_trace[j] *= discounting_factor_gamma * trace_decay_lambda;
+				feature_vector[j] = next_feature_vector[j];
 			} // end of j loop
 			
 			/* Update state and action to next state and action */
@@ -820,6 +846,31 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 	
 	return;
 } // end of LoopThroughEpisode function
+
+/* This function selects an action in state state_index */
+unsigned int SelectAction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon)
+{
+	unsigned int i, action_index;
+	double probability;
+	
+	probability = UnifRand();
+	
+	/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
+	EpsilonGreedyPolicyFromApproximateStateActionFunction(max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_tile_indices, number_of_features, feature_vector, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon);
+	
+	/* Find which action using probability */
+	for (i = 0; i < max_number_of_actions; i++)
+	{
+		if (probability <= policy_cumulative_sum[i])
+		{
+			action_index = i;
+			
+			break; // break i loop since we found our index
+		}
+	} // end of i loop
+		
+	return action_index;
+} // end of SelectAction function
 
 /* This function observes the reward from the environment by taking action action_index in state state_index */
 double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards)
@@ -846,18 +897,39 @@ double ObserveReward(unsigned int state_index, unsigned int action_index, unsign
 } // end of ObserveReward function
 
 /* This function calculates the approximate state action value function w^T * x */
-double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, double* weights)
+double ApproximateStateActionValueFunction(unsigned int number_of_features, double* feature_vector, double* weights)
 {
 	unsigned int i;
 	double approximate_state_action_value_function = 0.0;
 	
-	for (i = 0; i < number_of_state_tilings; i++)
+	for (i = 0; i < number_of_features; i++)
 	{
-		approximate_state_action_value_function += weights[action_index * number_of_state_tiles + state_tile_indices[i]];
+		approximate_state_action_value_function += weights[i] * feature_vector[i];
 	} // end of i loop
 	
 	return approximate_state_action_value_function;
 } // end of ApproximateStateActionValueFunction function
+
+/* This function updates a dutch style eligibility trace */
+void UpdateDutchEligibilityTrace(unsigned int number_of_features, double* feature_vector, double alpha, double discounting_factor_gamma, double trace_decay_lambda, double* eligibility_trace)
+{
+	unsigned int i;
+	double gamma_lambda = discounting_factor_gamma * trace_decay_lambda, temp_scalar = 0.0;
+
+	for (i = 0; i < number_of_features; i++)
+	{
+		temp_scalar	+= eligibility_trace[i] * feature_vector[i];
+	} // end of i loop
+	
+	temp_scalar = (1.0 - alpha * gamma_lambda * temp_scalar);
+	
+	for (i = 0; i < number_of_features; i++)
+	{
+		eligibility_trace[i] = gamma_lambda * eligibility_trace[i] + temp_scalar * feature_vector[i];
+	} // end of i loop
+	
+	return;
+} // end of UpdateDutchEligibilityTrace function
 
 double UnifRand(void)
 {
