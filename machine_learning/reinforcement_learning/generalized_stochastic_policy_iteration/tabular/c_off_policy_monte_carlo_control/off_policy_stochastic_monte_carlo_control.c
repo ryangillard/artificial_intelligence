@@ -371,7 +371,7 @@ int main(int argc, char* argv[])
 		printf("\n");
 	} // end of i loop
 	
-	/* This function generates episodes */
+	/* Create counter to keep track of current episode's length */
 	unsigned int episode_length = 0;
 	
 	/* Loop over episodes */
@@ -414,6 +414,7 @@ int main(int argc, char* argv[])
 	/****************************************** FREE DYNAMIC MEMORY ******************************************/
 	/*********************************************************************************************************/
 	
+	/* Free policy iteration arrays */
 	for (i = 0; i < number_of_non_terminal_states; i++)
 	{
 		free(behavior_policy_cumulative_sum[i]);
@@ -434,6 +435,7 @@ int main(int argc, char* argv[])
 	
 	free(episode_log);
 	
+	/* Free environment arrays */
 	for (i = 0; i < number_of_non_terminal_states; i++)
 	{
 		for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
