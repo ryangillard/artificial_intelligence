@@ -347,22 +347,26 @@ int main(int argc, char* argv[])
 	
 	/* Create our feature vector */
 	double* feature_vector;
-	feature_vector = malloc(sizeof(double) * number_of_features);
+	feature_vector = malloc(sizeof(double) * (number_of_features + 1));
 	
 	ResetFeatureVector(number_of_features, feature_vector); // initialize all features to zero
 	
+	feature_vector[number_of_features] = 1.0; // bias term
+	
 	/* Create our next feature vector */
 	double* next_feature_vector;
-	next_feature_vector = malloc(sizeof(double) * number_of_features);
+	next_feature_vector = malloc(sizeof(double) * (number_of_features + 1));
 	
 	ResetFeatureVector(number_of_features, next_feature_vector); // initialize all features to zero
 	
+	next_feature_vector[number_of_features] = 1.0; // bias term
+	
 	/* Create our weights */
 	double* weights; // since this is linear, there is a weight for each input feature
-	weights = malloc(sizeof(double) * number_of_features);
+	weights = malloc(sizeof(double) * (number_of_features + 1));
 	
 	/* Initialize weights to zero */
-	for (i = 0; i < number_of_features; i++)
+	for (i = 0; i < number_of_features + 1; i++)
 	{
 		weights[i] = 0.0;
 	} // end of i loop
@@ -404,8 +408,8 @@ int main(int argc, char* argv[])
 	
 	/* Create eligibility trace array */
 	double* eligibility_trace;
-	eligibility_trace = malloc(sizeof(double) * number_of_features);
-	for (i = 0; i < number_of_features; i++)
+	eligibility_trace = malloc(sizeof(double) * (number_of_features + 1));
+	for (i = 0; i < (number_of_features + 1); i++)
 	{
 		eligibility_trace[i] = 0.0;
 	} // end of i loop
@@ -701,7 +705,7 @@ void ResetEligbilityTraces(unsigned int number_of_features, double* eligibility_
 {
 	unsigned int i;
 	
-	for (i = 0; i < number_of_features; i++)
+	for (i = 0; i < (number_of_features + 1); i++)
 	{
 		eligibility_trace[i] = 0.0;
 	} // end of i loop
@@ -819,7 +823,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		UpdateDutchEligibilityTrace(number_of_features, feature_vector, alpha, discounting_factor_gamma, trace_decay_lambda, eligibility_trace);
 
 		/* Update weights */
-		for (j = 0; j < number_of_features; j++)
+		for (j = 0; j < (number_of_features + 1); j++)
 		{
 			weights[j] += alpha * (delta + approximate_q - approximate_q_old) * eligibility_trace[j] - alpha * (approximate_q - approximate_q_old) * feature_vector[j];
 		} // end of j loop
@@ -902,7 +906,7 @@ double ApproximateStateActionValueFunction(unsigned int number_of_features, doub
 	unsigned int i;
 	double approximate_state_action_value_function = 0.0;
 	
-	for (i = 0; i < number_of_features; i++)
+	for (i = 0; i < (number_of_features + 1); i++)
 	{
 		approximate_state_action_value_function += weights[i] * feature_vector[i];
 	} // end of i loop
@@ -916,14 +920,14 @@ void UpdateDutchEligibilityTrace(unsigned int number_of_features, double* featur
 	unsigned int i;
 	double gamma_lambda = discounting_factor_gamma * trace_decay_lambda, temp_scalar = 0.0;
 
-	for (i = 0; i < number_of_features; i++)
+	for (i = 0; i < (number_of_features + 1); i++)
 	{
 		temp_scalar	+= eligibility_trace[i] * feature_vector[i];
 	} // end of i loop
 	
 	temp_scalar = (1.0 - alpha * gamma_lambda * temp_scalar);
 	
-	for (i = 0; i < number_of_features; i++)
+	for (i = 0; i < (number_of_features + 1); i++)
 	{
 		eligibility_trace[i] = gamma_lambda * eligibility_trace[i] + temp_scalar * feature_vector[i];
 	} // end of i loop
