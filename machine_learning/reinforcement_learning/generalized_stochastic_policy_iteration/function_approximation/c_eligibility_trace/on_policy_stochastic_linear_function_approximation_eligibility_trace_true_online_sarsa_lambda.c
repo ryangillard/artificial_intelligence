@@ -670,7 +670,7 @@ void ResetFeatureVector(unsigned int number_of_features, double* feature_vector)
 	} // end of i loop
 	
 	return;
-} // end of CreateFeatureVector function
+} // end of ResetFeatureVector function
 
 /* This function initializes episodes */
 void InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int* state_tile_indices, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int number_of_features, double* feature_vector, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double* eligibility_trace, double epsilon, unsigned int* initial_state_index, unsigned int* initial_action_index)
