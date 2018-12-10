@@ -35,8 +35,8 @@ void InitializeEpisode(unsigned int number_of_states, unsigned int max_number_of
 /* This function selects a policy with using epsilon-greedy from the state-action-value function */
 void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double epsilon);
 
-/* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int n_steps);
+/* This function loops forever through steps and updates the policy */
+void LoopForeverThroughSteps(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int n_steps);
 
 /* This function calculates the approximate state action value function w^T * x */
 double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, double* weights);
@@ -327,11 +327,8 @@ int main(int argc, char* argv[])
 	/* Set the n steps */
 	unsigned int n_steps = 4;
 	
-	/* Set the number of episodes */
-	unsigned int number_of_episodes = 10000;
-	
 	/* Set the maximum episode length */
-	unsigned int maximum_episode_length = 200;
+	unsigned int maximum_episode_length = 1000000;
 	
 	/* Create episode log */
 	struct Episode* episode_log;
@@ -407,15 +404,11 @@ int main(int argc, char* argv[])
 		printf("\n");
 	} // end of i loop
 	
-	/* Loop over episodes */
-	for (i = 0; i < number_of_episodes; i++)
-	{
-		/* Initialize episode to get initial state and action */
-		InitializeEpisode(number_of_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon, episode_log);
-		
-		/* Loop through episode and update the policy */
-		LoopThroughEpisode(number_of_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, alpha, beta, epsilon, average_reward_estimate, maximum_episode_length, episode_log, n_steps);
-	} // end of i loop
+	/* Initialize episode to get initial state and action */
+	InitializeEpisode(number_of_states, max_number_of_actions, state_tile_indices, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, epsilon, episode_log);
+	
+	/* Loop through episode and update the policy */
+	LoopForeverThroughSteps(number_of_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, weights, approximate_state_action_value_function, policy, policy_cumulative_sum, alpha, beta, epsilon, average_reward_estimate, maximum_episode_length, episode_log, n_steps);
 	
 	/*********************************************************************************************************/
 	/**************************************** PRINT VALUES AND POLICIES ****************************************/
@@ -681,14 +674,14 @@ void EpsilonGreedyPolicyFromApproximateStateActionFunction(unsigned int max_numb
 	return;
 } // end of EpsilonGreedyPolicyFromStateActionFunction function
 
-/* This function loops through episodes and updates the policy */
-void LoopThroughEpisode(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int n_steps)
+/* This function loops forever through steps and updates the policy */
+void LoopForeverThroughSteps(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, double* weights, double* approximate_state_action_value_function, double* policy, double* policy_cumulative_sum, double alpha, double beta, double epsilon, double average_reward_estimate, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int n_steps)
 {
 	int t, i, tau = 0;
 	unsigned int t_mod_n_plus_1, t_plus_1_mod_n_plus_1, tau_plus_n_mod_n_plus_1, tau_mod_n_plus_1, successor_state_transition_index;
 	double probability, state_value_function_expected_value_on_policy = 0.0, expected_return = 0.0, delta;
 		
-	/* Loop through episode steps until termination */
+	/* Loop forever (or at least until our maximum) */
 	for (t = 0; t < maximum_episode_length; t++)
 	{
 		/* Spend a little memory to save computation time */
@@ -778,7 +771,7 @@ void LoopThroughEpisode(unsigned int number_of_states, unsigned int** number_of_
 	} // end of t loop
 	
 	return;
-} // end of LoopThroughEpisode function
+} // end of LoopForeverThroughSteps function
 
 /* This function calculates the approximate state action value function w^T * x */
 double ApproximateStateActionValueFunction(unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int* state_tile_indices, unsigned int action_index, double* weights)

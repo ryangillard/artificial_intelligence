@@ -488,7 +488,7 @@ int main(int argc, char* argv[])
 		printf("\n");
 	} // end of i loop
 	
-	/* Create counter to keep track of current episode's length */
+	/* Create variable for episode's initial state */
 	unsigned int initial_state_index = 0;
 	
 	/* Loop over episodes */

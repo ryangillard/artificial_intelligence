@@ -33,8 +33,8 @@ unsigned int SelectAction(unsigned int max_number_of_actions, unsigned int numbe
 /* This function observes the reward from the environment by taking action in current state */
 double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards);
 
-/* This function loops through episodes and updates the policy */
-void LoopForever(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, unsigned int number_of_policy_weights, double* policy_weights, double* state_value_weights, double* policy, double* policy_cumulative_sum, double* policy_eligibility_trace, double* state_value_eligibility_trace, double policy_weight_alpha, double state_value_weight_alpha, double average_reward_estimate_alpha, double average_reward_estimate, double policy_trace_decay_lambda, double state_value_trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index);
+/* This function loops forever through steps and updates the policy */
+void LoopForeverThroughSteps(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, unsigned int number_of_policy_weights, double* policy_weights, double* state_value_weights, double* policy, double* policy_cumulative_sum, double* policy_eligibility_trace, double* state_value_eligibility_trace, double policy_weight_alpha, double state_value_weight_alpha, double average_reward_estimate_alpha, double average_reward_estimate, double policy_trace_decay_lambda, double state_value_trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index);
 
 /* This function calculates the approximate state-value function w^T * x */
 double ApproximateStateValueFunction(unsigned int number_of_features, double* feature_vector, double* state_value_weights);
@@ -457,14 +457,14 @@ int main(int argc, char* argv[])
 		printf("\n");
 	} // end of i loop
 	
-	/* Create counter to keep track of current episode's length */
+	/* Create variable for episode's initial state */
 	unsigned int initial_state_index = 0;
 	
 	/* Initialize episode */
 	initial_state_index = InitializeEpisode(number_of_states, number_of_policy_weights, policy_eligibility_trace, number_of_features, state_value_eligibility_trace);
 	
 	/* Loop forever and update the policy */
-	LoopForever(number_of_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, number_of_features, feature_vector, next_feature_vector, number_of_policy_weights, policy_weights, state_value_weights, policy, policy_cumulative_sum, policy_eligibility_trace, state_value_eligibility_trace, policy_weight_alpha, state_value_weight_alpha, average_reward_estimate_alpha, average_reward_estimate, policy_trace_decay_lambda, state_value_trace_decay_lambda, maximum_episode_length, initial_state_index);
+	LoopForeverThroughSteps(number_of_states, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, max_number_of_actions, number_of_state_tilings, number_of_state_tiles, state_double_variables, number_of_state_double_variables, state_int_variables, number_of_state_int_variables, state_tile_indices, number_of_features, feature_vector, next_feature_vector, number_of_policy_weights, policy_weights, state_value_weights, policy, policy_cumulative_sum, policy_eligibility_trace, state_value_eligibility_trace, policy_weight_alpha, state_value_weight_alpha, average_reward_estimate_alpha, average_reward_estimate, policy_trace_decay_lambda, state_value_trace_decay_lambda, maximum_episode_length, initial_state_index);
 	
 	/*********************************************************************************************************/
 	/*************************************** PRINT VALUES AND POLICIES ***************************************/
@@ -767,8 +767,8 @@ double ObserveReward(unsigned int state_index, unsigned int action_index, unsign
 	return reward;
 } // end of ObserveReward function
 
-/* This function loops through episodes and updates the policy */
-void LoopForever(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, unsigned int number_of_policy_weights, double* policy_weights, double* state_value_weights, double* policy, double* policy_cumulative_sum, double* policy_eligibility_trace, double* state_value_eligibility_trace, double policy_weight_alpha, double state_value_weight_alpha, double average_reward_estimate_alpha, double average_reward_estimate, double policy_trace_decay_lambda, double state_value_trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index)
+/* This function loops forever through steps and updates the policy */
+void LoopForeverThroughSteps(unsigned int number_of_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* next_feature_vector, unsigned int number_of_policy_weights, double* policy_weights, double* state_value_weights, double* policy, double* policy_cumulative_sum, double* policy_eligibility_trace, double* state_value_eligibility_trace, double policy_weight_alpha, double state_value_weight_alpha, double average_reward_estimate_alpha, double average_reward_estimate, double policy_trace_decay_lambda, double state_value_trace_decay_lambda, unsigned int maximum_episode_length, unsigned int state_index)
 {
 	unsigned int t, i, j, action_index, successor_state_transition_index, next_state_index;
 	double probability, reward, delta;
@@ -848,7 +848,7 @@ void LoopForever(unsigned int number_of_states, unsigned int** number_of_state_a
 	} // end of t loop
 	
 	return;
-} // end of LoopForever function
+} // end of LoopForeverThroughSteps function
 
 /* This function calculates the approximate state-value function w^T * x */
 double ApproximateStateValueFunction(unsigned int number_of_features, double* feature_vector, double* state_value_weights)
