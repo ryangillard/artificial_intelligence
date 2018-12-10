@@ -369,10 +369,10 @@ int main(int argc, char* argv[])
 	
 	/* Create our policy_weights */
 	double* policy_weights;
-	policy_weights = malloc(sizeof(double) * (number_of_policy_weights + 1));
+	policy_weights = malloc(sizeof(double) * number_of_policy_weights);
 	
 	/* Initialize policy weights to zero */
-	for (i = 0; i < (number_of_policy_weights + 1); i++)
+	for (i = 0; i < number_of_policy_weights; i++)
 	{
 		policy_weights[i] = 0.0;
 	} // end of i loop
@@ -440,10 +440,17 @@ int main(int argc, char* argv[])
 	/******************************************* RUN POLICY CONTROL ******************************************/
 	/*********************************************************************************************************/
 	
-	printf("\nInitial policy_weights:\n");
-	for (i = 0; i < (number_of_policy_weights + 1); i++)
+	printf("\nInitial policy weights:\n");
+	for (i = 0; i < number_of_policy_weights; i++)
 	{
 		printf("%lf\t", policy_weights[i]);
+	} // end of i loop
+	printf("\n");
+	
+	printf("\nInitial state-value weights:\n");
+	for (i = 0; i < (number_of_features + 1); i++)
+	{
+		printf("%lf\t", state_value_weights[i]);
 	} // end of i loop
 	printf("\n");
 	
@@ -493,10 +500,17 @@ int main(int argc, char* argv[])
 	/*************************************** PRINT VALUES AND POLICIES ***************************************/
 	/*********************************************************************************************************/
 	
-	printf("\nFinal policy_weights:\n");
-	for (i = 0; i < (number_of_policy_weights + 1); i++)
+	printf("\nFinal policy weights:\n");
+	for (i = 0; i < number_of_policy_weights; i++)
 	{
 		printf("%lf\t", policy_weights[i]);
+	} // end of i loop
+	printf("\n");
+	
+	printf("\nFinal state-value weights:\n");
+	for (i = 0; i < (number_of_features + 1); i++)
+	{
+		printf("%lf\t", state_value_weights[i]);
 	} // end of i loop
 	printf("\n");
 	
@@ -807,7 +821,7 @@ double ObserveReward(unsigned int state_index, unsigned int action_index, unsign
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, unsigned int number_of_policy_weights, double* policy_weights, double* state_value_weights, double* policy, double* policy_cumulative_sum, double policy_weight_alpha, double state_value_weight_alpha, double discounting_factor_gamma, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int episode_length)
 {
 	unsigned int t, i, j, k, successor_state_transition_index;
-	double probability, expected_return, delta, expected_intercept_term;
+	double expected_return, delta;
 		
 	/* Loop through episode steps until termination */
 	for (t = 0; t < episode_length; t++)
@@ -856,14 +870,6 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 				} // end of j loop				
 			}
 		} // end of i loop
-		
-		expected_intercept_term = 0.0;
-		for (i = 0; i < max_number_of_actions; i++)
-		{
-			expected_intercept_term += policy[i];
-		} // end of i loop
-		
-		policy_weights[number_of_features * max_number_of_actions] += policy_weight_alpha * pow(discounting_factor_gamma, t) * delta * (1.0 - expected_intercept_term);
 	} // end of t loop
 	
 	return;
@@ -898,8 +904,6 @@ void ApproximatePolicy(unsigned int max_number_of_actions, unsigned int number_o
 		{
 			policy[i] += policy_weights[i * number_of_features + j] * feature_vector[j];
 		} // end of j loop
-		
-		policy[i] += policy_weights[number_of_features * max_number_of_actions];
 	} // end of i loop
 	
 	ApplySoftmaxActivationFunction(max_number_of_actions, policy);
