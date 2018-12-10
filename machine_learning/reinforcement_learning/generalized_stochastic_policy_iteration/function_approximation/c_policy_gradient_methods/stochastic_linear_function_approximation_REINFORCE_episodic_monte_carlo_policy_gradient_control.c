@@ -43,6 +43,12 @@ void ResetFeatureVector(unsigned int number_of_features, double* feature_vector)
 /* This function generates episodes */
 unsigned int GenerateEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int number_of_state_double_variables, double** state_double_variables, unsigned int number_of_state_int_variables, int** state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum, unsigned int maximum_episode_length, struct Episode* episode_log);
 
+/* This function selects an action in current state */
+unsigned int SelectAction(unsigned int max_number_of_actions, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum);
+
+/* This function observes the reward from the environment by taking action in current state */
+double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards);
+
 /* This function loops through episodes and updates the policy */
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum, double alpha, double discounting_factor_gamma, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int episode_length);
 
@@ -667,63 +673,37 @@ void ResetFeatureVector(unsigned int number_of_features, double* feature_vector)
 /* This function generates episodes */
 unsigned int GenerateEpisode(unsigned int number_of_non_terminal_states, unsigned int max_number_of_actions, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, unsigned int number_of_state_double_variables, double** state_double_variables, unsigned int number_of_state_int_variables, int** state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum, unsigned int maximum_episode_length, struct Episode* episode_log)
 {
-	unsigned int i;
-	unsigned int step_count = 0, current_state = 0, action_index = 0, successor_state_transition_index = 0;
-	double probability = 0.0;
+	unsigned int step_count = 0, state_index = 0, successor_state_transition_index = 0;
 	
 	/* Initial state */
-	current_state = rand() % number_of_non_terminal_states; // randomly choose an initial state from all non-terminal states
+	state_index = rand() % number_of_non_terminal_states; // randomly choose an initial state from all non-terminal states
 	
 	/* Now repeat */
 	while (step_count < maximum_episode_length)
 	{
 		/* Get state */
-		episode_log[step_count].state_index = current_state;
+		episode_log[step_count].state_index = state_index;
 		
 		/* Get tiled feature indices of state */
 		GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[episode_log[step_count].state_index], number_of_state_double_variables, state_int_variables[episode_log[step_count].state_index], number_of_state_int_variables, state_tile_indices);
 		
 		/* Create feature vector using state feature tilings */
 		CreateFeatureVector(number_of_state_tilings, state_tile_indices, number_of_features, feature_vector);
-		
-		/* Approximate policy for current state */
-		ApproximatePolicy(max_number_of_actions, number_of_features, feature_vector, policy_weights, policy, policy_cumulative_sum);
 
 		/* Get action */
-		probability = UnifRand();
-		
-		for (i = 0; i < max_number_of_actions; i++)
-		{
-			if (probability <= policy_cumulative_sum[i])
-			{
-				action_index = i;
-				break; // break i loop since we found our index
-			}
-		} // end of i loop
-		episode_log[step_count].action_index = action_index;
+		episode_log[step_count].action_index = SelectAction(max_number_of_actions, number_of_features, feature_vector, policy_weights, policy, policy_cumulative_sum);
 		
 		/* Get reward */
-		probability = UnifRand();
+		episode_log[step_count].reward = ObserveReward(episode_log[step_count].state_index, episode_log[step_count].action_index, &successor_state_transition_index, number_of_state_action_successor_states, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards);
 		
-		for (i = 0; i < number_of_state_action_successor_states[current_state][action_index]; i++)
-		{
-			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[current_state][action_index][i])
-			{
-				successor_state_transition_index = i;
-				break; // break i loop since we found our index
-			}
-		} // end of i loop
+		/* Get next state */
+		state_index = state_action_successor_state_indices[episode_log[step_count].state_index][episode_log[step_count].action_index][successor_state_transition_index];
 		
-		episode_log[step_count].reward = state_action_successor_state_rewards[current_state][action_index][successor_state_transition_index];
-	
 		/* Increment step count */
 		step_count++;
 		
-		/* Get next state */
-		current_state = state_action_successor_state_indices[current_state][action_index][successor_state_transition_index];
-
 		/* Check to see if we actioned into a terminal state */
-		if (current_state >= number_of_non_terminal_states)
+		if (state_index >= number_of_non_terminal_states)
 		{
 			break; // episode terminated since we ended up in a terminal state
 		}
@@ -731,6 +711,56 @@ unsigned int GenerateEpisode(unsigned int number_of_non_terminal_states, unsigne
 	
 	return step_count;
 } // end of GenerateEpisode function
+
+/* This function selects an action in current state */
+unsigned int SelectAction(unsigned int max_number_of_actions, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum)
+{
+	unsigned int i, action_index;
+	double probability;
+	
+	/* Approximate policy for current state */
+	ApproximatePolicy(max_number_of_actions, number_of_features, feature_vector, policy_weights, policy, policy_cumulative_sum);
+	
+	probability = UnifRand();
+	
+	/* Find which action using probability */
+	for (i = 0; i < max_number_of_actions; i++)
+	{
+		if (probability <= policy_cumulative_sum[i])
+		{
+			action_index = i;
+			
+			break; // break i loop since we found our index
+		}
+	} // end of i loop
+		
+	return action_index;
+} // end of SelectAction function
+
+/* This function observes the reward from the environment by taking action in current state */
+double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards)
+{
+	unsigned int i;
+	double probability, reward;
+	
+	probability = UnifRand();
+	
+	/* Find which successor state using probability */
+	for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
+	{
+		if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
+		{
+			(*successor_state_transition_index) = i;
+			
+			break; // break i loop since we found our index
+		}
+	} // end of i loop
+	
+	/* Get reward from state and action */
+	reward = state_action_successor_state_rewards[state_index][action_index][(*successor_state_transition_index)];
+	
+	return reward;
+} // end of ObserveReward function
 
 /* This function loops through episodes and updates the policy */
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, unsigned int max_number_of_actions, unsigned int number_of_state_tilings, unsigned int number_of_state_tiles, double** state_double_variables, unsigned int number_of_state_double_variables, int** state_int_variables, unsigned int number_of_state_int_variables, unsigned int* state_tile_indices, unsigned int number_of_features, double* feature_vector, double* policy_weights, double* policy, double* policy_cumulative_sum, double alpha, double discounting_factor_gamma, unsigned int maximum_episode_length, struct Episode* episode_log, unsigned int episode_length)
