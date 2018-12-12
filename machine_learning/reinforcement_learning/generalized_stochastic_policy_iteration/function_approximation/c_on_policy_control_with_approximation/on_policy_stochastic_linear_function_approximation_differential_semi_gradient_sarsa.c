@@ -708,8 +708,6 @@ void LoopForeverThroughSteps(unsigned int number_of_states, unsigned int** numbe
 			}
 		} // end of j loop
 		
-		printf("i = %u, state_index = %u, action_index = %u, reward = %lf, next_state_index = %u, next_action_index = %u\n", i, state_index, action_index, reward, next_state_index, next_action_index);
-		
 		/* Get tiled feature indices of state */
 		GetTileIndices(number_of_state_tilings, number_of_state_tiles, state_double_variables[state_index], number_of_state_double_variables, state_int_variables[state_index], number_of_state_int_variables, state_tile_indices);
 		
