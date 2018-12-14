@@ -565,18 +565,18 @@ double GreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_per_n
 /* This function loops through episodes in reverse order and updates the target policy */
 void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double** weights_cumulative_sum, double** target_policy, double** behavior_policy, double discounting_factor_gamma, struct Episode* episode_log, unsigned int episode_length)
 {
-	int i, j;
+	int t;
 	unsigned int state_index, action_index;
 	double expected_return = 0.0, weight = 1.0, max_policy_apportioned_probability_per_action;
 		
 	/* Loop through episode steps in reverse order */
-	for (i = episode_length - 1; i >= 0; i--)
+	for (t = episode_length - 1; t >= 0; t--)
 	{
-		state_index = episode_log[i].state_index;
-		action_index = episode_log[i].action_index;
+		state_index = episode_log[t].state_index;
+		action_index = episode_log[t].action_index;
 		
 		/* Calculate expected return */
-		expected_return = discounting_factor_gamma * expected_return + episode_log[i].reward;
+		expected_return = discounting_factor_gamma * expected_return + episode_log[t].reward;
 		
 		/* Keep track of weight so that we can incrementally calculate average */
 		weights_cumulative_sum[state_index][action_index] += weight;
@@ -604,7 +604,7 @@ void LoopThroughEpisodeInReverse(unsigned int number_of_non_terminal_states, uns
 		{
 			weight /= behavior_policy[state_index][action_index];
 		}
-	} // end of i loop
+	} // end of t loop
 	
 	return;
 } // end of LoopThroughEpisodeInReverse function
