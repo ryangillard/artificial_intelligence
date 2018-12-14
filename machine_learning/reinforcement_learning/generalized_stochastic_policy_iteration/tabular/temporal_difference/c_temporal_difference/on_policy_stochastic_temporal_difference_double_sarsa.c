@@ -511,24 +511,24 @@ void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_
 /* This function loops through episodes and updates the policy */
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, double** state_action_value_function1, double** state_action_value_function2, double** policy, double** policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, unsigned int maximum_episode_length, unsigned int state_index, unsigned int action_index)
 {
-	unsigned int i, j;
+	unsigned int t, i;
 	unsigned int successor_state_transition_index, next_state_index;
 	double probability, reward;
 		
 	/* Loop through episode steps until termination */
-	for (i = 0; i < maximum_episode_length; i++)
+	for (t = 0; t < maximum_episode_length; t++)
 	{
 		/* Get reward */
 		probability = UnifRand();
 		
-		for (j = 0; j < number_of_state_action_successor_states[state_index][action_index]; j++)
+		for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
 		{
-			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
+			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
 			{
-				successor_state_transition_index = j;
-				break; // break j loop since we found our index
+				successor_state_transition_index = i;
+				break; // break i loop since we found our index
 			}
-		} // end of j loop
+		} // end of i loop
 		
 		/* Get reward from state and action */
 		reward = state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
@@ -553,7 +553,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		{
 			break; // episode terminated since we ended up in a terminal state
 		}
-	} // end of i loop
+	} // end of t loop
 	
 	return;
 } // end of LoopThroughEpisode function

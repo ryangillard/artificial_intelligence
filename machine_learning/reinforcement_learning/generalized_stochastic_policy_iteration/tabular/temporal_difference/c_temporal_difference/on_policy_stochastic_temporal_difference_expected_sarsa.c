@@ -456,12 +456,12 @@ void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_
 /* This function loops through episodes and updates the policy */
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, double** state_action_value_function, double** policy, double** policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, unsigned int maximum_episode_length, unsigned int state_index)
 {
-	unsigned int i, j;
+	unsigned int t, i;
 	unsigned int action_index, successor_state_transition_index, next_state_index;
 	double probability, reward, state_value_function_expected_value_on_policy;
 		
 	/* Loop through episode steps until termination */
-	for (i = 0; i < maximum_episode_length; i++)
+	for (t = 0; t < maximum_episode_length; t++)
 	{
 		/* Get epsilon-greedy action */
 		probability = UnifRand();
@@ -470,26 +470,26 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		EpsilonGreedyPolicyFromStateActionFunction(number_of_actions_per_non_terminal_state, state_action_value_function, epsilon, state_index, policy, policy_cumulative_sum);
 		
 		/* Find which action using probability */
-		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
+		for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
 		{
-			if (probability <= policy_cumulative_sum[state_index][j])
+			if (probability <= policy_cumulative_sum[state_index][i])
 			{
-				action_index = j;
-				break; // break j loop since we found our index
+				action_index = i;
+				break; // break i loop since we found our index
 			}
-		} // end of j loop
+		} // end of i loop
 		
 		/* Get reward */
 		probability = UnifRand();
 		
-		for (j = 0; j < number_of_state_action_successor_states[state_index][action_index]; j++)
+		for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
 		{
-			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
+			if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
 			{
-				successor_state_transition_index = j;
-				break; // break j loop since we found our index
+				successor_state_transition_index = i;
+				break; // break i loop since we found our index
 			}
-		} // end of j loop
+		} // end of i loop
 		
 		/* Get reward from state and action */
 		reward = state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
@@ -508,10 +508,10 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 			/* Get next action, using expectation value */
 			state_value_function_expected_value_on_policy = 0.0;
 			
-			for (j = 0; j < number_of_actions_per_non_terminal_state[next_state_index]; j++)
+			for (i = 0; i < number_of_actions_per_non_terminal_state[next_state_index]; i++)
 			{
-				state_value_function_expected_value_on_policy += policy[next_state_index][j] * state_action_value_function[next_state_index][j];
-			} // end of j loop
+				state_value_function_expected_value_on_policy += policy[next_state_index][i] * state_action_value_function[next_state_index][i];
+			} // end of i loop
 			
 			/* Calculate state-action-function expectation */
 			state_action_value_function[state_index][action_index] += alpha * (reward + discounting_factor_gamma * state_value_function_expected_value_on_policy - state_action_value_function[state_index][action_index]);
@@ -519,7 +519,7 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 			/* Update state to next state */
 			state_index = next_state_index;
 		}
-	} // end of i loop
+	} // end of t loop
 	
 	return;
 } // end of LoopThroughEpisode function
