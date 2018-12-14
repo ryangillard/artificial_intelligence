@@ -384,7 +384,7 @@ void PolicyEvaluation(unsigned int number_of_non_terminal_states, unsigned int* 
 			/* Cache state-value function for state i */
 			temp_state_value_function = state_value_function[i];
 		
-			/* Update state-value function based on current policy */
+			/* Update state-action value function based on successor states, transition probabilities, and rewards */
 			state_value_function[i] = 0.0;
 			for (j = 0; j < number_of_actions_per_non_terminal_state[i]; j++)
 			{
@@ -401,6 +401,7 @@ void PolicyEvaluation(unsigned int number_of_non_terminal_states, unsigned int* 
 					}
 				} // end of k loop
 				
+				/* Update state value function based on current policy */
 				state_value_function[i] += policy[i][j] * state_action_value_function[i][j];
 			} // end of j loop
 		
