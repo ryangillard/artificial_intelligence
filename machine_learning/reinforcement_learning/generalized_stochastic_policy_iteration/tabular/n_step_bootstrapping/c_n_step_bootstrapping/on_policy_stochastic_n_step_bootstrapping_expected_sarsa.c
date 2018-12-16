@@ -24,7 +24,7 @@ struct Episode
 /*********************************************************************************************************/
 
 /* This function initializes episodes */
-unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int maximum_episode_length, double** policy_cumulative_sum, struct Episode* episode_log);
+unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int maximum_episode_length, struct Episode* episode_log);
 
 /* This function selects a policy with using epsilon-greedy from the state-action-value function */
 void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double epsilon, unsigned int state_index, double** policy, double** policy_cumulative_sum);
@@ -334,8 +334,8 @@ int main(int argc, char* argv[])
 	/* Loop over episodes */
 	for (i = 0; i < number_of_episodes; i++)
 	{
-		/* Initialize episode to get initial state and action */
-		max_timestep = InitializeEpisode(number_of_non_terminal_states, number_of_actions_per_non_terminal_state, state_action_value_function, maximum_episode_length, policy_cumulative_sum, episode_log);
+		/* Initialize episode to get initial state */
+		max_timestep = InitializeEpisode(number_of_non_terminal_states, maximum_episode_length, episode_log);
 
 		/* Loop through episode and update the policy */
 		LoopThroughEpisode(number_of_non_terminal_states, number_of_actions_per_non_terminal_state, number_of_state_action_successor_states, state_action_successor_state_indices, state_action_successor_state_transition_probabilities_cumulative_sum, state_action_successor_state_rewards, state_action_value_function, policy, policy_cumulative_sum, alpha, epsilon, discounting_factor_gamma, maximum_episode_length, max_timestep, episode_log, n_steps);
@@ -418,26 +418,13 @@ int main(int argc, char* argv[])
 /*********************************************************************************************************/
 
 /* This function initializes episodes */
-unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int maximum_episode_length, double** policy_cumulative_sum, struct Episode* episode_log)
+unsigned int InitializeEpisode(unsigned int number_of_non_terminal_states, unsigned int maximum_episode_length, struct Episode* episode_log)
 {
 	unsigned int i;
 	double probability = 0.0;
 	
 	/* Initial state */
 	episode_log[0].state_index = rand() % number_of_non_terminal_states; // randomly choose an initial state from all non-terminal states
-	
-	/* Get initial action */
-	probability = UnifRand();
-	
-	/* Find which action using probability */
-	for (i = 0; i < number_of_actions_per_non_terminal_state[episode_log[0].state_index]; i++)
-	{
-		if (probability <= policy_cumulative_sum[episode_log[0].state_index][i])
-		{
-			episode_log[0].action_index = i;
-			break; // break i loop since we found our index
-		}
-	} // end of i loop
 	
 	return maximum_episode_length;
 } // end of InitializeEpisode function
@@ -514,6 +501,19 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 		
 		if (t < max_timestep)
 		{
+			/* Get action */
+			probability = UnifRand();
+			
+			/* Find which action using probability */
+			for (i = 0; i < number_of_actions_per_non_terminal_state[episode_log[t_mod_n_plus_1].state_index]; i++)
+			{
+				if (probability <= policy_cumulative_sum[episode_log[t_mod_n_plus_1].state_index][i])
+				{
+					episode_log[t_mod_n_plus_1].action_index = i;
+					break; // break i loop since we found our index
+				}
+			} // end of i loop
+			
 			/* Get reward */
 			probability = UnifRand();
 			
@@ -536,21 +536,6 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 			if (episode_log[t_plus_1_mod_n_plus_1].state_index >= number_of_non_terminal_states)
 			{
 				max_timestep = t + 1;
-			}
-			else
-			{
-				/* Get next action */
-				probability = UnifRand();
-				
-				/* Find which action using probability */
-				for (i = 0; i < number_of_actions_per_non_terminal_state[episode_log[t_plus_1_mod_n_plus_1].state_index]; i++)
-				{
-					if (probability <= policy_cumulative_sum[episode_log[t_plus_1_mod_n_plus_1].state_index][i])
-					{
-						episode_log[t_plus_1_mod_n_plus_1].action_index = i;
-						break; // break i loop since we found our index
-					}
-				} // end of i loop
 			}
 		}
 		
