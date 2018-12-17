@@ -940,7 +940,10 @@ void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int 
 	
 	for (i = 0; i < number_of_planning_steps; i++)
 	{
+		/* Randomly choose state indices from previously seen states */
 		state_index = model_seen_non_terminal_states_stack[rand() % model_number_of_seen_non_terminal_states];
+		
+		/* Randomly choose action indices from previously seen actions in previously seen states */
 		action_index = model_seen_non_terminal_states_actions_stack[state_index][rand() % model_number_of_seen_non_terminal_states_actions[state_index]];
 		
 		/* Get reward */
