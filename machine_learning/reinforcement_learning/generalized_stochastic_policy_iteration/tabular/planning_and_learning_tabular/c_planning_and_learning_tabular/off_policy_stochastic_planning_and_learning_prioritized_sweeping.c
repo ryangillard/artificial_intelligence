@@ -33,6 +33,15 @@ void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_
 /* This function loops through episodes and updates the policy */
 void LoopThroughEpisode(unsigned int number_of_states, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** environment_number_of_state_action_successor_states, unsigned int*** environment_state_action_successor_state_indices, double*** environment_state_action_successor_state_transition_probabilities_cumulative_sum, double*** environment_state_action_successor_state_rewards, unsigned int* model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup, unsigned int** model_number_of_state_action_successor_states, unsigned int**** model_state_action_successor_state_indices, double**** model_state_action_successor_state_transition_probabilities, double**** model_state_action_successor_state_transition_probabilities_cumulative_sum, double**** model_state_action_successor_state_rewards, unsigned int**** model_state_action_successor_state_number_of_visits, double** state_action_value_function, unsigned int** state_action_value_function_max_tie_stack, double** policy, double** policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, double theta, unsigned int maximum_episode_length, unsigned int number_of_planning_steps, unsigned int state_index, unsigned int* model_number_of_state_predecessor_state_action_pairs, struct PredecessorStateActionPair*** model_state_predecessor_state_action_pairs, unsigned int* current_priority_queue_size, unsigned int* max_priority_queue_size, struct PriorityQueueNode** priority_queue);
 
+/* This function selects an action in state state_index from epsilon-greedy policy */
+unsigned int SelectActionFromEpsilonGreedyPolicy(unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double epsilon, unsigned int state_index, double** policy, double** policy_cumulative_sum);
+
+/* This function observes the reward from the environment by taking action action_index in state state_index */
+double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards);
+
+/* This function selects the action that leads gives the maximum state-action value function for the given state */
+unsigned int SelectMaxStateActionValueFunctionAction(unsigned int state_index, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int** state_action_value_function_max_tie_stack);
+
 /* This function updates what state and actions the model has seen */
 void UpdateModelSeenStateActions(unsigned int state_index, unsigned int action_index, unsigned int* model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup);
 
@@ -799,129 +808,145 @@ void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_
 void LoopThroughEpisode(unsigned int number_of_states, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** environment_number_of_state_action_successor_states, unsigned int*** environment_state_action_successor_state_indices, double*** environment_state_action_successor_state_transition_probabilities_cumulative_sum, double*** environment_state_action_successor_state_rewards, unsigned int* model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup, unsigned int** model_number_of_state_action_successor_states, unsigned int**** model_state_action_successor_state_indices, double**** model_state_action_successor_state_transition_probabilities, double**** model_state_action_successor_state_transition_probabilities_cumulative_sum, double**** model_state_action_successor_state_rewards, unsigned int**** model_state_action_successor_state_number_of_visits, double** state_action_value_function, unsigned int** state_action_value_function_max_tie_stack, double** policy, double** policy_cumulative_sum, double alpha, double epsilon, double discounting_factor_gamma, double theta, unsigned int maximum_episode_length, unsigned int number_of_planning_steps, unsigned int state_index, unsigned int* model_number_of_state_predecessor_state_action_pairs, struct PredecessorStateActionPair*** model_state_predecessor_state_action_pairs, unsigned int* current_priority_queue_size, unsigned int* max_priority_queue_size, struct PriorityQueueNode** priority_queue)
 {
 	unsigned int i, j;
-	unsigned int action_index, successor_state_transition_index, next_state_index, next_action_index, max_action_count;
-	double probability, reward, max_action_value, priority;
+	unsigned int action_index, successor_state_transition_index, next_state_index, next_action_index;
+	double reward, priority;
 		
 	/* Loop through episode steps until termination */
 	for (i = 0; i < maximum_episode_length; i++)
 	{
 		/* Get epsilon-greedy action */
-		probability = UnifRand();
-		
-		/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
-		EpsilonGreedyPolicyFromStateActionFunction(number_of_actions_per_non_terminal_state, state_action_value_function, epsilon, state_index, policy, policy_cumulative_sum);
-		
-		/* Find which action using probability */
-		for (j = 0; j < number_of_actions_per_non_terminal_state[state_index]; j++)
-		{
-			if (probability <= policy_cumulative_sum[state_index][j])
-			{
-				action_index = j;
-				break; // break j loop since we found our index
-			}
-		} // end of j loop
+		action_index = SelectActionFromEpsilonGreedyPolicy(number_of_actions_per_non_terminal_state, state_action_value_function, epsilon, state_index, policy, policy_cumulative_sum);
 		
 		/* Update what state and actions the model has seen */
 		UpdateModelSeenStateActions(state_index, action_index, model_number_of_seen_non_terminal_states, model_seen_non_terminal_states_stack, model_seen_non_terminal_states_stack_reverse_lookup, model_number_of_seen_non_terminal_states_actions, model_seen_non_terminal_states_actions_stack, model_seen_non_terminal_states_actions_stack_reverse_lookup);
 		
 		/* Get reward */
-		probability = UnifRand();
-		for (j = 0; j < environment_number_of_state_action_successor_states[state_index][action_index]; j++)
-		{
-			if (probability <= environment_state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
-			{
-				successor_state_transition_index = j;
-				break; // break j loop since we found our index
-			}
-		} // end of j loop
-		
-		/* Get reward from state and action */
-		reward = environment_state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
+		reward = ObserveReward(state_index, action_index, &successor_state_transition_index, environment_number_of_state_action_successor_states, environment_state_action_successor_state_transition_probabilities_cumulative_sum, environment_state_action_successor_state_rewards);
 		
 		/* Get next state */
 		next_state_index = environment_state_action_successor_state_indices[state_index][action_index][successor_state_transition_index];
 		
+		/* Update model of environment from experience */
+		UpdateModelOfEnvironmentFromExperience(state_index, action_index, reward, next_state_index, number_of_states, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, model_state_action_successor_state_indices, model_state_action_successor_state_transition_probabilities, model_state_action_successor_state_transition_probabilities_cumulative_sum, model_state_action_successor_state_rewards, model_state_action_successor_state_number_of_visits, model_number_of_state_predecessor_state_action_pairs, model_state_predecessor_state_action_pairs);
+		
 		/* Check to see if we actioned into a terminal state */
 		if (next_state_index >= number_of_non_terminal_states)
 		{
-			/* Update model of environment from experience */
-			UpdateModelOfEnvironmentFromExperience(state_index, action_index, reward, next_state_index, number_of_states, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, model_state_action_successor_state_indices, model_state_action_successor_state_transition_probabilities, model_state_action_successor_state_transition_probabilities_cumulative_sum, model_state_action_successor_state_rewards, model_state_action_successor_state_number_of_visits, model_number_of_state_predecessor_state_action_pairs, model_state_predecessor_state_action_pairs);
-
 			/* Calculate priority */
 			priority = fabs(reward - state_action_value_function[state_index][action_index]);
-			
-			/* Check if priority is over threshold to add to priority queue */
-			if (priority > theta)
-			{
-				/* Check if priority queue is large enough to accept new entry */
-				if ((*current_priority_queue_size) + 1 > (*max_priority_queue_size))
-				{
-					/* Realloc priority queue to double current size */
-					Realloc1dPriorityQueue((*max_priority_queue_size), priority_queue);
-					(*max_priority_queue_size) *= 2;
-				}
-				
-				SearchAndUpdatePriorityQueue(state_index, action_index, priority, current_priority_queue_size, (*priority_queue));
-			}
-			
-			/* Use updated model to simulate experience in planning phase */
-			ModelSimualatePlanning(number_of_planning_steps, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, (*model_number_of_seen_non_terminal_states), model_seen_non_terminal_states_stack, model_seen_non_terminal_states_stack_reverse_lookup, model_number_of_seen_non_terminal_states_actions, model_seen_non_terminal_states_actions_stack, model_seen_non_terminal_states_actions_stack_reverse_lookup, model_number_of_state_action_successor_states, (*model_state_action_successor_state_indices), (*model_state_action_successor_state_transition_probabilities), (*model_state_action_successor_state_transition_probabilities_cumulative_sum), (*model_state_action_successor_state_rewards), (*model_state_action_successor_state_number_of_visits), model_number_of_state_predecessor_state_action_pairs, (*model_state_predecessor_state_action_pairs), state_action_value_function_max_tie_stack, alpha, discounting_factor_gamma, theta, state_action_value_function, current_priority_queue_size, max_priority_queue_size, priority_queue);
-			
-			break; // break i loop, episode terminated since we ended up in a terminal state
 		}
 		else
-		{	
-			/* Update model of environment from experience */
-			UpdateModelOfEnvironmentFromExperience(state_index, action_index, reward, next_state_index, number_of_states, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, model_number_of_state_action_successor_states, model_state_action_successor_state_indices, model_state_action_successor_state_transition_probabilities, model_state_action_successor_state_transition_probabilities_cumulative_sum, model_state_action_successor_state_rewards, model_state_action_successor_state_number_of_visits, model_number_of_state_predecessor_state_action_pairs, model_state_predecessor_state_action_pairs);
-
+		{
 			/* Get next action, max action of next state */
-			max_action_value = -DBL_MAX;
-			max_action_count = 0;
-			
-			for (j = 0; j < number_of_actions_per_non_terminal_state[next_state_index]; j++)
-			{
-				if (max_action_value < state_action_value_function[next_state_index][j])
-				{
-					max_action_value = state_action_value_function[next_state_index][j];
-					state_action_value_function_max_tie_stack[next_state_index][0] = j;
-					max_action_count = 1;
-				}
-				else if (max_action_value == state_action_value_function[next_state_index][j])
-				{
-					state_action_value_function_max_tie_stack[next_state_index][max_action_count];
-					max_action_count++;
-				}
-			} // end of j loop
-			
-			next_action_index = state_action_value_function_max_tie_stack[next_state_index][rand() % max_action_count];
+			next_action_index = SelectMaxStateActionValueFunctionAction(next_state_index, number_of_actions_per_non_terminal_state, state_action_value_function, state_action_value_function_max_tie_stack);
 			
 			/* Calculate priority */
 			priority = fabs(reward + discounting_factor_gamma * state_action_value_function[next_state_index][next_action_index] - state_action_value_function[state_index][action_index]);
-			
-			/* Check if priority is over threshold to add to priority queue */
-			if (priority > theta)
+		}
+		
+		/* Check if priority is over threshold to add to priority queue */
+		if (priority > theta)
+		{
+			/* Check if priority queue is large enough to accept new entry */
+			if ((*current_priority_queue_size) + 1 > (*max_priority_queue_size))
 			{
-				/* Check if priority queue is large enough to accept new entry */
-				if ((*current_priority_queue_size) + 1 > (*max_priority_queue_size))
-				{
-					/* Realloc priority queue to double current size */
-					Realloc1dPriorityQueue((*max_priority_queue_size), priority_queue);
-					(*max_priority_queue_size) *= 2;
-				}
-				
-				SearchAndUpdatePriorityQueue(state_index, action_index, priority, current_priority_queue_size, (*priority_queue));
+				/* Realloc priority queue to double current size */
+				Realloc1dPriorityQueue((*max_priority_queue_size), priority_queue);
+				(*max_priority_queue_size) *= 2;
 			}
 			
-			/* Use updated model to simulate experience in planning phase */
-			ModelSimualatePlanning(number_of_planning_steps, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, (*model_number_of_seen_non_terminal_states), model_seen_non_terminal_states_stack, model_seen_non_terminal_states_stack_reverse_lookup, model_number_of_seen_non_terminal_states_actions, model_seen_non_terminal_states_actions_stack, model_seen_non_terminal_states_actions_stack_reverse_lookup, model_number_of_state_action_successor_states, (*model_state_action_successor_state_indices), (*model_state_action_successor_state_transition_probabilities), (*model_state_action_successor_state_transition_probabilities_cumulative_sum), (*model_state_action_successor_state_rewards), (*model_state_action_successor_state_number_of_visits), model_number_of_state_predecessor_state_action_pairs, (*model_state_predecessor_state_action_pairs), state_action_value_function_max_tie_stack, alpha, discounting_factor_gamma, theta, state_action_value_function, current_priority_queue_size, max_priority_queue_size, priority_queue);
-			
-			/* Update state to next state */
-			state_index = next_state_index;
+			SearchAndUpdatePriorityQueue(state_index, action_index, priority, current_priority_queue_size, (*priority_queue));
 		}
+		
+		/* Use updated model to simulate experience in planning phase */
+		ModelSimualatePlanning(number_of_planning_steps, number_of_non_terminal_states, number_of_actions_per_non_terminal_state, (*model_number_of_seen_non_terminal_states), model_seen_non_terminal_states_stack, model_seen_non_terminal_states_stack_reverse_lookup, model_number_of_seen_non_terminal_states_actions, model_seen_non_terminal_states_actions_stack, model_seen_non_terminal_states_actions_stack_reverse_lookup, model_number_of_state_action_successor_states, (*model_state_action_successor_state_indices), (*model_state_action_successor_state_transition_probabilities), (*model_state_action_successor_state_transition_probabilities_cumulative_sum), (*model_state_action_successor_state_rewards), (*model_state_action_successor_state_number_of_visits), model_number_of_state_predecessor_state_action_pairs, (*model_state_predecessor_state_action_pairs), state_action_value_function_max_tie_stack, alpha, discounting_factor_gamma, theta, state_action_value_function, current_priority_queue_size, max_priority_queue_size, priority_queue);
+		
+		/* Check to see if we actioned into a terminal state */
+		if (next_state_index >= number_of_non_terminal_states)
+		{
+			break; // break i loop, episode terminated since we ended up in a terminal state
+		}
+		
+		/* Update state to next state */
+		state_index = next_state_index;
 	} // end of i loop
 	
 	return;
 } // end of LoopThroughEpisode function
+
+/* This function selects an action in state state_index from epsilon-greedy policy */
+unsigned int SelectActionFromEpsilonGreedyPolicy(unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, double epsilon, unsigned int state_index, double** policy, double** policy_cumulative_sum)
+{
+	unsigned int i, action_index;
+	double probability;
+	
+	probability = UnifRand();
+	
+	/* Choose policy for chosen state by epsilon-greedy choosing from the state-action-value function */
+	EpsilonGreedyPolicyFromStateActionFunction(number_of_actions_per_non_terminal_state, state_action_value_function, epsilon, state_index, policy, policy_cumulative_sum);
+	
+	/* Find which action using probability */
+	for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
+	{
+		if (probability <= policy_cumulative_sum[state_index][i])
+		{
+			action_index = i;
+			break; // break i loop since we found our index
+		}
+	} // end of i loop
+		
+	return action_index;
+} // end of SelectActionFromEpsilonGreedyPolicy function
+
+/* This function observes the reward from the environment by taking action action_index in state state_index */
+double ObserveReward(unsigned int state_index, unsigned int action_index, unsigned int* successor_state_transition_index, unsigned int** number_of_state_action_successor_states, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards)
+{
+	unsigned int i;
+	double probability, reward;
+	
+	probability = UnifRand();
+	
+	for (i = 0; i < number_of_state_action_successor_states[state_index][action_index]; i++)
+	{
+		if (probability <= state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][i])
+		{
+			(*successor_state_transition_index) = i;
+			
+			break; // break i loop since we found our index
+		}
+	} // end of i loop
+	
+	/* Get reward from state and action */
+	reward = state_action_successor_state_rewards[state_index][action_index][(*successor_state_transition_index)];
+	
+	return reward;
+} // end of ObserveReward function
+
+/* This function selects the action that leads gives the maximum state-action value function for the given state */
+unsigned int SelectMaxStateActionValueFunctionAction(unsigned int state_index, unsigned int* number_of_actions_per_non_terminal_state, double** state_action_value_function, unsigned int** state_action_value_function_max_tie_stack)
+{
+	unsigned int i, max_action_count = 0, next_action_index;
+	double max_action_value = -DBL_MAX;
+	
+	for (i = 0; i < number_of_actions_per_non_terminal_state[state_index]; i++)
+	{
+		if (max_action_value < state_action_value_function[state_index][i])
+		{
+			max_action_value = state_action_value_function[state_index][i];
+			state_action_value_function_max_tie_stack[state_index][0] = i;
+			max_action_count = 1;
+		}
+		else if (max_action_value == state_action_value_function[state_index][i])
+		{
+			state_action_value_function_max_tie_stack[state_index][max_action_count];
+			max_action_count++;
+		}
+	} // end of i loop
+	
+	next_action_index = state_action_value_function_max_tie_stack[state_index][rand() % max_action_count];
+	
+	return next_action_index;
+} // end of SelectMaxStateActionValueFunctionAction function
 
 /* This function updates what state and actions the model has seen */
 void UpdateModelSeenStateActions(unsigned int state_index, unsigned int action_index, unsigned int* model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup)
@@ -1106,8 +1131,8 @@ void Realloc1dStatePredecessorStateActionArray(unsigned int model_number_of_stat
 void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int model_number_of_seen_non_terminal_states, unsigned int* model_seen_non_terminal_states_stack, unsigned int* model_seen_non_terminal_states_stack_reverse_lookup, unsigned int* model_number_of_seen_non_terminal_states_actions, unsigned int** model_seen_non_terminal_states_actions_stack, unsigned int** model_seen_non_terminal_states_actions_stack_reverse_lookup, unsigned int** model_number_of_state_action_successor_states, unsigned int*** model_state_action_successor_state_indices, double*** model_state_action_successor_state_transition_probabilities, double*** model_state_action_successor_state_transition_probabilities_cumulative_sum, double*** model_state_action_successor_state_rewards, unsigned int*** model_state_action_successor_state_number_of_visits, unsigned int* model_number_of_state_predecessor_state_action_pairs, struct PredecessorStateActionPair** model_state_predecessor_state_action_pairs, unsigned int** state_action_value_function_max_tie_stack, double alpha, double discounting_factor_gamma, double theta, double** state_action_value_function, unsigned int* current_priority_queue_size, unsigned int* max_priority_queue_size, struct PriorityQueueNode** priority_queue)
 {
 	unsigned int i, j, k;
-	unsigned int state_index, action_index, next_state_index, next_action_index, successor_state_transition_index, max_action_count, predecessor_state_index, predecessor_action_index;
-	double probability, reward, max_action_value, priority;
+	unsigned int state_index, action_index, next_state_index, next_action_index, successor_state_transition_index, predecessor_state_index, predecessor_action_index;
+	double probability, reward, priority;
 	struct PriorityQueueNode max_priority_state_action_pair;
 	
 	for (i = 0; i < number_of_planning_steps; i++)
@@ -1125,19 +1150,7 @@ void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int 
 		action_index = max_priority_state_action_pair.action_index;
 		
 		/* Get reward */
-		probability = UnifRand();
-		
-		for (j = 0; j < model_number_of_state_action_successor_states[state_index][action_index]; j++)
-		{
-			if (probability <= model_state_action_successor_state_transition_probabilities_cumulative_sum[state_index][action_index][j])
-			{
-				successor_state_transition_index = j;
-				break; // break j loop since we found our index
-			}
-		} // end of j loop
-		
-		/* Get reward from state and action */
-		reward = model_state_action_successor_state_rewards[state_index][action_index][successor_state_transition_index];
+		reward = ObserveReward(state_index, action_index, &successor_state_transition_index, model_number_of_state_action_successor_states, model_state_action_successor_state_transition_probabilities_cumulative_sum, model_state_action_successor_state_rewards);
 		
 		/* Get next state */
 		next_state_index = model_state_action_successor_state_indices[state_index][action_index][successor_state_transition_index];
@@ -1150,25 +1163,7 @@ void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int 
 		else
 		{
 			/* Get next action, max action of next state */
-			max_action_value = -DBL_MAX;
-			max_action_count = 0;
-			
-			for (j = 0; j < number_of_actions_per_non_terminal_state[next_state_index]; j++)
-			{
-				if (max_action_value < state_action_value_function[next_state_index][j])
-				{
-					max_action_value = state_action_value_function[next_state_index][j];
-					state_action_value_function_max_tie_stack[next_state_index][0] = j;
-					max_action_count = 1;
-				}
-				else if (max_action_value == state_action_value_function[next_state_index][j])
-				{
-					state_action_value_function_max_tie_stack[next_state_index][max_action_count];
-					max_action_count++;
-				}
-			} // end of j loop
-			
-			next_action_index = state_action_value_function_max_tie_stack[next_state_index][rand() % max_action_count];
+			next_action_index = SelectMaxStateActionValueFunctionAction(next_state_index, number_of_actions_per_non_terminal_state, state_action_value_function, state_action_value_function_max_tie_stack);
 			
 			/* Calculate state-action-function using quintuple SARSargmax(a,Q) */
 			state_action_value_function[state_index][action_index] += alpha * (reward + discounting_factor_gamma * state_action_value_function[next_state_index][next_action_index] - state_action_value_function[state_index][action_index]);
@@ -1194,25 +1189,7 @@ void ModelSimualatePlanning(unsigned int number_of_planning_steps, unsigned int 
 			reward = model_state_action_successor_state_rewards[predecessor_state_index][predecessor_action_index][successor_state_transition_index];
 			
 			/* Get next action, max action of next state */
-			max_action_value = -DBL_MAX;
-			max_action_count = 0;
-			
-			for (k = 0; k < number_of_actions_per_non_terminal_state[state_index]; k++)
-			{
-				if (max_action_value < state_action_value_function[state_index][k])
-				{
-					max_action_value = state_action_value_function[state_index][k];
-					state_action_value_function_max_tie_stack[state_index][0] = k;
-					max_action_count = 1;
-				}
-				else if (max_action_value == state_action_value_function[state_index][k])
-				{
-					state_action_value_function_max_tie_stack[state_index][max_action_count];
-					max_action_count++;
-				}
-			} // end of k loop
-			
-			next_action_index = state_action_value_function_max_tie_stack[state_index][rand() % max_action_count];
+			next_action_index = SelectMaxStateActionValueFunctionAction(state_index, number_of_actions_per_non_terminal_state, state_action_value_function, state_action_value_function_max_tie_stack);
 			
 			/* Calculate priority */
 			priority = fabs(reward + discounting_factor_gamma * state_action_value_function[state_index][next_action_index] - state_action_value_function[predecessor_state_index][predecessor_action_index]);
