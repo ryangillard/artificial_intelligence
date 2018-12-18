@@ -1513,7 +1513,7 @@ struct PriorityQueueNode PopMaxNodeFromPriorityQueue(unsigned int* current_prior
 	MaxHeapifyPriorityQueue(0, (*current_priority_queue_size), priority_queue);
 	
 	return root;
-} // end of PopMax function
+} // end of PopMaxNodeFromPriorityQueue function
 
 /* This function recursively heapifies a subtree with the root at given index, however assumes that the subtrees are already heapified */
 void MaxHeapifyPriorityQueue(unsigned int priority_queue_index, unsigned int current_priority_queue_size, struct PriorityQueueNode* priority_queue)
