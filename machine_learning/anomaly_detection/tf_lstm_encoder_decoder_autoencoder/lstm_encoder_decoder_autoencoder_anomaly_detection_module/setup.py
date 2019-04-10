@@ -19,7 +19,7 @@ REQUIRED_PACKAGES = [
 ]
 
 setup(
-    name = "lstm_autoencoder_anomaly_detection",
+    name = "lstm_encoder_decoder_autoencoder_anomaly_detection",
     version = "0.1",
     author = "Ryan Gillard",
     author_email = "ryangillard@google.com",

@@ -1,7 +1,11 @@
+import tensorflow as tf
+
 # Set logging to be level of INFO
 tf.logging.set_verbosity(tf.logging.INFO)
 
 # Determine CSV and label columns
+number_of_tags = 5
+tag_columns = ["tag_{0}".format(tag) for tag in range(0, number_of_tags)]
 UNLABELED_CSV_COLUMNS = tag_columns
 
 LABEL_COLUMN = "anomalous_sequence_flag"
