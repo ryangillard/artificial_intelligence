@@ -223,7 +223,7 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
     # Train our decoder now
   
     # Encoder-decoders work differently during training/evaluation and inference so we will have two separate subgraphs for each
-    if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] != "calculate_error_distribution_statistics":
+    if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
         # Break 3-D labels tensor into a list of 2-D tensors
         unstacked_labels = tf.unstack(value = Y, num = params["sequence_length"], axis = 1) # list of sequence_length long of shape = (current_batch_size, number_of_features)
 
@@ -261,6 +261,7 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
     # Now that we are through the final DNN for each sequence element for each example in the batch, reshape the predictions to match our labels
     predictions = tf.reshape(tensor = logits, shape = [current_batch_size, params["sequence_length"], number_of_features]) # shape = (current_batch_size, sequence_length, number_of_features)
     
+    # Variables for calculating error distribution statistics
     with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
         # Time based
         absolute_error_count_batch_time_variable = tf.get_variable(name = "absolute_error_count_batch_time_variable", # shape = ()
@@ -311,7 +312,171 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
                                                                                            initializer = tf.zeros(shape = [params["sequence_length"], params["sequence_length"]], 
                                                                                                                   dtype = tf.float64),
                                                                                            trainable = False)
+    
+    # Variables for automatically tuning anomaly thresholds
+    with tf.variable_scope(name_or_scope = "mahalanobis_distance_threshold_variables", reuse = tf.AUTO_REUSE):
+        # Time based
+        true_positives_at_thresholds_time_variable = tf.get_variable(name = "true_positives_at_thresholds_time_variable", # shape = (number_of_batch_time_anomaly_thresholds,)
+                                                                     dtype = tf.int64,
+                                                                     initializer = tf.zeros(shape = [params["number_of_batch_time_anomaly_thresholds"]], 
+                                                                                            dtype = tf.int64),
+                                                                     trainable = False)
+
+        false_negatives_at_thresholds_time_variable = tf.get_variable(name = "false_negatives_at_thresholds_time_variable", # shape = (number_of_batch_time_anomaly_thresholds,)
+                                                                      dtype = tf.int64,
+                                                                      initializer = tf.zeros(shape = [params["number_of_batch_time_anomaly_thresholds"]], 
+                                                                                             dtype = tf.int64),
+                                                                      trainable = False)
+
+        false_positives_at_thresholds_time_variable = tf.get_variable(name = "false_positives_at_thresholds_time_variable", # shape = (number_of_batch_time_anomaly_thresholds,)
+                                                                      dtype = tf.int64,
+                                                                      initializer = tf.zeros(shape = [params["number_of_batch_time_anomaly_thresholds"]], 
+                                                                                             dtype = tf.int64),
+                                                                      trainable = False)
+
+        true_negatives_at_thresholds_time_variable = tf.get_variable(name = "true_negatives_at_thresholds_time_variable", # shape = (number_of_batch_time_anomaly_thresholds,)
+                                                                     dtype = tf.int64,
+                                                                     initializer = tf.zeros(shape = [params["number_of_batch_time_anomaly_thresholds"]], 
+                                                                                            dtype = tf.int64),
+                                                                     trainable = False)
         
+        time_anomaly_threshold_variable = tf.get_variable(name = "time_anomaly_threshold_variable", # shape = ()
+                                                          dtype = tf.float64,
+                                                          initializer = tf.zeros(shape = [], 
+                                                                                 dtype = tf.float64),
+                                                          trainable = False)
+
+        # Features based
+        true_positives_at_thresholds_features_variable = tf.get_variable(name = "true_positives_at_thresholds_features_variable", # shape = (number_of_batch_features_anomaly_thresholds,)
+                                                                         dtype = tf.int64,
+                                                                         initializer = tf.zeros(shape = [params["number_of_batch_features_anomaly_thresholds"]], 
+                                                                                                dtype = tf.int64),
+                                                                         trainable = False)
+
+        false_negatives_at_thresholds_features_variable = tf.get_variable(name = "false_negatives_at_thresholds_features_variable", # shape = (number_of_batch_features_anomaly_thresholds,)
+                                                                          dtype = tf.int64,
+                                                                          initializer = tf.zeros(shape = [params["number_of_batch_features_anomaly_thresholds"]], 
+                                                                                                 dtype = tf.int64),
+                                                                          trainable = False)
+
+        false_positives_at_thresholds_features_variable = tf.get_variable(name = "false_positives_at_thresholds_features_variable", # shape = (number_of_batch_features_anomaly_thresholds,)
+                                                                          dtype = tf.int64,
+                                                                          initializer = tf.zeros(shape = [params["number_of_batch_features_anomaly_thresholds"]], 
+                                                                                                 dtype = tf.int64),
+                                                                          trainable = False)
+
+        true_negatives_at_thresholds_features_variable = tf.get_variable(name = "true_negatives_at_thresholds_features_variable", # shape = (number_of_batch_features_anomaly_thresholds,)
+                                                                         dtype = tf.int64,
+                                                                         initializer = tf.zeros(shape = [params["number_of_batch_features_anomaly_thresholds"]], 
+                                                                                                dtype = tf.int64),
+                                                                         trainable = False)
+        
+        features_anomaly_threshold_variable = tf.get_variable(name = "features_anomaly_threshold_variable", # shape = ()
+                                                              dtype = tf.float64,
+                                                              initializer = tf.zeros(shape = [], 
+                                                                                     dtype = tf.float64),
+                                                              trainable = False)
+        
+    # Variables for automatically tuning anomaly thresholds
+    with tf.variable_scope(name_or_scope = "anomaly_threshold_eval_variables", reuse = tf.AUTO_REUSE):
+        # Time based
+        true_positives_at_threshold_eval_time_variable = tf.get_variable(name = "true_positives_at_threshold_eval_time_variable", # shape = ()
+                                                                         dtype = tf.int64,
+                                                                         initializer = tf.zeros(shape = [], 
+                                                                                                dtype = tf.int64),
+                                                                         trainable = False)
+
+        false_negatives_at_threshold_eval_time_variable = tf.get_variable(name = "false_negatives_at_threshold_eval_time_variable", # shape = ()
+                                                                          dtype = tf.int64,
+                                                                          initializer = tf.zeros(shape = [], 
+                                                                                                 dtype = tf.int64),
+                                                                          trainable = False)
+
+        false_positives_at_threshold_eval_time_variable = tf.get_variable(name = "false_positives_at_threshold_eval_time_variable", # shape = ()
+                                                                          dtype = tf.int64,
+                                                                          initializer = tf.zeros(shape = [], 
+                                                                                                 dtype = tf.int64),
+                                                                          trainable = False)
+
+        true_negatives_at_threshold_eval_time_variable = tf.get_variable(name = "true_negatives_at_threshold_eval_time_variable", # shape = ()
+                                                                         dtype = tf.int64,
+                                                                         initializer = tf.zeros(shape = [], 
+                                                                                                dtype = tf.int64),
+                                                                         trainable = False)
+        
+        accuracy_at_threshold_eval_time_variable = tf.get_variable(name = "accuracy_at_threshold_eval_time_variable", # shape = ()
+                                                                   dtype = tf.float64,
+                                                                   initializer = tf.zeros(shape = [], 
+                                                                                          dtype = tf.float64),
+                                                                   trainable = False)
+        
+        precision_at_threshold_eval_time_variable = tf.get_variable(name = "precision_at_threshold_eval_time_variable", # shape = ()
+                                                                    dtype = tf.float64,
+                                                                    initializer = tf.zeros(shape = [], 
+                                                                                           dtype = tf.float64),
+                                                                    trainable = False)
+        
+        recall_at_threshold_eval_time_variable = tf.get_variable(name = "recall_at_threshold_eval_time_variable", # shape = ()
+                                                                 dtype = tf.float64,
+                                                                 initializer = tf.zeros(shape = [], 
+                                                                                        dtype = tf.float64),
+                                                                 trainable = False)
+        
+        f_beta_score_at_threshold_eval_time_variable = tf.get_variable(name = "f_beta_score_at_threshold_eval_time_variable", # shape = ()
+                                                                       dtype = tf.float64,
+                                                                       initializer = tf.zeros(shape = [], 
+                                                                                              dtype = tf.float64),
+                                                                       trainable = False)
+
+        # Features based
+        true_positives_at_threshold_eval_features_variable = tf.get_variable(name = "true_positives_at_threshold_eval_features_variable", # shape = ()
+                                                                             dtype = tf.int64,
+                                                                             initializer = tf.zeros(shape = [], 
+                                                                                                    dtype = tf.int64),
+                                                                             trainable = False)
+
+        false_negatives_at_threshold_eval_features_variable = tf.get_variable(name = "false_negatives_at_threshold_eval_features_variable", # shape = ()
+                                                                              dtype = tf.int64,
+                                                                              initializer = tf.zeros(shape = [], 
+                                                                                                     dtype = tf.int64),
+                                                                              trainable = False)
+
+        false_positives_at_threshold_eval_features_variable = tf.get_variable(name = "false_positives_at_threshold_eval_features_variable", # shape = ()
+                                                                              dtype = tf.int64,
+                                                                              initializer = tf.zeros(shape = [], 
+                                                                                                     dtype = tf.int64),
+                                                                              trainable = False)
+
+        true_negatives_at_threshold_eval_features_variable = tf.get_variable(name = "true_negatives_at_threshold_eval_features_variable", # shape = ()
+                                                                             dtype = tf.int64,
+                                                                             initializer = tf.zeros(shape = [], 
+                                                                                                    dtype = tf.int64),
+                                                                             trainable = False)
+        
+        accuracy_at_threshold_eval_features_variable = tf.get_variable(name = "accuracy_at_threshold_eval_features_variable", # shape = ()
+                                                                   dtype = tf.float64,
+                                                                   initializer = tf.zeros(shape = [], 
+                                                                                          dtype = tf.float64),
+                                                                   trainable = False)
+        
+        precision_at_threshold_eval_features_variable = tf.get_variable(name = "precision_at_threshold_eval_features_variable", # shape = ()
+                                                                    dtype = tf.float64,
+                                                                    initializer = tf.zeros(shape = [], 
+                                                                                           dtype = tf.float64),
+                                                                    trainable = False)
+        
+        recall_at_threshold_eval_features_variable = tf.get_variable(name = "recall_at_threshold_eval_features_variable", # shape = ()
+                                                                 dtype = tf.float64,
+                                                                 initializer = tf.zeros(shape = [], 
+                                                                                        dtype = tf.float64),
+                                                                 trainable = False)
+        
+        f_beta_score_at_threshold_eval_features_variable = tf.get_variable(name = "f_beta_score_at_threshold_eval_features_variable", # shape = ()
+                                                                       dtype = tf.float64,
+                                                                       initializer = tf.zeros(shape = [], 
+                                                                                              dtype = tf.float64),
+                                                                       trainable = False)
+
     dummy_variable = tf.get_variable(name = "dummy_variable", # shape = ()
                                      dtype = tf.float64,
                                      initializer = tf.zeros(shape = [], dtype = tf.float64),
@@ -325,7 +490,7 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
     export_outputs = None
     
     # 3. Loss function, training/eval ops
-    if mode == tf.estimator.ModeKeys.TRAIN:
+    if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] != "tune_anomaly_thresholds":
         if params["evaluation_mode"] == "reconstruction":
             loss = tf.losses.mean_squared_error(labels = Y, predictions = predictions)
 
@@ -493,7 +658,6 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
                                 global_step = tf.train.get_global_step(),
                                 learning_rate = params["learning_rate"],
                                 optimizer = "SGD")
-                                                                                                       
     elif mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] != "tune_anomaly_thresholds":
         # Reconstruction loss on evaluation set
         loss = tf.losses.mean_squared_error(labels = Y, predictions = predictions)
@@ -504,7 +668,7 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
                 "rmse": tf.metrics.root_mean_squared_error(labels = Y, predictions = predictions),
                 "mae": tf.metrics.mean_absolute_error(labels = Y, predictions = predictions)
             }
-    else: # mode == tf.estimator.ModeKeys.PREDICT or (mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] == "tune_anomaly_thresholds")
+    elif mode == tf.estimator.ModeKeys.PREDICT or ((mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL) and params["evaluation_mode"] == "tune_anomaly_thresholds"):
         def mahalanobis_distance(error_vectors_reshaped, mean_vector, inverse_covariance_matrix, final_shape):
             error_vectors_reshaped_centered = error_vectors_reshaped - mean_vector # time_shape = (current_batch_size * sequence_length, number_of_features), features_shape = (current_batch_size * number_of_features, sequence_length)
 
@@ -549,71 +713,207 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
                                                                        mean_vector = absolute_error_mean_batch_features_variable, 
                                                                        inverse_covariance_matrix = absolute_error_inverse_covariance_matrix_batch_features_variable,
                                                                        final_shape = number_of_features)
+
+        if mode != tf.estimator.ModeKeys.PREDICT:
+            labels_normal_mask = tf.equal(x = labels, y = 0)
+            labels_anomalous_mask = tf.equal(x = labels, y = 1)
             
-        batch_time_anomaly_flags = tf.where(condition = tf.reduce_any(input_tensor = tf.greater(x = tf.abs(x = mahalanobis_distance_batch_time), # shape = (current_batch_size,)
-                                                                                                y = params["time_anomaly_threshold"]), 
-                                                                      axis = 1), 
-                                            x = tf.ones(shape = [current_batch_size], dtype = tf.int64), 
-                                            y = tf.zeros(shape = [current_batch_size], dtype = tf.int64))
-        
-        batch_features_anomaly_flags = tf.where(condition = tf.reduce_any(input_tensor = tf.greater(x = tf.abs(x = mahalanobis_distance_batch_features), # shape = (current_batch_size,)
-                                                                                                    y = params["features_anomaly_threshold"]), 
+            if mode == tf.estimator.ModeKeys.TRAIN:
+                def update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, number_of_thresholds, anomaly_thresholds, mahalanobis_distance, true_positives_at_thresholds_variable, false_negatives_at_thresholds_variable, false_positives_at_thresholds_variable, true_negatives_at_thresholds_variable):
+                    mahalanobis_distance_over_thresholds = tf.map_fn(fn = lambda anomaly_threshold: mahalanobis_distance > anomaly_threshold, 
+                                                                     elems = anomaly_thresholds, 
+                                                                     dtype = tf.bool) # time_shape = (number_of_batch_time_anomaly_thresholds, current_batch_size, sequence_length), features_shape = (number_of_batch_features_anomaly_thresholds, current_batch_size, number_of_features)
+
+                    mahalanobis_distance_any_over_thresholds = tf.reduce_any(input_tensor = mahalanobis_distance_over_thresholds, axis = 2) # time_shape = (number_of_batch_time_anomaly_thresholds, current_batch_size), features_shape = (number_of_batch_features_anomaly_thresholds, current_batch_size)
+
+                    predicted_normals = tf.equal(x = mahalanobis_distance_any_over_thresholds, y = False) # time_shape = (number_of_batch_time_anomaly_thresholds, current_batch_size), features_shape = (number_of_batch_features_anomaly_thresholds, current_batch_size)
+                    predicted_anomalies = tf.equal(x = mahalanobis_distance_any_over_thresholds, y = True) # time_shape = (number_of_batch_time_anomaly_thresholds, current_batch_size), features_shape = (number_of_batch_features_anomaly_thresholds, current_batch_size)
+
+                    # Calculate confusion matrix of current batch
+                    true_positives = tf.reduce_sum(input_tensor = tf.cast(x = tf.map_fn(fn = lambda threshold: tf.logical_and(x = labels_anomalous_mask, y = predicted_anomalies[threshold, :]),
+                                                                                        elems = tf.range(start = 0, limit = number_of_thresholds, dtype = tf.int64),
+                                                                                        dtype = tf.bool),
+                                                                          dtype = tf.int64),
+                                                   axis = 1) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+
+                    false_negatives = tf.reduce_sum(input_tensor = tf.cast(x = tf.map_fn(fn = lambda threshold: tf.logical_and(x = labels_anomalous_mask, y = predicted_normals[threshold, :]),
+                                                                                         elems = tf.range(start = 0, limit = number_of_thresholds, dtype = tf.int64),
+                                                                                         dtype = tf.bool),
+                                                                          dtype = tf.int64),
+                                                    axis = 1) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+
+                    false_positives = tf.reduce_sum(input_tensor = tf.cast(x = tf.map_fn(fn = lambda threshold: tf.logical_and(x = labels_normal_mask, y = predicted_anomalies[threshold, :]),
+                                                                                         elems = tf.range(start = 0, limit = number_of_thresholds, dtype = tf.int64),
+                                                                                         dtype = tf.bool),
+                                                                          dtype = tf.int64),
+                                                    axis = 1) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+
+                    true_negatives = tf.reduce_sum(input_tensor = tf.cast(x = tf.map_fn(fn = lambda threshold: tf.logical_and(x = labels_normal_mask, y = predicted_normals[threshold, :]),
+                                                                                        elems = tf.range(start = 0, limit = number_of_thresholds, dtype = tf.int64),
+                                                                                        dtype = tf.bool),
+                                                                          dtype = tf.int64),
+                                                   axis = 1) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+
+                    with tf.control_dependencies(control_inputs = [tf.assign_add(ref = true_positives_at_thresholds_variable, value = true_positives), tf.assign_add(ref = false_negatives_at_thresholds_variable, value = false_negatives), tf.assign_add(ref = false_positives_at_thresholds_variable, value = false_positives), tf.assign_add(ref = true_negatives_at_thresholds_variable, value = true_negatives)]):
+                        return tf.identity(input = true_positives_at_thresholds_variable), tf.identity(input = false_negatives_at_thresholds_variable), tf.identity(input = false_positives_at_thresholds_variable), tf.identity(input = true_negatives_at_thresholds_variable)
+
+                with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
+                    # Time based
+                    time_anomaly_thresholds = tf.linspace(start = tf.constant(value = params["min_batch_time_anomaly_threshold"], dtype = tf.float64), # shape = (number_of_batch_time_anomaly_thresholds,)
+                                                          stop = tf.constant(value = params["max_batch_time_anomaly_threshold"], dtype = tf.float64), 
+                                                          num = params["number_of_batch_time_anomaly_thresholds"])
+
+                    true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable = \
+                        update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, params["number_of_batch_time_anomaly_thresholds"], time_anomaly_thresholds, mahalanobis_distance_batch_time, true_positives_at_thresholds_time_variable, false_negatives_at_thresholds_time_variable, false_positives_at_thresholds_time_variable, true_negatives_at_thresholds_time_variable)
+
+                    # Features based
+                    features_anomaly_thresholds = tf.linspace(start = tf.constant(value = params["min_batch_features_anomaly_threshold"], dtype = tf.float64), # shape = (number_of_batch_features_anomaly_thresholds,)
+                                                              stop = tf.constant(value = params["max_batch_features_anomaly_threshold"], dtype = tf.float64), 
+                                                              num = params["number_of_batch_features_anomaly_thresholds"])
+
+                    true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable = \
+                        update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, params["number_of_batch_features_anomaly_thresholds"], features_anomaly_thresholds, mahalanobis_distance_batch_features, true_positives_at_thresholds_features_variable, false_negatives_at_thresholds_features_variable, false_positives_at_thresholds_features_variable, true_negatives_at_thresholds_features_variable)
+
+                # Reconstruction loss on evaluation set
+                with tf.control_dependencies(control_inputs = [true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable, true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable]):
+                    def calculate_composite_classification_metrics(anomaly_thresholds, true_positives, false_negatives, false_positives, true_negatives):
+                        accuracy = tf.cast(x = true_positives + true_negatives, dtype = tf.float64) / tf.cast(x = true_positives + false_negatives + false_positives + true_negatives, dtype = tf.float64) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+                        precision = tf.cast(x = true_positives, dtype = tf.float64) / tf.cast(x = true_positives + false_positives, dtype = tf.float64) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+                        recall = tf.cast(x = true_positives, dtype = tf.float64) / tf.cast(x = true_positives + false_negatives, dtype = tf.float64) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+                        f_beta_score = (1 + params["f_score_beta"] ** 2) * (precision * recall) / (params["f_score_beta"] ** 2 * precision + recall) # time_shape = (number_of_batch_time_anomaly_thresholds,), features_shape = (number_of_batch_features_anomaly_thresholds,)
+
+                        return accuracy, precision, recall, f_beta_score
+
+                    # Time based
+                    accuracy_time, precision_time, recall_time, f_beta_score_time = \
+                        calculate_composite_classification_metrics(time_anomaly_thresholds, true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable)
+
+                    # Features based
+                    accuracy_features, precision_features, recall_features, f_beta_score_features = \
+                        calculate_composite_classification_metrics(features_anomaly_thresholds, true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable)
+
+                    with tf.control_dependencies(control_inputs = [precision_time, precision_features]):
+                        with tf.control_dependencies(control_inputs = [recall_time, recall_features]):
+                            with tf.control_dependencies(control_inputs = [f_beta_score_time, f_beta_score_features]):
+                                def find_best_anomaly_threshold(anomaly_thresholds, f_beta_score, user_passed_anomaly_threshold, anomaly_threshold_variable):
+                                    if user_passed_anomaly_threshold == None:
+                                        best_anomaly_threshold = tf.gather(params = anomaly_thresholds, indices = tf.argmax(input = f_beta_score, axis = 0)) # shape = ()
+                                    else:
+                                        best_anomaly_threshold = user_passed_anomaly_threshold # shape = ()
+
+                                    with tf.control_dependencies(control_inputs = [tf.assign(ref = anomaly_threshold_variable, value = best_anomaly_threshold)]):
+                                        return tf.identity(input = anomaly_threshold_variable)
+                                        
+                                # Time based
+                                best_anomaly_threshold_time = find_best_anomaly_threshold(time_anomaly_thresholds, f_beta_score_time, params["time_anomaly_threshold"], time_anomaly_threshold_variable)
+
+                                # Features based
+                                best_anomaly_threshold_features = find_best_anomaly_threshold(features_anomaly_thresholds, f_beta_score_features, params["features_anomaly_threshold"], features_anomaly_threshold_variable)
+
+                                with tf.control_dependencies(control_inputs = [tf.assign(ref = time_anomaly_threshold_variable, value = best_anomaly_threshold_time), 
+                                                                               tf.assign(ref = features_anomaly_threshold_variable, value = best_anomaly_threshold_features)]):
+                                    loss = tf.reduce_sum(input_tensor = tf.zeros(shape = (), dtype = tf.float64) * dummy_variable)
+
+                                    train_op = tf.contrib.layers.optimize_loss(
+                                        loss = loss,
+                                        global_step = tf.train.get_global_step(),
+                                        learning_rate = params["learning_rate"],
+                                        optimizer = "SGD")
+            elif mode == tf.estimator.ModeKeys.EVAL:
+                def update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, anomaly_threshold, mahalanobis_distance, true_positives_at_thresholds_variable, false_negatives_at_thresholds_variable, false_positives_at_thresholds_variable, true_negatives_at_thresholds_variable):
+                    mahalanobis_distance_over_threshold  = mahalanobis_distance > anomaly_threshold # time_shape = (current_batch_size, sequence_length), features_shape = (current_batch_size, number_of_features)
+
+                    mahalanobis_distance_any_over_threshold = tf.reduce_any(input_tensor = mahalanobis_distance_over_threshold, axis = -1) # time_shape = (current_batch_size,), features_shape = (current_batch_size,)
+
+                    predicted_normals = tf.equal(x = mahalanobis_distance_any_over_threshold, y = False) # time_shape = (current_batch_size,), features_shape = (current_batch_size,)
+                    predicted_anomalies = tf.equal(x = mahalanobis_distance_any_over_threshold, y = True) # time_shape = (current_batch_size,), features_shape = (current_batch_size,)
+
+                    # Calculate confusion matrix of current batch
+                    true_positives = tf.reduce_sum(input_tensor = tf.cast(x = tf.logical_and(x = labels_anomalous_mask, y = predicted_anomalies), dtype = tf.int64),
+                                                   axis = -1) # time_shape = (), features_shape = ()
+
+                    false_negatives = tf.reduce_sum(input_tensor = tf.cast(x = tf.logical_and(x = labels_anomalous_mask, y = predicted_normals), dtype = tf.int64),
+                                                    axis = -1) # time_shape = (), features_shape = ()
+
+                    false_positives = tf.reduce_sum(input_tensor = tf.cast(x = tf.logical_and(x = labels_normal_mask, y = predicted_anomalies), dtype = tf.int64),
+                                                    axis = -1) # time_shape = (), features_shape = ()
+
+                    true_negatives = tf.reduce_sum(input_tensor = tf.cast(x = tf.logical_and(x = labels_normal_mask, y = predicted_normals), dtype = tf.int64),
+                                                   axis = -1) # time_shape = (), features_shape = ()
+
+                    with tf.control_dependencies(control_inputs = [tf.assign_add(ref = true_positives_at_thresholds_variable, value = true_positives), tf.assign_add(ref = false_negatives_at_thresholds_variable, value = false_negatives), tf.assign_add(ref = false_positives_at_thresholds_variable, value = false_positives), tf.assign_add(ref = true_negatives_at_thresholds_variable, value = true_negatives)]):
+                        return tf.identity(input = true_positives_at_thresholds_variable), tf.identity(input = false_negatives_at_thresholds_variable), tf.identity(input = false_positives_at_thresholds_variable), tf.identity(input = true_negatives_at_thresholds_variable)
+                    
+                with tf.variable_scope(name_or_scope = "anomaly_threshold_eval_variables", reuse = tf.AUTO_REUSE):
+                    # Time based
+                    true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable = \
+                        update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, time_anomaly_threshold_variable, mahalanobis_distance_batch_time, true_positives_at_threshold_eval_time_variable, false_negatives_at_threshold_eval_time_variable, false_positives_at_threshold_eval_time_variable, true_negatives_at_threshold_eval_time_variable)
+
+                    # Features based
+                    true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable = \
+                        update_anomaly_threshold_variables(labels_normal_mask, labels_anomalous_mask, features_anomaly_threshold_variable, mahalanobis_distance_batch_features, true_positives_at_threshold_eval_features_variable, false_negatives_at_threshold_eval_features_variable, false_positives_at_threshold_eval_features_variable, true_negatives_at_threshold_eval_features_variable)
+                    
+                with tf.control_dependencies(control_inputs = [true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable, true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable]):
+                    def calculate_composite_classification_metrics(anomaly_thresholds, true_positives, false_negatives, false_positives, true_negatives, accuracy_at_threshold_variable, precision_at_threshold_variable, recall_at_threshold_variable, f_beta_score_at_threshold_variable):
+                        accuracy = tf.cast(x = true_positives + true_negatives, dtype = tf.float64) / tf.cast(x = true_positives + false_negatives + false_positives + true_negatives, dtype = tf.float64) # shape = ()
+                        precision = tf.cast(x = true_positives, dtype = tf.float64) / tf.cast(x = true_positives + false_positives, dtype = tf.float64) # shape = ()
+                        recall = tf.cast(x = true_positives, dtype = tf.float64) / tf.cast(x = true_positives + false_negatives, dtype = tf.float64) # shape = ()
+                        f_beta_score = (1 + params["f_score_beta"] ** 2) * (precision * recall) / (params["f_score_beta"] ** 2 * precision + recall) # shape = ()
+
+                        with tf.control_dependencies(control_inputs = [tf.assign(ref = accuracy_at_threshold_variable, value = accuracy), tf.assign(ref = precision_at_threshold_variable, value = precision), tf.assign(ref = recall_at_threshold_variable, value = recall)]):
+                            with tf.control_dependencies(control_inputs = [tf.assign(ref = f_beta_score_at_threshold_variable, value = f_beta_score)]):
+                                return tf.identity(input = accuracy_at_threshold_variable), tf.identity(input = precision_at_threshold_variable), tf.identity(input = recall_at_threshold_variable), tf.identity(input = f_beta_score_at_threshold_variable)
+
+                    with tf.variable_scope(name_or_scope = "anomaly_threshold_eval_variables", reuse = tf.AUTO_REUSE):
+                        # Time based
+                        accuracy_time, precision_time, recall_time, f_beta_score_time = \
+                            calculate_composite_classification_metrics(time_anomaly_threshold_variable, true_positives_time_variable, false_negatives_time_variable, false_positives_time_variable, true_negatives_time_variable, accuracy_at_threshold_eval_time_variable, precision_at_threshold_eval_time_variable, recall_at_threshold_eval_time_variable, f_beta_score_at_threshold_eval_time_variable)
+
+                        # Features based
+                        accuracy_features, precision_features, recall_features, f_beta_score_features = \
+                            calculate_composite_classification_metrics(features_anomaly_threshold_variable, true_positives_features_variable, false_negatives_features_variable, false_positives_features_variable, true_negatives_features_variable, accuracy_at_threshold_eval_features_variable, precision_at_threshold_eval_features_variable, recall_at_threshold_eval_features_variable, f_beta_score_at_threshold_eval_features_variable)
+
+                    with tf.control_dependencies(control_inputs = [accuracy_time, precision_time, recall_time, f_beta_score_time, accuracy_features, precision_features, recall_features, f_beta_score_features]):
+                        loss = tf.losses.mean_squared_error(labels = Y, predictions = predictions)
+
+                        # Anomaly detection eval metrics
+                        eval_metric_ops = {
+                            # Time based
+                            "time_anomaly_true_positives": tuple([true_positives_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "time_anomaly_false_negatives": tuple([false_negatives_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "time_anomaly_false_positives": tuple([false_positives_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "time_anomaly_true_negatives": tuple([true_negatives_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+
+                            "time_anomaly_accuracy": tuple([accuracy_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "time_anomaly_precision": tuple([precision_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "time_anomaly_recall": tuple([recall_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "time_anomaly_f_beta_score": tuple([f_beta_score_at_threshold_eval_time_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+
+                             # Features based
+                            "features_anomaly_true_positives": tuple([true_positives_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "features_anomaly_false_negatives": tuple([false_negatives_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "features_anomaly_false_positives": tuple([false_positives_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+                            "features_anomaly_true_negatives": tuple([true_negatives_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.int64)]),
+
+                            "features_anomaly_accuracy": tuple([accuracy_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "features_anomaly_precision": tuple([precision_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "features_anomaly_recall": tuple([recall_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.float64)]),
+                            "features_anomaly_f_beta_score": tuple([f_beta_score_at_threshold_eval_features_variable, tf.zeros(shape = [], dtype = tf.float64)])
+                        }
+        else: # mode == tf.estimator.ModeKeys.PREDICT
+            # Flag predictions as either normal or anomalous
+            batch_time_anomaly_flags = tf.where(condition = tf.reduce_any(input_tensor = tf.greater(x = tf.abs(x = mahalanobis_distance_batch_time), # shape = (current_batch_size,)
+                                                                                                    y = time_anomaly_threshold_variable), 
                                                                           axis = 1), 
                                                 x = tf.ones(shape = [current_batch_size], dtype = tf.int64), 
                                                 y = tf.zeros(shape = [current_batch_size], dtype = tf.int64))
-        
-        if mode == tf.estimator.ModeKeys.EVAL:
-            # Reconstruction loss on evaluation set
-            loss = tf.losses.mean_squared_error(labels = Y, predictions = predictions)
-            
-            # Anomaly detection eval metrics
-            def create_anomaly_detection_eval_metric_ops(labels, predictions, params):
-                batch_anomaly_true_positives = tf.metrics.true_positives(labels = labels, predictions = predictions)
-                batch_anomaly_false_negatives = tf.metrics.false_negatives(labels = labels, predictions = predictions)
-                batch_anomaly_false_positives = tf.metrics.false_positives(labels = labels, predictions = predictions)
-                batch_anomaly_true_negatives = tf.metrics.true_negatives(labels = labels, predictions = predictions)
 
-                batch_anomaly_accuracy = tf.metrics.accuracy(labels = labels, predictions = predictions)
-                batch_anomaly_precision = tf.metrics.precision(labels = labels, predictions = predictions)
-                batch_anomaly_recall = tf.metrics.recall(labels = labels, predictions = predictions)
-                batch_anomaly_f_beta_score_metric = (1.0 + params["f_score_beta"]**2) * batch_anomaly_precision[0] * batch_anomaly_recall[0] / (params["f_score_beta"]**2 * batch_anomaly_precision[0] + batch_anomaly_recall[0])
-                batch_anomaly_f_beta_score_update_op = (1.0 + params["f_score_beta"]**2) * batch_anomaly_precision[1] * batch_anomaly_recall[1] / (params["f_score_beta"]**2 * batch_anomaly_precision[1] + batch_anomaly_recall[1])
-                
-                return batch_anomaly_true_positives, batch_anomaly_false_negatives, batch_anomaly_false_positives, batch_anomaly_true_negatives, \
-                    batch_anomaly_accuracy, batch_anomaly_precision, batch_anomaly_recall, tuple([batch_anomaly_f_beta_score_metric, batch_anomaly_f_beta_score_update_op])
-            
-            # Time based
-            batch_time_anomaly_true_positives, batch_time_anomaly_false_negatives, batch_time_anomaly_false_positives, batch_time_anomaly_true_negatives, \
-                batch_time_anomaly_accuracy, batch_time_anomaly_precision, batch_time_anomaly_recall, batch_time_anomaly_f_beta_score = create_anomaly_detection_eval_metric_ops(labels = labels, predictions = batch_time_anomaly_flags, params = params)
-            
-            # Feature based
-            batch_features_anomaly_true_positives, batch_features_anomaly_false_negatives, batch_features_anomaly_false_positives, batch_features_anomaly_true_negatives, \
-                batch_features_anomaly_accuracy, batch_features_anomaly_precision, batch_features_anomaly_recall, batch_features_anomaly_f_beta_score = create_anomaly_detection_eval_metric_ops(labels = labels, predictions = batch_features_anomaly_flags, params = params)
-            
-            eval_metric_ops = {
-                # Time based
-                "batch_time_anomaly_true_positives": batch_time_anomaly_true_positives,
-                "batch_time_anomaly_false_negatives": batch_time_anomaly_false_negatives,
-                "batch_time_anomaly_false_positives": batch_time_anomaly_false_positives,
-                "batch_time_anomaly_true_negatives": batch_time_anomaly_true_negatives,
-                
-                "batch_time_anomaly_accuracy": batch_time_anomaly_accuracy,
-                "batch_time_anomaly_precision": batch_time_anomaly_precision,
-                "batch_time_anomaly_recall": batch_time_anomaly_recall,
-                "batch_time_anomaly_f_beta_score": batch_time_anomaly_f_beta_score,
-                
-                 # Feature based
-                "batch_features_anomaly_true_positives": batch_features_anomaly_true_positives,
-                "batch_features_anomaly_false_negatives": batch_features_anomaly_false_negatives,
-                "batch_features_anomaly_false_positives": batch_features_anomaly_false_positives,
-                "batch_features_anomaly_true_negatives": batch_features_anomaly_true_negatives,
-                
-                "batch_features_anomaly_accuracy": batch_features_anomaly_accuracy,
-                "batch_features_anomaly_precision": batch_features_anomaly_precision,
-                "batch_features_anomaly_recall": batch_features_anomaly_recall,
-                "batch_features_anomaly_f_beta_score": batch_features_anomaly_f_beta_score
-            }
-        else: # mode == tf.estimator.ModeKeys.PREDICT
+            batch_features_anomaly_flags = tf.where(condition = tf.reduce_any(input_tensor = tf.greater(x = tf.abs(x = mahalanobis_distance_batch_features), # shape = (current_batch_size,)
+                                                                                                        y = features_anomaly_threshold_variable), 
+                                                                              axis = 1), 
+                                                    x = tf.ones(shape = [current_batch_size], dtype = tf.int64), 
+                                                    y = tf.zeros(shape = [current_batch_size], dtype = tf.int64))
+        
             # Create predictions dictionary
             predictions_dict = {"Y": Y,
                                 "predictions": predictions, 
@@ -692,6 +992,12 @@ def train_and_evaluate(args):
             "dnn_hidden_units": args["dnn_hidden_units"], 
             "learning_rate": args["learning_rate"],
             "evaluation_mode": args["evaluation_mode"],
+            "number_of_batch_time_anomaly_thresholds": args["number_of_batch_time_anomaly_thresholds"],
+            "number_of_batch_features_anomaly_thresholds": args["number_of_batch_features_anomaly_thresholds"],
+            "min_batch_time_anomaly_threshold": args["min_batch_time_anomaly_threshold"],
+            "max_batch_time_anomaly_threshold": args["max_batch_time_anomaly_threshold"],
+            "min_batch_features_anomaly_threshold": args["min_batch_features_anomaly_threshold"],
+            "max_batch_features_anomaly_threshold": args["max_batch_features_anomaly_threshold"],
             "time_anomaly_threshold": args["time_anomaly_threshold"], 
             "features_anomaly_threshold": args["features_anomaly_threshold"],
             "eps": args["eps"],
@@ -732,25 +1038,40 @@ def train_and_evaluate(args):
     else:
         if args["evaluation_mode"] == "calculate_error_distribution_statistics":
             # Get final mahalanobis statistics over the entire validation_1 dataset
-            estimator.train(
+            train_spec = tf.estimator.TrainSpec(
                 input_fn = read_dataset(
-                    filename = args["eval_file_pattern"], 
-                    mode = tf.estimator.ModeKeys.EVAL, 
-                    batch_size = args["eval_batch_size"],
+                    filename = args["train_file_pattern"],
+                    mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
+                    batch_size = args["train_batch_size"],
                     params = args),
-                steps = 1)
+                max_steps = args["train_steps"])
 
+            # Don't create exporter for serving yet since anomaly thresholds aren't trained yet
+            exporter = None
         elif args["evaluation_mode"] == "tune_anomaly_thresholds":
             # Tune anomaly thresholds using valdiation_2 and validation_anomaly datasets
-            estimator.evaluate(
+            train_spec = tf.estimator.TrainSpec(
                 input_fn = read_dataset(
-                    filename = args["eval_file_pattern"], 
-                    mode = tf.estimator.ModeKeys.EVAL, 
-                    batch_size = args["eval_batch_size"],
+                    filename = args["train_file_pattern"],
+                    mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
+                    batch_size = args["train_batch_size"],
                     params = args),
-                steps = None)
+                max_steps = args["train_steps"])
+            
+            # Create exporter that uses serving_input_fn to create saved_model for serving
+            exporter = tf.estimator.LatestExporter(name = "exporter", serving_input_receiver_fn = lambda: serving_input_fn(args["sequence_length"]))
 
-        # Export savedmodel with learned error distribution statistics to be used for inference
-        estimator.export_savedmodel(
-            export_dir_base = args['output_dir'] + "/export/exporter", 
-            serving_input_receiver_fn = lambda: serving_input_fn(args["sequence_length"]))
+        # Create eval spec to read in our validation data and export our model
+        eval_spec = tf.estimator.EvalSpec(
+            input_fn = read_dataset(
+                filename = args["eval_file_pattern"], 
+                mode = tf.estimator.ModeKeys.EVAL, 
+                batch_size = args["eval_batch_size"],
+                params = args),
+            steps = None,
+            exporters = exporter,
+            start_delay_secs = args["start_delay_secs"], # start evaluating after N seconds
+            throttle_secs = args["throttle_secs"])    # evaluate every N seconds
+        
+        # Create train and evaluate loop to train and evaluate our estimator
+        tf.estimator.train_and_evaluate(estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)

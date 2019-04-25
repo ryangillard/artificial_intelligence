@@ -128,16 +128,52 @@ if __name__ == "__main__":
         default = "reconstruction"
     )
     parser.add_argument(
+        "--number_of_batch_time_anomaly_thresholds",
+        help = "Number of anomaly thresholds to evaluate in the time dimension",
+        type = int,
+        default = 120
+    )
+    parser.add_argument(
+        "--number_of_batch_features_anomaly_thresholds",
+        help = "Number of anomaly thresholds to evaluate in the features dimension",
+        type = int,
+        default = 120
+    )
+    parser.add_argument(
+        "--min_batch_time_anomaly_threshold",
+        help = "The minimum anomaly threshold to evaluate in the time dimension",
+        type = float,
+        default = 100.0
+    )
+    parser.add_argument(
+        "--max_batch_time_anomaly_threshold",
+        help = "The maximum anomaly threshold to evaluate in the time dimension",
+        type = float,
+        default = 2000.0
+    )
+    parser.add_argument(
+        "--min_batch_features_anomaly_threshold",
+        help = "The minimum anomaly threshold to evaluate in the time dimension",
+        type = float,
+        default = 100.0
+    )
+    parser.add_argument(
+        "--max_batch_features_anomaly_threshold",
+        help = "The maximum anomaly threshold to evaluate in the time dimension",
+        type = float,
+        default = 2000.0
+    )
+    parser.add_argument(
         "--time_anomaly_threshold",
         help = "The anomaly threshold in the time dimension",
         type = float,
-        default = 2000.0
+        default = None
     )
     parser.add_argument(
         "--features_anomaly_threshold",
         help = "The anomaly threshold in the features dimension",
         type = float,
-        default = 75000.0
+        default = None
     )
     parser.add_argument(
         "--eps",
