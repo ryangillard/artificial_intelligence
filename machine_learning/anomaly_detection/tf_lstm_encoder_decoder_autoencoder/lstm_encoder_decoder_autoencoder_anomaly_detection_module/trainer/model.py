@@ -933,9 +933,6 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
         singleton_time_condition = tf.equal(
           x = cur_batch_size * params["seq_len"], y = 1) # shape = ()
         
-        print("abs_err_reshaped_time = \n{}".format(abs_err_reshaped_time))
-        print("singleton_time_condition = \n{}".format(singleton_time_condition))
-        
         cov_time_update_op, mean_time_update_op, count_time_update_op, inv_time_update_op = tf.cond(
           pred = singleton_time_condition, 
           true_fn = lambda: singleton_batch_mahalanobis_distance_variable_updating(
