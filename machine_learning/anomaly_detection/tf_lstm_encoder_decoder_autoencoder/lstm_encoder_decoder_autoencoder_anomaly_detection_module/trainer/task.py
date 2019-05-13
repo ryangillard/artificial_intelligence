@@ -32,7 +32,7 @@ if __name__ == "__main__":
     
     # Sequence shape hyperparameters
     parser.add_argument(
-        "--sequence_length",
+        "--seq_len",
         help = "Number of timesteps to include in each example",
         type = int,
         default = 32
@@ -53,12 +53,6 @@ if __name__ == "__main__":
     # Architecture hyperparameters
     
     # LSTM hyperparameters
-    parser.add_argument(
-        "--shared_encoder_decoder_weights",
-        help = "Whether the weights are shared between the encoder and decoder or not",
-        type = bool,
-        default = False
-    )
     parser.add_argument(
         "--encoder_lstm_hidden_units",
         help = "Hidden layer sizes to use for LSTM encoder",
@@ -128,37 +122,37 @@ if __name__ == "__main__":
         default = "reconstruction"
     )
     parser.add_argument(
-        "--number_of_batch_time_anomaly_thresholds",
+        "--num_time_anomaly_thresholds",
         help = "Number of anomaly thresholds to evaluate in the time dimension",
         type = int,
         default = 120
     )
     parser.add_argument(
-        "--number_of_batch_features_anomaly_thresholds",
+        "--num_features_anomaly_thresholds",
         help = "Number of anomaly thresholds to evaluate in the features dimension",
         type = int,
         default = 120
     )
     parser.add_argument(
-        "--min_batch_time_anomaly_threshold",
+        "--min_time_anomaly_threshold",
         help = "The minimum anomaly threshold to evaluate in the time dimension",
         type = float,
         default = 100.0
     )
     parser.add_argument(
-        "--max_batch_time_anomaly_threshold",
+        "--max_time_anomaly_threshold",
         help = "The maximum anomaly threshold to evaluate in the time dimension",
         type = float,
         default = 2000.0
     )
     parser.add_argument(
-        "--min_batch_features_anomaly_threshold",
+        "--min_features_anomaly_threshold",
         help = "The minimum anomaly threshold to evaluate in the time dimension",
         type = float,
         default = 100.0
     )
     parser.add_argument(
-        "--max_batch_features_anomaly_threshold",
+        "--max_features_anomaly_threshold",
         help = "The maximum anomaly threshold to evaluate in the time dimension",
         type = float,
         default = 2000.0
