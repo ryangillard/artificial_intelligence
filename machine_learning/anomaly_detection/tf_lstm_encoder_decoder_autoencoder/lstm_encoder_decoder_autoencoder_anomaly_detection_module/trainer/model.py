@@ -1267,18 +1267,20 @@ def lstm_encoder_decoder_autoencoder_anomaly_detection(features, labels, mode, p
         y = tf.zeros(shape = [cur_batch_size], dtype = tf.int64)) # shape = (cur_batch_size,)
     
       # Create predictions dictionary
-      predictions_dict = {"Y": Y,
-                "predictions": predictions, 
-                "error": error,
-                "absolute_error": absolute_error,
-                "mahalanobis_distance_time": mahalanobis_distance_time, 
-                "mahalanobis_distance_features": mahalanobis_distance_features, 
-                "time_anomaly_flags": time_anomaly_flags, 
-                "features_anomaly_flags": features_anomaly_flags}
+      predictions_dict = {
+        "Y": Y,
+        "predictions": predictions, 
+        "error": error,
+        "absolute_error": absolute_error,
+        "mahalanobis_distance_time": mahalanobis_distance_time, 
+        "mahalanobis_distance_features": mahalanobis_distance_features, 
+        "time_anomaly_flags": time_anomaly_flags, 
+        "features_anomaly_flags": features_anomaly_flags}
 
       # Create export outputs
-      export_outputs = {"predict_export_outputs": tf.estimator.export.PredictOutput(
-        outputs = predictions_dict)}
+      export_outputs = {
+        "predict_export_outputs": tf.estimator.export.PredictOutput(
+          outputs = predictions_dict)}
 
   # Return EstimatorSpec
   return tf.estimator.EstimatorSpec(
@@ -1334,109 +1336,110 @@ def serving_input_fn(seq_len):
     
     # Fix dynamic shape ambiguity of feature tensors for our DNN
     features = {key: get_shape_and_set_modified_shape_2D(
-      tensor = tensor, additional_dimension_sizes = [seq_len]) for key, tensor in features.items()}
+      tensor = tensor, additional_dimension_sizes = [seq_len]) 
+                for key, tensor in features.items()}
 
     return tf.estimator.export.ServingInputReceiver(
       features = features, receiver_tensors = feature_placeholders)
 
 # Create estimator to train and evaluate
 def train_and_evaluate(args):
-    # Create our custom estimator using our model function
-    estimator = tf.estimator.Estimator(
-        model_fn = lstm_encoder_decoder_autoencoder_anomaly_detection,
-        model_dir = args["output_dir"],
-        params = {
-            "seq_len": args["seq_len"],
-            "reverse_labels_sequence": args["reverse_labels_sequence"],
-            "encoder_lstm_hidden_units": args["encoder_lstm_hidden_units"],
-            "decoder_lstm_hidden_units": args["decoder_lstm_hidden_units"],
-            "lstm_dropout_output_keep_probs": args["lstm_dropout_output_keep_probs"], 
-            "dnn_hidden_units": args["dnn_hidden_units"], 
-            "learning_rate": args["learning_rate"],
-            "evaluation_mode": args["evaluation_mode"],
-            "num_time_anomaly_thresholds": args["num_time_anomaly_thresholds"],
-            "num_features_anomaly_thresholds": args["num_features_anomaly_thresholds"],
-            "min_time_anomaly_threshold": args["min_time_anomaly_threshold"],
-            "max_time_anomaly_threshold": args["max_time_anomaly_threshold"],
-            "min_features_anomaly_threshold": args["min_features_anomaly_threshold"],
-            "max_features_anomaly_threshold": args["max_features_anomaly_threshold"],
-            "time_anomaly_threshold": args["time_anomaly_threshold"], 
-            "features_anomaly_threshold": args["features_anomaly_threshold"],
-            "eps": args["eps"],
-            "f_score_beta": args["f_score_beta"]})
+  # Create our custom estimator using our model function
+  estimator = tf.estimator.Estimator(
+    model_fn = lstm_encoder_decoder_autoencoder_anomaly_detection,
+    model_dir = args["output_dir"],
+    params = {
+      "seq_len": args["seq_len"],
+      "reverse_labels_sequence": args["reverse_labels_sequence"],
+      "encoder_lstm_hidden_units": args["encoder_lstm_hidden_units"],
+      "decoder_lstm_hidden_units": args["decoder_lstm_hidden_units"],
+      "lstm_dropout_output_keep_probs": args["lstm_dropout_output_keep_probs"], 
+      "dnn_hidden_units": args["dnn_hidden_units"], 
+      "learning_rate": args["learning_rate"],
+      "evaluation_mode": args["evaluation_mode"],
+      "num_time_anomaly_thresholds": args["num_time_anomaly_thresholds"],
+      "num_features_anomaly_thresholds": args["num_features_anomaly_thresholds"],
+      "min_time_anomaly_threshold": args["min_time_anomaly_threshold"],
+      "max_time_anomaly_threshold": args["max_time_anomaly_threshold"],
+      "min_features_anomaly_threshold": args["min_features_anomaly_threshold"],
+      "max_features_anomaly_threshold": args["max_features_anomaly_threshold"],
+      "time_anomaly_threshold": args["time_anomaly_threshold"], 
+      "features_anomaly_threshold": args["features_anomaly_threshold"],
+      "eps": args["eps"],
+      "f_score_beta": args["f_score_beta"]})
+  
+  if args["evaluation_mode"] == "reconstruction":
+    early_stopping_hook = tf.contrib.estimator.stop_if_no_decrease_hook(
+      estimator = estimator,
+      metric_name = "rmse",
+      max_steps_without_decrease = 100,
+      min_steps = 1000,
+      run_every_secs = 60,
+      run_every_steps = None)
+
+    # Create train spec to read in our training data
+    train_spec = tf.estimator.TrainSpec(
+      input_fn = read_dataset(
+        filename = args["train_file_pattern"],
+        mode = tf.estimator.ModeKeys.TRAIN, 
+        batch_size = args["train_batch_size"],
+        params = args),
+      max_steps = args["train_steps"], 
+      hooks = [early_stopping_hook])
+
+    # Create eval spec to read in our validation data and export our model
+    eval_spec = tf.estimator.EvalSpec(
+      input_fn = read_dataset(
+        filename = args["eval_file_pattern"], 
+        mode = tf.estimator.ModeKeys.EVAL, 
+        batch_size = args["eval_batch_size"],
+        params = args),
+      steps = None,
+      start_delay_secs = args["start_delay_secs"], # start evaluating after N seconds
+      throttle_secs = args["throttle_secs"])  # evaluate every N seconds
+
+    # Create train and evaluate loop to train and evaluate our estimator
+    tf.estimator.train_and_evaluate(
+      estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
+  else:
+    if args["evaluation_mode"] == "calculate_error_distribution_statistics":
+      # Get final mahalanobis statistics over the entire validation_1 dataset
+      train_spec = tf.estimator.TrainSpec(
+        input_fn = read_dataset(
+          filename = args["train_file_pattern"],
+          mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
+          batch_size = args["train_batch_size"],
+          params = args),
+        max_steps = args["train_steps"])
+
+      # Don't create exporter for serving yet since anomaly thresholds aren't trained yet
+      exporter = None
+    elif args["evaluation_mode"] == "tune_anomaly_thresholds":
+      # Tune anomaly thresholds using valdiation_2 and validation_anomaly datasets
+      train_spec = tf.estimator.TrainSpec(
+        input_fn = read_dataset(
+          filename = args["train_file_pattern"],
+          mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
+          batch_size = args["train_batch_size"],
+          params = args),
+        max_steps = args["train_steps"])
+      
+      # Create exporter that uses serving_input_fn to create saved_model for serving
+      exporter = tf.estimator.LatestExporter(
+        name = "exporter", serving_input_receiver_fn = lambda: serving_input_fn(args["sequence_length"]))
+
+    # Create eval spec to read in our validation data and export our model
+    eval_spec = tf.estimator.EvalSpec(
+      input_fn = read_dataset(
+        filename = args["eval_file_pattern"], 
+        mode = tf.estimator.ModeKeys.EVAL, 
+        batch_size = args["eval_batch_size"],
+        params = args),
+      steps = None,
+      exporters = exporter,
+      start_delay_secs = args["start_delay_secs"], # start evaluating after N seconds
+      throttle_secs = args["throttle_secs"])  # evaluate every N seconds
     
-    if args["evaluation_mode"] == "reconstruction":
-        early_stopping_hook = tf.contrib.estimator.stop_if_no_decrease_hook(
-            estimator = estimator,
-            metric_name = "rmse",
-            max_steps_without_decrease = 100,
-            min_steps = 1000,
-            run_every_secs = 60,
-            run_every_steps = None)
-
-        # Create train spec to read in our training data
-        train_spec = tf.estimator.TrainSpec(
-            input_fn = read_dataset(
-                filename = args["train_file_pattern"],
-                mode = tf.estimator.ModeKeys.TRAIN, 
-                batch_size = args["train_batch_size"],
-                params = args),
-            max_steps = args["train_steps"], 
-            hooks = [early_stopping_hook])
-
-        # Create eval spec to read in our validation data and export our model
-        eval_spec = tf.estimator.EvalSpec(
-            input_fn = read_dataset(
-                filename = args["eval_file_pattern"], 
-                mode = tf.estimator.ModeKeys.EVAL, 
-                batch_size = args["eval_batch_size"],
-                params = args),
-            steps = None,
-            start_delay_secs = args["start_delay_secs"], # start evaluating after N seconds
-            throttle_secs = args["throttle_secs"])    # evaluate every N seconds
-
-        # Create train and evaluate loop to train and evaluate our estimator
-        tf.estimator.train_and_evaluate(
-          estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
-    else:
-        if args["evaluation_mode"] == "calculate_error_distribution_statistics":
-            # Get final mahalanobis statistics over the entire validation_1 dataset
-            train_spec = tf.estimator.TrainSpec(
-                input_fn = read_dataset(
-                    filename = args["train_file_pattern"],
-                    mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
-                    batch_size = args["train_batch_size"],
-                    params = args),
-                max_steps = args["train_steps"])
-
-            # Don't create exporter for serving yet since anomaly thresholds aren't trained yet
-            exporter = None
-        elif args["evaluation_mode"] == "tune_anomaly_thresholds":
-            # Tune anomaly thresholds using valdiation_2 and validation_anomaly datasets
-            train_spec = tf.estimator.TrainSpec(
-                input_fn = read_dataset(
-                    filename = args["train_file_pattern"],
-                    mode = tf.estimator.ModeKeys.EVAL, # only read through validation dataset once
-                    batch_size = args["train_batch_size"],
-                    params = args),
-                max_steps = args["train_steps"])
-            
-            # Create exporter that uses serving_input_fn to create saved_model for serving
-            exporter = tf.estimator.LatestExporter(
-              name = "exporter", serving_input_receiver_fn = lambda: serving_input_fn(args["sequence_length"]))
-
-        # Create eval spec to read in our validation data and export our model
-        eval_spec = tf.estimator.EvalSpec(
-            input_fn = read_dataset(
-                filename = args["eval_file_pattern"], 
-                mode = tf.estimator.ModeKeys.EVAL, 
-                batch_size = args["eval_batch_size"],
-                params = args),
-            steps = None,
-            exporters = exporter,
-            start_delay_secs = args["start_delay_secs"], # start evaluating after N seconds
-            throttle_secs = args["throttle_secs"])    # evaluate every N seconds
-        
-        # Create train and evaluate loop to train and evaluate our estimator
-        tf.estimator.train_and_evaluate(
-          estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
+    # Create train and evaluate loop to train and evaluate our estimator
+    tf.estimator.train_and_evaluate(
+      estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
