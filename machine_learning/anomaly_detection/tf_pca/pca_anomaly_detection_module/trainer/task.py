@@ -38,6 +38,44 @@ if __name__ == "__main__":
     default = 32
   )
   
+  # Training parameters
+  parser.add_argument(
+    "--train_batch_size",
+    help = "Number of examples in training batch",
+    type = int,
+    default = 32
+  )
+  parser.add_argument(
+    "--eval_batch_size",
+    help = "Number of examples in evaluation batch",
+    type = int,
+    default = 32
+  )
+  parser.add_argument(
+    "--train_steps",
+    help = "Number of batches to train for",
+    type = int,
+    default = 2000
+  )
+  parser.add_argument(
+    "--learning_rate",
+    help = "The learning rate, how quickly or slowly we train our model by scaling the gradient",
+    type = float,
+    default = 0.1
+  )
+  parser.add_argument(
+    "--start_delay_secs",
+    help = "Number of seconds to wait before first evaluation",
+    type = int,
+    default = 60
+  )
+  parser.add_argument(
+    "--throttle_secs",
+    help = "Number of seconds to wait between evaluations",
+    type = int,
+    default = 120
+  )
+  
   # Anomaly detection
   parser.add_argument(
     "--evaluation_mode",
