@@ -8,7 +8,7 @@
 /*********************************************************************************************************/
 
 /* This function loops through iterations and updates the policy */
-void LoopThroughIterations(unsigned int number_of_iterations, unsigned int number_of_bandits, double* bandit_mean, double* bandit_variance, double* action_value_function, unsigned int* action_count, double* action_trace, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, int action_selection_type, int action_value_update_type);
+void LoopThroughIterations(unsigned int number_of_iterations, unsigned int number_of_bandits, double* bandit_mean, double* bandit_variance, unsigned int* bandit_stochastic_change_frequencies, unsigned int* bandit_stochastic_change_counter, double global_bandit_mean_mean, double global_bandit_mean_variance, double global_bandit_variance_mean, double global_bandit_variance_variance, double* action_value_function, unsigned int* action_count, double* action_trace, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, int action_selection_type, int action_value_update_type);
 
 /* This function updates policy as some function of action-value function */
 void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double* action_value_function, unsigned int* action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double* policy, double* policy_cumulative_sum);
@@ -103,12 +103,26 @@ int main(int argc, char* argv[])
 	{
 		bandit_variance[i] = RNorm(global_bandit_variance_mean, sqrt(global_bandit_variance_variance));
 	} // end of i loop
+
+	unsigned int* bandit_stochastic_change_frequencies;
+	bandit_stochastic_change_frequencies = malloc(sizeof(unsigned int) * number_of_bandits);
 	
-	/* Print bandit means and variances */
-	printf("i\tmean\tvar\n");
+	FILE* infile_bandit_stochastic_change_frequencies = fopen("inputs/bandit_stochastic_change_frequencies.txt", "r");
 	for (i = 0; i < number_of_bandits; i++)
 	{
-		printf("%u\t%lf\t%lf\n", i, bandit_mean[i], bandit_variance[i]);
+		system_return = fscanf(infile_bandit_stochastic_change_frequencies, "%u\n", &bandit_stochastic_change_frequencies[i]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/bandit_stochastic_change_frequencies.txt\n");
+		}
+	} // end of i loop
+	fclose(infile_bandit_stochastic_change_frequencies);
+	
+	unsigned int* bandit_stochastic_change_counter;
+	bandit_stochastic_change_counter = malloc(sizeof(unsigned int) * number_of_bandits);
+	for (i = 0; i < number_of_bandits; i++)
+	{
+		bandit_stochastic_change_counter[i] = 0;
 	} // end of i loop
 	
 	/*********************************************************************************************************/
@@ -116,7 +130,7 @@ int main(int argc, char* argv[])
 	/*********************************************************************************************************/
 	
 	/* Set the number of iterations */
-	unsigned int number_of_iterations = 200;
+	unsigned int number_of_iterations = 2000;
 	
 	/* Create action-value function array */
 	double* action_value_function;
@@ -165,7 +179,7 @@ int main(int argc, char* argv[])
 	/* Set epsilon for our epsilon level of exploration */
 	double epsilon = 0.1;
 	
-	/* Get action selection type (epsilon-greedy, upper-confidence-bound) */
+	/* Get action selection type (greedy, epsilon-greedy, upper-confidence-bound) */
 	int action_selection_type = 0;
 	
 	FILE* infile_action_selection_type = fopen("inputs/action_selection_type.txt", "r");
@@ -193,6 +207,13 @@ int main(int argc, char* argv[])
 	/*********************************************************************************************************/
 	/****************************************** RUN POLICY CONTROL *******************************************/
 	/*********************************************************************************************************/
+
+	printf("\nInitial bandit properties:\n");
+	printf("i\tmean\tvar\tchg_frq\n");
+	for (i = 0; i < number_of_bandits; i++)
+	{
+		printf("%u\t%lf\t%lf\t%u\n", i, bandit_mean[i], bandit_variance[i], bandit_stochastic_change_frequencies[i]);
+	} // end of i loop
 	
 	printf("\nInitial action value function:\n");
 	printf("i\tQ\n");
@@ -209,12 +230,19 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	/* This function loops through iterations and updates the policy */
-	LoopThroughIterations(number_of_iterations, number_of_bandits, bandit_mean, bandit_variance, action_value_function, action_count, action_trace, policy, policy_cumulative_sum, alpha, epsilon, action_selection_type, action_value_update_type);
+	LoopThroughIterations(number_of_iterations, number_of_bandits, bandit_mean, bandit_variance, bandit_stochastic_change_frequencies, bandit_stochastic_change_counter, global_bandit_mean_mean, global_bandit_mean_variance, global_bandit_variance_mean, global_bandit_variance_variance, action_value_function, action_count, action_trace, policy, policy_cumulative_sum, alpha, epsilon, action_selection_type, action_value_update_type);
 	
 	/*********************************************************************************************************/
 	/**************************************** PRINT VALUES AND POLICIES **************************************/
 	/*********************************************************************************************************/
-	
+
+	printf("\nFinal bandit properties:\n");
+	printf("i\tmean\tvar\tchg_frq\n");
+	for (i = 0; i < number_of_bandits; i++)
+	{
+		printf("%u\t%lf\t%lf\t%u\n", i, bandit_mean[i], bandit_variance[i], bandit_stochastic_change_frequencies[i]);
+	} // end of i loop
+
 	printf("\nFinal action value function:\n");
 	printf("i\tQ\n");
 	for (i = 0; i < number_of_bandits; i++)
@@ -238,6 +266,8 @@ int main(int argc, char* argv[])
 	free(action_trace);
 	free(action_count);
 	free(action_value_function);
+	free(bandit_stochastic_change_counter);
+	free(bandit_stochastic_change_frequencies);
 	free(bandit_variance);
 	free(bandit_mean);
 	
@@ -249,7 +279,7 @@ int main(int argc, char* argv[])
 /*********************************************************************************************************/
 
 /* This function loops through iterations and updates the policy */
-void LoopThroughIterations(unsigned int number_of_iterations, unsigned int number_of_bandits, double* bandit_mean, double* bandit_variance, double* action_value_function, unsigned int* action_count, double* action_trace, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, int action_selection_type, int action_value_update_type)
+void LoopThroughIterations(unsigned int number_of_iterations, unsigned int number_of_bandits, double* bandit_mean, double* bandit_variance, unsigned int* bandit_stochastic_change_frequencies, unsigned int* bandit_stochastic_change_counter, double global_bandit_mean_mean, double global_bandit_mean_variance, double global_bandit_variance_mean, double global_bandit_variance_variance, double* action_value_function, unsigned int* action_count, double* action_trace, double* policy, double* policy_cumulative_sum, double alpha, double epsilon, int action_selection_type, int action_value_update_type)
 {
 	unsigned int t, i;
 	unsigned int action_index;
@@ -261,7 +291,7 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 		/* Choose policy by epsilon-greedy choosing from the action-value function */
 		UpdatePolicyFromActionValueFunction(number_of_bandits, action_value_function, action_count, t + 1, epsilon, action_selection_type, policy, policy_cumulative_sum);
 		
-		/* Get next action */
+		/* Get action */
 		probability = UnifRand();
 		for (i = 0; i < number_of_bandits; i++)
 		{
@@ -294,6 +324,23 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 
 			action_value_function[action_index] += (alpha / action_trace[action_index]) * (reward - action_value_function[action_index]);
 		}
+		
+		/* Mutate bandit statistics */
+		for (i = 0; i < number_of_bandits; i++)
+		{
+			if (bandit_stochastic_change_frequencies[i] > 0)
+			{
+				bandit_stochastic_change_counter[i]++;
+				
+				if (bandit_stochastic_change_counter[i] == bandit_stochastic_change_frequencies[i])
+				{
+					bandit_mean[i] = RNorm(global_bandit_mean_mean, sqrt(global_bandit_mean_variance));
+					bandit_variance[i] = RNorm(global_bandit_variance_mean, sqrt(global_bandit_variance_variance));
+					
+					bandit_stochastic_change_counter[i] = 0;
+				}
+			}
+		} // end of i loop
 	} // end of t loop
 	
 	return;
@@ -309,11 +356,11 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 	for (i = 0; i < number_of_bandits; i++)
 	{
 		/* Calculate action value depending on action selection type */
-		if (action_selection_type == 0)
+		if (action_selection_type == 0 || action_selection_type == 1) // greedy or epsilon-greedy
 		{
 			action_value = action_value_function[i];
 		}
-		else if (action_selection_type == 1)
+		else if (action_selection_type == 2) // upper-confidence-bound
 		{
 			if (action_count[i] == 0)
 			{
@@ -340,7 +387,7 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 	} // end of i loop
 	
 	/* Apportion policy probability across ties equally for state-action pairs that have the same value and spread out epsilon otherwise */
-	if (action_selection_type == 0)
+	if (action_selection_type == 1) // epsilon-greedy
 	{
 		if (max_action_count == number_of_bandits)
 		{
@@ -353,7 +400,7 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 			remaining_apportioned_probability_per_action = epsilon / (number_of_bandits - max_action_count);
 		}
 	}
-	else if (action_selection_type == 1)
+	else if (action_selection_type == 0 || action_selection_type == 2) // greedy or upper-confidence-bound
 	{
 		max_policy_apportioned_probability_per_action = 1.0 / max_action_count;
 		remaining_apportioned_probability_per_action = 0.0;		
@@ -363,11 +410,11 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 	for (i = 0; i < number_of_bandits; i++)
 	{
 		/* Calculate action value depending on action selection type */
-		if (action_selection_type == 0)
+		if (action_selection_type == 0 || action_selection_type == 1) // greedy or epsilon-greedy
 		{
 			action_value = action_value_function[i];
 		}
-		else if (action_selection_type == 1)
+		else if (action_selection_type == 2) // upper-confidence-bound
 		{
 			if (action_count[i] == 0)
 			{
