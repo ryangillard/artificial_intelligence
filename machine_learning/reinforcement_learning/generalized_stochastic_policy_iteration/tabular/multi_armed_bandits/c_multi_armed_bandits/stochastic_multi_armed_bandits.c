@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 	/**************************************** READ IN THE ENVIRONMENT ****************************************/
 	/*********************************************************************************************************/
 	
-	/* Get the number of states */
+	/* Get the number of bandits */
 	unsigned int number_of_bandits = 0;
 	
 	FILE* infile_number_of_bandits = fopen("inputs/number_of_bandits.txt", "r");
@@ -350,9 +350,9 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double* action_value_function, unsigned int* action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double* policy, double* policy_cumulative_sum)
 {
 	unsigned int i, max_action_count = 1;
-	double action_value = 0.0, max_state_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0, remaining_apportioned_probability_per_action = 0.0;
+	double action_value = 0.0, max_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0, remaining_apportioned_probability_per_action = 0.0;
 	
-	/* Update policy greedily from state-value function */
+	/* Update policy greedily from value function */
 	for (i = 0; i < number_of_bandits; i++)
 	{
 		/* Calculate action value depending on action selection type */
@@ -365,7 +365,7 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 			if (action_count[i] == 0)
 			{
 				action_value = DBL_MAX;
-				max_state_action_value = action_value;
+				max_action_value = action_value;
 				break;
 			}
 			else
@@ -374,19 +374,19 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 			}
 		}
 		
-		/* Save max action value and find the number of actions that have the same max state action value */
-		if (action_value > max_state_action_value)
+		/* Save max action value and find the number of actions that have the same max action value */
+		if (action_value > max_action_value)
 		{
-			max_state_action_value = action_value;
+			max_action_value = action_value;
 			max_action_count = 1;
 		}
-		else if (action_value == max_state_action_value)
+		else if (action_value == max_action_value)
 		{
 			max_action_count++;
 		}
 	} // end of i loop
 	
-	/* Apportion policy probability across ties equally for state-action pairs that have the same value and spread out epsilon otherwise */
+	/* Apportion policy probability across ties equally for action pairs that have the same value and spread out epsilon otherwise */
 	if (action_selection_type == 1) // epsilon-greedy
 	{
 		if (max_action_count == number_of_bandits)
@@ -426,7 +426,7 @@ void UpdatePolicyFromActionValueFunction(unsigned int number_of_bandits, double*
 			}
 		}
 		
-		if (action_value == max_state_action_value)
+		if (action_value == max_action_value)
 		{
 			policy[i] = max_policy_apportioned_probability_per_action;
 		}
