@@ -10,8 +10,8 @@
 /* This function loops through iterations and updates the policy */
 void LoopThroughIterations(unsigned int number_of_iterations, unsigned int number_of_states, unsigned int number_of_bandits, double** bandit_mean, double** bandit_variance, unsigned int* bandit_stochastic_change_frequencies, unsigned int* bandit_stochastic_change_counter, double global_bandit_mean_mean, double global_bandit_mean_variance, double global_bandit_variance_mean, double global_bandit_variance_variance, double** state_action_value_function, unsigned int** action_count, double** action_trace, double** policy, double** policy_cumulative_sum, double alpha, double epsilon, int action_selection_type, int action_value_update_type);
 
-/* This function updates policy as some function of action-value function */
-void UpdatePolicyFromActionValueFunction(unsigned int state_index, unsigned int number_of_bandits, double** state_action_value_function, unsigned int** action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double** policy, double** policy_cumulative_sum);
+/* This function updates policy as some function of state-action-value function */
+void UpdatePolicyFromStateActionValueFunction(unsigned int state_index, unsigned int number_of_bandits, double** state_action_value_function, unsigned int** action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double** policy, double** policy_cumulative_sum);
 
 /* This function returns a random normal number with given mean and standard deviation */
 double RNorm(double mu, double sigma);
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
 	/* Set the number of iterations */
 	unsigned int number_of_iterations = 2000;
 	
-	/* Create action-value function array */
+	/* Create state-action-value function array */
 	double** state_action_value_function;
 	state_action_value_function = malloc(sizeof(double*) * number_of_states);
 	for (i = 0; i < number_of_states; i++)
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	printf("\nInitial state-action value function:\n");
+	printf("\nInitial state-action-value function:\n");
 	printf("s\\b\t");
 	for (j = 0; j < number_of_bandits; j++)
 	{
@@ -308,7 +308,7 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	printf("\nFinal state-action value function:\n");
+	printf("\nFinal state-action-value function:\n");
 	printf("s\\b\t");
 	for (j = 0; j < number_of_bandits; j++)
 	{
@@ -380,14 +380,14 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 	unsigned int state_index, action_index;
 	double probability, reward;
 		
-	/* Loop through episode steps until termination */
+	/* Loop through iterations until termination */
 	for (t = 0; t < number_of_iterations; t++)
 	{
 		/* Get random state */
 		state_index = rand() % number_of_states;
 		
-		/* Choose policy by epsilon-greedy choosing from the action-value function */
-		UpdatePolicyFromActionValueFunction(state_index, number_of_bandits, state_action_value_function, action_count, t + 1, epsilon, action_selection_type, policy, policy_cumulative_sum);
+		/* Choose policy by epsilon-greedy choosing from the state-action-value function */
+		UpdatePolicyFromStateActionValueFunction(state_index, number_of_bandits, state_action_value_function, action_count, t + 1, epsilon, action_selection_type, policy, policy_cumulative_sum);
 		
 		/* Get action */
 		probability = UnifRand();
@@ -406,7 +406,7 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 		/* Update action count */
 		action_count[state_index][action_index]++;
 		
-		/* Update action-function */
+		/* Update state-action-value function */
 		if (action_value_update_type == 0) // sample-average method
 		{
 			state_action_value_function[state_index][action_index] += (1.0 / action_count[state_index][action_index]) * (reward - state_action_value_function[state_index][action_index]);
@@ -447,13 +447,13 @@ void LoopThroughIterations(unsigned int number_of_iterations, unsigned int numbe
 	return;
 } // end of LoopThroughIterations 
 
-/* This function updates policy as some function of action-value function */
-void UpdatePolicyFromActionValueFunction(unsigned int state_index, unsigned int number_of_bandits, double** state_action_value_function, unsigned int** action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double** policy, double** policy_cumulative_sum)
+/* This function updates policy as some function of state-action-value function */
+void UpdatePolicyFromStateActionValueFunction(unsigned int state_index, unsigned int number_of_bandits, double** state_action_value_function, unsigned int** action_count, unsigned int iteration_count, double epsilon, int action_selection_type, double** policy, double** policy_cumulative_sum)
 {
 	unsigned int i, max_action_count = 1;
 	double action_value = 0.0, max_action_value = -DBL_MAX, max_policy_apportioned_probability_per_action = 1.0, remaining_apportioned_probability_per_action = 0.0;
 	
-	/* Update policy greedily from value function */
+	/* Update policy from value function */
 	for (i = 0; i < number_of_bandits; i++)
 	{
 		/* Calculate action value depending on action selection type */
@@ -545,7 +545,7 @@ void UpdatePolicyFromActionValueFunction(unsigned int state_index, unsigned int 
 	} // end of i loop
 	
 	return;
-} // end of UpdatePolicyFromActionValueFunction function
+} // end of UpdatePolicyFromStateActionValueFunction function
 
 /* This function returns a random normal number with given mean and standard deviation */
 double RNorm(double mu, double sigma)
