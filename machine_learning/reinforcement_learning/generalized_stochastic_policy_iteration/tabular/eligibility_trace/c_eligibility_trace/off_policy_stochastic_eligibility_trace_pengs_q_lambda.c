@@ -515,8 +515,8 @@ void EpsilonGreedyPolicyFromStateActionFunction(unsigned int* number_of_actions_
 void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int* number_of_actions_per_non_terminal_state, unsigned int** number_of_state_action_successor_states, unsigned int*** state_action_successor_state_indices, double*** state_action_successor_state_transition_probabilities_cumulative_sum, double*** state_action_successor_state_rewards, double** state_action_value_function, unsigned int** state_action_value_function_max_tie_stack, double** policy, double** policy_cumulative_sum, double** eligibility_trace, double alpha, double epsilon, double discounting_factor_gamma, double trace_decay_lambda, unsigned int trace_update_type, unsigned int maximum_episode_length, unsigned int state_index)
 {
 	unsigned int i, j;
-	unsigned int action_index, successor_state_transition_index, next_state_index, next_action_index, max_action_count;
-	double probability, reward, delta, delta_prime, max_action_value, state_value, next_state_value;
+	unsigned int action_index, successor_state_transition_index, next_state_index;
+	double probability, reward, delta, delta_prime, state_value, next_state_value;
 		
 	/* Loop through episode steps until termination */
 	for (i = 0; i < maximum_episode_length; i++)
@@ -593,7 +593,6 @@ void LoopThroughEpisode(unsigned int number_of_non_terminal_states, unsigned int
 			
 			/* Update state and action to next state and action */
 			state_index = next_state_index;
-			action_index = next_action_index;
 		}
 	} // end of i loop
 	
