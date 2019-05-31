@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
 			}
 		} // end of j loop
 		printf("\n");
-	} // end of i loop		
+	} // end of i loop
 	fclose(infile_matrix);
 	
 	/* Call function to perform Cholesky decomposition on our real symmetric positive definite matrix */
@@ -178,7 +178,7 @@ int recursive_cholesky_factorization(int n, double** a, int a_row_offset, int a_
 		if (error != 0)
 		{
 			return error;
-		}		
+		}
 
 		/* Update and scale A21 */
 		error = solve_triangular_matrix_equation(n2, n1, a, a_row_offset, a_col_offset, n1 + a_row_offset, a_col_offset);
@@ -253,7 +253,7 @@ int solve_triangular_matrix_equation(int m, int n, double** a, int read_row_offs
 		} // end of j loop
 	} // end of k loop
 	
-	return 0;				
+	return 0;
 } // end of solve_triangular_matrix_equation function
 
 /*
