@@ -7,13 +7,13 @@
 /*********************************************************************************************************/
 
 /* This function computes the Cholesky factorization of a real symmetric positive definite matrix A using the recursive algorithm. */
-int recursive_cholesky_factorization(int n, double** a, int a_row_offset, int a_col_offset);
+int RecursiveCholeskyFactorization(int n, double** a, int a_row_offset, int a_col_offset);
 
 /* This function solves the matrix equation X * A**T = B for triangular matrix A */
-int solve_triangular_matrix_equation(int m, int n, double** a, int a_row_offset, int a_col_offset, int b_row_offset, int b_col_offset);
+int SolveTriangularMatrixEquation(int m, int n, double** a, int a_row_offset, int a_col_offset, int b_row_offset, int b_col_offset);
 
 /* This function performs the symmetric rank k operation C := -A * A**T + C */
-int symmetric_rank_k_operation(int n, int k, double** a, int a_row_offset, int a_col_offset, int c_row_offset, int c_col_offset);
+int SymmetricRankKOperation(int n, int k, double** a, int a_row_offset, int a_col_offset, int c_row_offset, int c_col_offset);
 
 /*********************************************************************************************************/
 /************************************************* MAIN **************************************************/
@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
 	fclose(infile_matrix);
 	
 	/* Call function to perform Cholesky decomposition on our real symmetric positive definite matrix */
-	error = recursive_cholesky_factorization(order, matrix, 0, 0);
+	error = RecursiveCholeskyFactorization(order, matrix, 0, 0);
 	
 	/* Print L or error code message */
 	if (error == 0)
@@ -88,15 +88,15 @@ int main(int argc, char* argv[])
 	}
 	else if (error == 1)
 	{
-		printf("ERROR: recursive_cholesky_factorization somehow managed to start with n == 0\n");
+		printf("ERROR: RecursiveCholeskyFactorization somehow managed to start with n == 0\n");
 	}
 	else if (error == 2)
 	{
-		printf("ERROR: solve_triangular_matrix_equation somehow managed to start with m or n == 0\n");
+		printf("ERROR: SolveTriangularMatrixEquation somehow managed to start with m or n == 0\n");
 	}
 	else if (error == 3)
 	{
-		printf("ERROR: symmetric_rank_k_operation somehow managed to start with n or k == 0\n");
+		printf("ERROR: SymmetricRankKOperation somehow managed to start with n or k == 0\n");
 	}
 	else
 	{
@@ -136,7 +136,7 @@ The function calls itself to factor A11. Update and scale A21,
 update A22, then calls itself to factor A22.
 Modified from dpotrf2.
 */
-int recursive_cholesky_factorization(int n, double** a, int a_row_offset, int a_col_offset)
+int RecursiveCholeskyFactorization(int n, double** a, int a_row_offset, int a_col_offset)
 {
 	/*
 	Args:
@@ -174,32 +174,32 @@ int recursive_cholesky_factorization(int n, double** a, int a_row_offset, int a_
 		int n2 = n - n1;
 
 		/* Factor A11 */
-		error = recursive_cholesky_factorization(n1, a, a_row_offset, a_col_offset);
+		error = RecursiveCholeskyFactorization(n1, a, a_row_offset, a_col_offset);
 		if (error != 0)
 		{
 			return error;
 		}
 
 		/* Update and scale A21 */
-		error = solve_triangular_matrix_equation(n2, n1, a, a_row_offset, a_col_offset, n1 + a_row_offset, a_col_offset);
+		error = SolveTriangularMatrixEquation(n2, n1, a, a_row_offset, a_col_offset, n1 + a_row_offset, a_col_offset);
 		if (error != 0)
 		{
 			return error;
 		}
 
 		/* Update A22 */
-		error = symmetric_rank_k_operation(n2, n1, a, n1 + a_row_offset, a_col_offset, n1 + a_row_offset, n1 + a_col_offset);
+		error = SymmetricRankKOperation(n2, n1, a, n1 + a_row_offset, a_col_offset, n1 + a_row_offset, n1 + a_col_offset);
 		if (error != 0)
 		{
 			return error;
 		}
 		
 		/* Factor A22 */
-		error = recursive_cholesky_factorization(n2, a, n1 + a_row_offset, n1 + a_col_offset);
+		error = RecursiveCholeskyFactorization(n2, a, n1 + a_row_offset, n1 + a_col_offset);
 	}
 	
 	return error;
-} // end of recursive_cholesky_factorization function
+} // end of RecursiveCholeskyFactorization function
 
 /*
 This function solves the matrix equation X * A**T = B,
@@ -207,7 +207,7 @@ where X and B are m by n matrices, A is a non-unit,
 lower triangular matrix.
 Modified from dtrsm.
 */
-int solve_triangular_matrix_equation(int m, int n, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset)
+int SolveTriangularMatrixEquation(int m, int n, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset)
 {
 	/*
 	Args:
@@ -254,14 +254,14 @@ int solve_triangular_matrix_equation(int m, int n, double** a, int read_row_offs
 	} // end of k loop
 	
 	return 0;
-} // end of solve_triangular_matrix_equation function
+} // end of SolveTriangularMatrixEquation function
 
 /*
 This function performs the symmetric rank k operation C := -A * A**T + C,
 where C is an n by n symmetric matrix and A is an n by k matrix.
 Modified from dsyrk.
 */
-int symmetric_rank_k_operation(int n, int k, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset)
+int SymmetricRankKOperation(int n, int k, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset)
 {
 	/*
 	Args:
@@ -303,4 +303,4 @@ int symmetric_rank_k_operation(int n, int k, double** a, int read_row_offset, in
 	} // end of j loop
 
 	return 0;
-} // end of symmetric_rank_k_operation function
+} // end of SymmetricRankKOperation function
