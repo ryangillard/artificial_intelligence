@@ -6,14 +6,17 @@
 /********************************************** PROTOTYPES ***********************************************/
 /*********************************************************************************************************/
 
+/* This function performs the Cholesky decomposition A = L * L**T */
+int CholeskyDecomposition(int n, double** L);
+
 /* This function computes the Cholesky factorization of a real symmetric positive definite matrix A using the recursive algorithm. */
 int RecursiveCholeskyFactorization(int n, double** a, int a_row_offset, int a_col_offset);
 
 /* This function solves the matrix equation X * A**T = B for triangular matrix A */
-int SolveTriangularMatrixEquation(int m, int n, double** a, int a_row_offset, int a_col_offset, int b_row_offset, int b_col_offset);
+int SolveTriangularMatrixEquation(int m, int n, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset);
 
 /* This function performs the symmetric rank k operation C := -A * A**T + C */
-int SymmetricRankKOperation(int n, int k, double** a, int a_row_offset, int a_col_offset, int c_row_offset, int c_col_offset);
+int SymmetricRankKOperation(int n, int k, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset);
 
 /*********************************************************************************************************/
 /************************************************* MAIN **************************************************/
@@ -62,26 +65,47 @@ int main(int argc, char* argv[])
 	fclose(infile_matrix);
 	
 	/* Call function to perform Cholesky decomposition on our real symmetric positive definite matrix */
-	error = RecursiveCholeskyFactorization(order, matrix, 0, 0);
+	error = RecursiveCholeskyFactorization(order, matrix);
+	
+	/* Free dynamically allocated memory */
+	for (i = 0; i < order; i++)
+	{
+		free(matrix[i]);
+	} // end of i loop
+	free(matrix);
+	
+	return 0;
+} // end of main
+
+/*********************************************************************************************************/
+/*********************************************** FUNCTIONS ***********************************************/
+/*********************************************************************************************************/
+
+/* This function performs the Cholesky decomposition A = L * L**T */
+int CholeskyDecomposition(int n, double** L)
+{
+	int i, j, error = 0;
+	
+	error = RecursiveCholeskyFactorization(n, L, 0, 0);
 	
 	/* Print L or error code message */
 	if (error == 0)
 	{
 		/* Zero upper triangular matrix without diagonal since it wasn't updated */
-		for (i = 0; i < order - 1; i++)
+		for (i = 0; i < n - 1; i++)
 		{
-			for (j = i + 1; j < order; j++)
+			for (j = i + 1; j < n; j++)
 			{
-				matrix[i][j] = 0.0;
+				L[i][j] = 0.0;
 			} // end of j loop
 		} // end of i loop
-
-		printf("L = \n");
-		for (i = 0; i < order; i++)
+		
+		printf("\nL = \n");
+		for (i = 0; i < n; i++)
 		{
-			for (j = 0; j < order; j++)
+			for (j = 0; j < n; j++)
 			{
-				printf("%lf\t", matrix[i][j]);
+				printf("%e\t", L[i][j]);
 			} // end of j loop
 			printf("\n");
 		} // end of i loop
@@ -103,19 +127,8 @@ int main(int argc, char* argv[])
 		printf("ERROR: Matrix is not positive-definite!\n");
 	}
 	
-	/* Free dynamically allocated memory */
-	for (i = 0; i < order; i++)
-	{
-		free(matrix[i]);
-	} // end of i loop
-	free(matrix);
-	
-	return 0;
-} // end of main
-
-/*********************************************************************************************************/
-/*********************************************** FUNCTIONS ***********************************************/
-/*********************************************************************************************************/
+	return error;
+} // end of CholeskyFactorization function
 
 /*
 This function computes the Cholesky factorization of a real symmetric
@@ -231,6 +244,7 @@ int SolveTriangularMatrixEquation(int m, int n, double** a, int read_row_offset,
 	{
 		return 2;
 	}
+	
 	/* Form  B := B * inv( A**T ). */
 	for (k = 0; k < n; k++)
 	{
