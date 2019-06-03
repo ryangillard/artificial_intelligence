@@ -33,6 +33,9 @@ int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, d
 /* This function performs matrix multiplication between two given matrices */
 void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C);
 
+/* This function performs the dot product between two given vectors that are in 2D form */
+double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec);
+
 /* This function returns a random uniform number within range [0,1] */
 double UnifRand(void);
 
@@ -421,6 +424,24 @@ int main(int argc, char* argv[])
 		} // end of j loop
 		printf("\n");
 	} // end of i loop
+	
+	/* Calculate log marginal likelihood of gaussian process of training points */
+	double log_marginal_likelihood = 0;
+	
+	/* Find first term, -0.5 * y**T * (K(X, X) + sigma_n^2 * I)^-1 * y */
+	log_marginal_likelihood = -0.5 * VectorDotProductRank2(num_training_points, Ly, Ly, 1, 1);
+	
+	/* Next add second term, -0.5 * log(det(K(X, X) + sigma_n^2 * I)) */
+	for (i = 0; i < num_training_points; i++)
+	{
+		log_marginal_likelihood -= log(L[i][i]);
+	} // end of i loop
+	
+	/* Lastly add third term, the normalizing factor: -0.5 * n * log(2 * Pi) */
+	log_marginal_likelihood -= 0.5 * num_training_points * log(2.0 * M_PI);
+	
+	printf("\nlog_marginal_likelihood = %lf\n", log_marginal_likelihood);
+	printf("\nmarginal_likelihood = %lf\n", exp(log_marginal_likelihood));
 	
 	/*********************************************************************************************************/
 	/************************************************* SAMPLE ************************************************/
@@ -1077,6 +1098,53 @@ void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double
 	
 	return;
 } // end of MatrixMultiplication function
+
+/* This function performs the dot product between two given vectors that are in 2D form */
+double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec)
+{
+	/* A = [m, p] */
+	/* B = [p, n] */
+
+	unsigned int i;
+	double dot_product = 0.0;
+	
+	if (a_col_vec == 1)
+	{
+		if (b_col_vec == 1)
+		{
+			for (i = 0; i < n; i++)
+			{
+				dot_product += A[i][0] * B[i][0];
+			} // end of i loop
+		}
+		else
+		{
+			for (i = 0; i < n; i++)
+			{
+				dot_product += A[i][0] * B[0][i];
+			} // end of i loop
+		}
+	}
+	else
+	{
+		if (b_col_vec == 1)
+		{
+			for (i = 0; i < n; i++)
+			{
+				dot_product += A[0][i] * B[i][0];
+			} // end of i loop
+		}
+		else
+		{
+			for (i = 0; i < n; i++)
+			{
+				dot_product += A[0][i] * B[0][i];
+			} // end of i loop
+		}
+	}
+
+	return dot_product;
+} // end of VectorDotProductRank2 function
 
 /* This function returns a random uniform number within range [0,1] */
 double UnifRand(void)
