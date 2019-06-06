@@ -30,6 +30,41 @@ int SymmetricRankKOperation(int n, int k, double** a, int read_row_offset, int r
 /* This solves a system of linear equations A * X = B with A = L*L**T */
 int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, double** b);
 
+/* This function computes the inverse of a real symmetric positive definite
+matrix A using the Cholesky factorization A = L * L**T computed by DPOTRF.
+Modified from dpotri.
+*/
+int dpotri(unsigned int n, double** a);
+
+/* This function computes the inverse of a real lower triangular matrix A.
+Modified from dtrtri.
+*/
+int dtrtri(unsigned int n, double** a);
+
+/* 
+This function computes the inverse of a real lower triangular matrix.
+Modified from dtrti2.
+*/
+int dtrti2(unsigned int n, double** a);
+
+/*
+This function performs the matrix-vector operation x := A * x,
+where x is an n element vector and A is an n by n non-unit,
+lower triangular matrix.
+Modified from dtrmv.
+*/
+int dtrmv(unsigned int n, double** a, unsigned int col_offset);
+
+/*
+This function scales a vector by a constant.
+uses unrolled loops for increment equal to 1.
+Modified from dscal.
+*/
+void dscal(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset);
+
+/* This function uses the iterative conjugate gradient method that solves A * x = b */
+void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x);
+
 /* This function performs matrix multiplication between two given matrices */
 void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C);
 
@@ -1023,6 +1058,320 @@ int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, d
 	
 	return 0;
 } // end of SolveLowerCholeskyFactorizationMatrixEquation function
+
+/* This function computes the inverse of a real symmetric positive definite
+matrix A using the Cholesky factorization A = L * L**T computed by DPOTRF.
+Modified from dpotri.
+*/
+int dpotri(unsigned int n, double** a)
+{
+	/* Quick return if possible */
+	if (n == 0)
+	{
+		return -1;
+	}
+	
+	/* Invert the triangular Cholesky factor L */
+	return dtrtri(n, a);
+} // end of dpotri function
+
+/* This function computes the inverse of a real lower triangular matrix A.
+Modified from dtrtri.
+*/
+int dtrtri(unsigned int n, double** a)
+{
+	unsigned int i;
+	
+	/* Check for singularity */
+	for (i = 0; i < n; i++)
+	{
+		if (a[i][i] == 0.0)
+		{
+			return i;
+		}
+	} // end of i loop
+	
+	return dtrti2(n, a);
+} // end of dtrtri function
+
+/* 
+This function computes the inverse of a real lower triangular matrix.
+Modified from dtrti2.
+*/
+int dtrti2(unsigned int n, double** a)
+{
+	int j;
+	double ajj;
+	
+	int x, y;
+	
+	/* Compute inverse of lower triangular matrix. */
+	for (j = n - 1; j >= 0; j--) // moving left through columns, starting from the end
+	{
+		a[j][j] = 1.0 / a[j][j];
+		
+		ajj = -a[j][j];
+		
+		if (j < n - 1)
+		{
+			/* Compute elements j + 1:n of j-th column. */
+			dtrmv(n - 1 - j, a, j);
+			
+			dscal(n - 1 - j, ajj, a, j + 1, j);
+		}
+	} // end of j loop
+	
+	return 0;
+} // end of dtrti2 function
+
+/*
+This function performs the matrix-vector operation x := A * x,
+where x is an n element vector and A is an n by n non-unit,
+lower triangular matrix.
+Modified from dtrmv.
+*/
+int dtrmv(unsigned int n, double** a, unsigned int col_offset)
+{
+	/* n specifies the order of the matrix A */
+	
+	/* Quick return if possible. */
+	if (n == 0)
+	{
+		return -2;
+	}
+	
+	/* Start the operations. In this version the elements of A are
+	accessed sequentially with one pass through A. */
+	
+	/* Form  x := A * x. */
+	int i, j;
+	double temp;
+	
+	for (j = n; j > 0; j--) // moving up rows
+	{
+		if (a[j + col_offset][col_offset] != 0.0)
+		{
+			temp = a[j + col_offset][col_offset];
+			for (i = n; i >= j + 1; i--) // moving up rows, starting at the bottom
+			{
+				a[i + col_offset][col_offset] += temp * a[i + col_offset][j + col_offset];
+			} // end of i loop
+			a[j + col_offset][col_offset] *= a[j + col_offset][j + col_offset];
+		}
+	} // end of j loop
+	
+} // end of dtrmv function
+
+/*
+This function scales a vector by a constant.
+Modified from dscal.
+*/
+void dscal(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset)
+{
+	unsigned int i;
+	for (i = 0; i < n; i++) // moving down rows, starting at the offset
+	{
+		a[i + row_offset][col_offset] *= da;
+	} // end of i loop
+	
+	return;
+} // end of dscal function
+
+// void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double length_scale, double signal_variance, double noise_variance)
+// {
+// 	unsigned int i, j;
+	
+// 	if (kernel_type == 0) // linear
+// 	{
+// 		return; // maybe tune constant c???
+// 	}
+// 	else // squared exponential
+// 	{
+// 		/* Length-scale */
+// 		double** d_kernel_d_length_scale_temp;
+// 		d_kernel_d_length_scale_temp = malloc(sizeof(double*) * num_training_points);
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			d_kernel_d_length_scale_temp[i] = malloc(sizeof(double) * num_training_points);
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				d_kernel_d_length_scale_temp[i][j] = 0.0;
+// 			} // end of j loop
+// 		} // end of i loop
+		
+// 		double a_squared_sum, b_squared_sum;
+		
+// 		MatrixMultiplication(num_training_points, num_training_points, num_dimensions, X_train, X_train, 0, 1, d_kernel_d_length_scale_temp);
+
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				a_squared_sum = 0.0;
+// 				b_squared_sum = 0.0;
+// 				for (k = 0; k < num_dimensions; k++)
+// 				{
+// 					a_squared_sum += A[i][k] * A[i][k];
+// 					b_squared_sum += B[j][k] * B[j][k];
+// 				} // end of k loop
+
+// 				kernel[i][j] = a_squared_sum + b_squared_sum - 2.0 * kernel[i][j];
+// 			} // end of j loop
+// 		} // end of i loop
+		
+// 		double** d_kernel_d_length_scale;
+// 		d_kernel_d_length_scale = malloc(sizeof(double*) * num_training_points);
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			d_kernel_d_length_scale[i] = malloc(sizeof(double) * num_training_points);
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				d_kernel_d_length_scale[i][j] = 0.0;
+// 			} // end of j loop
+// 		} // end of i loop
+		
+// 		MatrixMultiplication(num_training_points, num_training_points, num_training_points, kernel_x_x, d_kernel_d_length_scale_temp, 0, 0, d_kernel_d_length_scale);
+		
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				d_kernel_d_length_scale[i][j] /= pow(length_scale, 3);
+// 			} // end of j loop
+// 		} // end of i loop
+			
+// 		/* Signal variance */
+// 		double** d_kernel_d_signal_variance;
+// 		d_kernel_d_signal_variance = malloc(sizeof(double*) * num_training_points);
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			d_kernel_d_signal_variance[i] = malloc(sizeof(double) * num_training_points);
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				if (i == j)
+// 				{
+// 					d_kernel_d_signal_variance[i][j] = 2.0 * (kernel_x_x[i][j] - noise_variance * noise_variance) / signal_variance;
+// 				}
+// 				else
+// 				{
+// 					d_kernel_d_signal_variance[i][j] = 2.0 * kernel_x_x[i][j] / signal_variance;
+// 				}
+// 			} // end of j loop
+// 		} // end of i loop
+		
+// 		/* Noise variance */
+// 		double** d_kernel_d_noise_variance;
+// 		d_kernel_d_noise_variance = malloc(sizeof(double*) * num_training_points);
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			d_kernel_d_noise_variance[i] = malloc(sizeof(double) * num_training_points);
+// 			for (j = 0; j < num_training_points; j++)
+// 			{
+// 				if (i == j)
+// 				{
+// 					d_kernel_d_noise_variance[i][j] = 2.0 * noise_variance;
+// 				}
+// 				else
+// 				{
+// 					d_kernel_d_noise_variance[i][j] = 0.0;
+// 				}
+// 			} // end of j loop
+// 		} // end of i loop
+		
+// 		/* Free dynamic memory */
+// 		for (i = 0; i < num_training_points; i++)
+// 		{
+// 			free(d_kernel_d_noise_variance[i]);
+// 			free(d_kernel_d_signal_variance[i]);
+// 			free(d_kernel_d_length_scale[i]);
+// 		} // end of i loop
+// 		free(d_kernel_d_noise_variance);
+// 		free(d_kernel_d_signal_variance);
+// 		free(d_kernel_d_length_scale);
+// 	}
+	
+// 	return;
+// } // end of OptimizeKernelHyperparameters function
+
+// /* This function uses the iterative conjugate gradient method that solves A * x = b */
+// void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x)
+// {
+// 	/* A = [n, n] */
+// 	/* b = [n, 1] */
+// 	/* x = [n, 1] */
+	
+// 	unsigned int i, j;
+	
+// 	double** r;
+// 	r = malloc(sizeof(double*) * n);
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		r[i] = malloc(sizeof(double) * 1);
+// 	} // end of i loop
+	
+// 	MatrixMultiplication(n, 1, n, A, x, 0, 0, r);
+	
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		r[i][0] = b[i][0] - r[i][0];
+// 	} // end of i loop
+	
+// 	double** p;
+// 	p = malloc(sizeof(double*) * n);
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		p[i] = malloc(sizeof(double) * 1);
+// 	} // end of i loop
+	
+// 	double rsold = 0.0, rsnew = 0;
+// 	rsold = VectorDotProductRank2(n, r, r, 1, 1);
+	
+// 	double** Ap;
+// 	Ap = malloc(sizeof(double*) * n);
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		Ap[i] = malloc(sizeof(double) * 1);
+// 	} // end of i loop
+	
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		MatrixMultiplication(n, 1, n, A, p, 0, 0, Ap);
+		
+// 		alpha = rsold / VectorDotProductRank2(n, p, Ap, 1, 1);
+		
+// 		for (j = 0; j < n; j++)
+// 		{
+// 			x[j][0] += alpha * p[j][0];
+// 			r[j][0] -= alpha * Ap[j][0];
+// 		} // end of j loop
+		
+// 		rsnew = VectorDotProductRank2(n, r, r, 1, 1);
+// 		if (sqrt(rsnew) < 1e-10)
+// 		{
+// 			break;
+// 		}
+
+// 		for (j = 0; j < n; j++)
+// 		{
+// 			p[j][0] = r[j][0] + (rsnew / rsold) * p[j][0];
+// 		} // end of j loop
+		
+//         rsold = rsnew;
+// 	} // end of i loop
+	
+// 	/* Free dynamic memory */
+// 	for (i = 0; i < n; i++)
+// 	{
+// 		free(Ap[i]);
+// 		free(p[i]);
+// 		free(r[i]);
+// 	} // end of i loop
+// 	free(Ap);
+// 	free(p);
+// 	free(r);
+
+// 	return;
+// } // end of ConjugateGradientMethod function
 
 /* This function performs matrix multiplication between two given matrices */
 void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C)
