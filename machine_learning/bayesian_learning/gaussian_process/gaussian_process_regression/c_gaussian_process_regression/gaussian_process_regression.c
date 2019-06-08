@@ -1,19 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <float.h>
 
 /*********************************************************************************************************/
 /********************************************** PROTOTYPES ***********************************************/
 /*********************************************************************************************************/
 
+/* This function reads the model hyperparameters */
+void ReadModelHyperparameters(unsigned int* num_training_points, unsigned int* num_test_points, unsigned int* num_dimensions, unsigned int* num_samples, int* kernel_type);
+
+/* This function reads the intial kernel hyperparameters */
+void ReadInitialKernelHyperparameters(int kernel_type, unsigned int* num_kernel_hyperparameters, double** kernel_hyperparameters);
+
+/* This function reads the training features and targets */
+void ReadTrainingData(unsigned int num_training_points, unsigned int num_dimensions, double*** X_train, double*** y);
+
+/* This function reads in the test features */
+void ReadTestData(unsigned int num_test_points, unsigned int num_dimensions, double*** X_test);
+
 /* This function calculates various similarity kernels between two matrices */
-void CalculateKernel(int kernel_type, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double constant, double length_scale, double signal_variance, double noise_variance, double** kernel);
+void CalculateKernel(int kernel_type, double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
 
 /* This function applies the linear kernel between two matrices */
-void LinearKernel(unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double constant, double** kernel);
+void LinearKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
 
 /* This function applies the squared exponential kernel between two matrices */
-void SquaredExponentialKernel(unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double length_scale, double signal_variance, double noise_variance, double** kernel);
+void SquaredExponentialKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
 
 /* This function performs the Cholesky decomposition A = L * L**T */
 int CholeskyDecomposition(int n, double** L);
@@ -30,46 +43,56 @@ int SymmetricRankKOperation(int n, int k, double** a, int read_row_offset, int r
 /* This solves a system of linear equations A * X = B with A = L*L**T */
 int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, double** b);
 
-/* This function computes the inverse of a real symmetric positive definite
-matrix A using the Cholesky factorization A = L * L**T computed by DPOTRF.
-Modified from dpotri.
-*/
-int dpotri(unsigned int n, double** a);
+/* This function computes the inverse of a real symmetric positive definite matrix A using the Cholesky factorization A = L * L**T. */
+int LowerCholeskyInverse(unsigned int n, double** a);
 
-/* This function computes the inverse of a real lower triangular matrix A.
-Modified from dtrtri.
-*/
-int dtrtri(unsigned int n, double** a);
+/* This function computes the inverse of a real lower triangular matrix A */
+int LowerTriangularInverseSingularityCheck(unsigned int n, double** a);
 
-/* 
-This function computes the inverse of a real lower triangular matrix.
-Modified from dtrti2.
-*/
-int dtrti2(unsigned int n, double** a);
+/* This function computes the inverse of a real lower triangular matrix */
+int LowerTriangularInverse(unsigned int n, double** a);
 
-/*
-This function performs the matrix-vector operation x := A * x,
-where x is an n element vector and A is an n by n non-unit,
-lower triangular matrix.
-Modified from dtrmv.
-*/
-int dtrmv(unsigned int n, double** a, unsigned int col_offset);
+/* This function performs the matrix-vector operation x := A * x, where A is an n by n non-unit, lower triangular matrix. */
+int MatrixVectorMultiplication(unsigned int n, double** a, unsigned int col_offset);
 
-/*
-This function scales a vector by a constant.
-uses unrolled loops for increment equal to 1.
-Modified from dscal.
-*/
-void dscal(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset);
+/* This function scales a vector by a constant. */
+void ScaleVectorByConstant(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset);
 
 /* This function efficiently recombines a lower cholesky decomposition inverse A^-1 = L^-1 * L^-T */
 void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, double** A);
+
+/* This function optimizes kernel hyperparameters */
+void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double* kernel_hyperparameters);
+
+/* This function reads the kernel hyperparameter optimization parameters */
+void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate);
+
+/* This function performs the kernel hyperparameter optimzation loop */
+void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double* kernel_hyperparameters);
+
+/* This function updates the constant hyperparameter of the linear kernel */
+double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+
+/* This function updates the length-scale hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, double* kernel_hyperparameters, double gnorm);
+
+/* This function updates the signal variance hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+
+/* This function updates the noise variance hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+
+/* This function updates a kernel hyperparameter with gradient ascent */
+double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, double* kernel_hyperparameters, double gnorm);
 
 /* This function uses the iterative conjugate gradient method that solves A * x = b */
 void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x);
 
 /* This function performs matrix multiplication between two given matrices */
-void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C);
+void MatrixMatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C);
+
+/* This function calculates the trace of the matrix-matrix multiplication of matrices A and B */
+int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double* trace);
 
 /* This function performs the dot product between two given vectors that are in 2D form */
 double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec);
@@ -89,212 +112,53 @@ double NormRand(void);
 
 int main(int argc, char* argv[])
 {
-	int i, j, system_return = 0, error = 0;
+	int i, j, error = 0;
 	srand(12345);
 	
 	/*********************************************************************************************************/
 	/********************************************* READ INPUTS ***********************************************/
 	/*********************************************************************************************************/
 	
-	/* Get the number of training points */
+	/* Get model hyperparameters */
 	unsigned int num_training_points = 0;
-	
-	FILE* infile_num_training_points = fopen("inputs/num_training_points.txt", "r");
-	system_return = fscanf(infile_num_training_points, "%u", &num_training_points);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/num_training_points.txt\n");
-	}
-	fclose(infile_num_training_points);
-	printf("num_training_points = %u\n", num_training_points);
-	
-	/* Get the number of test points */
 	unsigned int num_test_points = 0;
-	
-	FILE* infile_num_test_points = fopen("inputs/num_test_points.txt", "r");
-	system_return = fscanf(infile_num_test_points, "%u", &num_test_points);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/num_test_points.txt\n");
-	}
-	fclose(infile_num_test_points);
-	printf("num_test_points = %u\n", num_test_points);
-	
-	/* Get the number of dimensions */
 	unsigned int num_dimensions = 0;
-	
-	FILE* infile_num_dimensions = fopen("inputs/num_dimensions.txt", "r");
-	system_return = fscanf(infile_num_dimensions, "%u", &num_dimensions);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/num_dimensions.txt\n");
-	}
-	fclose(infile_num_dimensions);
-	printf("num_dimensions = %u\n", num_dimensions);
-	
-	/* Get the number of samples */
 	unsigned int num_samples = 0;
-	
-	FILE* infile_num_samples = fopen("inputs/num_samples.txt", "r");
-	system_return = fscanf(infile_num_samples, "%u", &num_samples);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/num_samples.txt\n");
-	}
-	fclose(infile_num_samples);
-	printf("num_samples = %u\n", num_samples);
-	
-	/* Get the kernel type */
 	int kernel_type = 0;
 	
-	FILE* infile_kernel_type = fopen("inputs/kernel_type.txt", "r");
-	system_return = fscanf(infile_kernel_type, "%d", &kernel_type);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/kernel_type.txt\n");
-	}
-	fclose(infile_kernel_type);
-	printf("kernel_type = %d\n", kernel_type);
+	ReadModelHyperparameters(&num_training_points, &num_test_points, &num_dimensions, &num_samples, &kernel_type);
 	
 	/* Get kernel hyperparameters */
+	unsigned int num_kernel_hyperparameters = 0;
+	double* kernel_hyperparameters;
 	
-	/* Linear kernel hyperparameters */
-	double constant = 0.0;
+	ReadInitialKernelHyperparameters(kernel_type, &num_kernel_hyperparameters, &kernel_hyperparameters);
 	
-	FILE* infile_constant = fopen("inputs/constant.txt", "r");
-	system_return = fscanf(infile_constant, "%lf", &constant);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/constant.txt\n");
-	}
-	fclose(infile_constant);
-	printf("constant = %lf\n", constant);
-	
-	/* Squared exponential kernel hyperparameters */
-	double length_scale = 0.0;
-	
-	FILE* infile_length_scale = fopen("inputs/length_scale.txt", "r");
-	system_return = fscanf(infile_length_scale, "%lf", &length_scale);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/length_scale.txt\n");
-	}
-	fclose(infile_length_scale);
-	printf("length_scale = %lf\n", length_scale);
-	
-	double signal_variance = 0.0;
-	
-	FILE* infile_signal_variance = fopen("inputs/signal_variance.txt", "r");
-	system_return = fscanf(infile_signal_variance, "%lf", &signal_variance);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/signal_variance.txt\n");
-	}
-	fclose(infile_signal_variance);
-	printf("signal_variance = %lf\n", signal_variance);
-	
-	/* Get noise variance */
-	double noise_variance = 0.0;
-	
-	FILE* infile_noise_variance = fopen("inputs/noise_variance.txt", "r");
-	system_return = fscanf(infile_noise_variance, "%lf", &noise_variance);
-	if (system_return == -1)
-	{
-		printf("Failed reading file inputs/noise_variance.txt\n");
-	}
-	fclose(infile_noise_variance);
-	printf("noise_variance = %lf\n", noise_variance);
-	
-	/* Now get the X_train values */
+	/* Get training data */
 	double** X_train;
-	
-	printf("\nX_train = \n");
-	FILE* infile_X_train = fopen("inputs/X_train.txt", "r");
-	X_train = malloc(sizeof(double*) * num_training_points);
-	for (i = 0; i < num_training_points; i++)
-	{
-		X_train[i] = malloc(sizeof(double) * num_dimensions);
-		for (j = 0; j < num_dimensions; j++)
-		{
-			system_return = fscanf(infile_X_train, "%lf\t", &X_train[i][j]);
-			if (system_return == -1)
-			{
-				printf("Failed reading file inputs/X_train.txt\n");
-			}
-			else
-			{
-				printf("%lf\t", X_train[i][j]);
-			}
-		} // end of j loop
-		printf("\n");
-	} // end of i loop
-	fclose(infile_X_train);
-	
-	/* Now get y noisy function values */
 	double** y;
 	
-	printf("\ny = \n");
-	FILE* infile_y = fopen("inputs/y.txt", "r");
-	y = malloc(sizeof(double*) * num_training_points);
-	for (i = 0; i < num_training_points; i++)
-	{
-		y[i] = malloc(sizeof(double) * 1);
-		system_return = fscanf(infile_y, "%lf\n", &y[i][0]);
-		if (system_return == -1)
-		{
-			printf("Failed reading file inputs/y.txt\n");
-		}
-		else
-		{
-			printf("%lf\n", y[i][0]);
-		}
-	} // end of i loop
-	fclose(infile_y);
+	ReadTrainingData(num_training_points, num_dimensions, &X_train, &y);
 	
-	/* Now get the X_test values */
+	/* Get test data */
 	double** X_test;
 	
-	printf("\nX_test = \n");
-	FILE* infile_X_test = fopen("inputs/X_test.txt", "r");
-	X_test = malloc(sizeof(double*) * num_test_points);
-	for (i = 0; i < num_test_points; i++)
-	{
-		X_test[i] = malloc(sizeof(double) * num_dimensions);
-		for (j = 0; j < num_dimensions; j++)
-		{
-			system_return = fscanf(infile_X_test, "%lf\t", &X_test[i][j]);
-			if (system_return == -1)
-			{
-				printf("Failed reading file inputs/X_test.txt\n");
-			}
-			else
-			{
-				printf("%lf\t", X_test[i][j]);
-			}
-		} // end of j loop
-		printf("\n");
-	} // end of i loop
-	fclose(infile_X_test);
-	
+	ReadTestData(num_test_points, num_dimensions, &X_test);
+
 	/*********************************************************************************************************/
 	/************************************* BUILD PREDICTIVE DISTRIBUTION *************************************/
 	/*********************************************************************************************************/
 	
 	/* Create array to hold kernel_x_x */
 	double** kernel_x_x;
-	
 	kernel_x_x = malloc(sizeof(double*) * num_training_points);
 	for (i = 0; i < num_training_points; i++)
 	{
 		kernel_x_x[i] = malloc(sizeof(double) * num_training_points);
-		for (j = 0; j < num_training_points; j++)
-		{
-			kernel_x_x[i][j] = 0.0;
-		} // end of j loop
 	} // end of i loop
 	
 	/* Calculate kernel K(X, X) */
-	CalculateKernel(kernel_type, num_training_points, num_training_points, num_dimensions, X_train, X_train, constant, length_scale, signal_variance, noise_variance, kernel_x_x);
+	CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_training_points, num_dimensions, X_train, X_train, kernel_x_x);
 	
 	printf("\nkernel_x_x = \n");
 	for (i = 0; i < num_training_points; i++)
@@ -306,9 +170,8 @@ int main(int argc, char* argv[])
 		printf("\n");
 	} // end of i loop
 
-	/* Rather than find the actual inverse of K(X, X), Cholesky decompose since it is faster and more numerically stable */
+	/* Rather than find the actual inverse of K(X, X), Cholesky decompose K(X, X) int L * L**T since it is faster and more numerically stable */
 	double** L;
-	
 	L = malloc(sizeof(double*) * num_training_points);
 	for (i = 0; i < num_training_points; i++)
 	{
@@ -324,19 +187,14 @@ int main(int argc, char* argv[])
 	
 	/* Now find kernel between our training and test points K(X, X_*) */
 	double** kernel_x_x_star;
-	
 	kernel_x_x_star = malloc(sizeof(double*) * num_training_points);
 	for (i = 0; i < num_training_points; i++)
 	{
 		kernel_x_x_star[i] = malloc(sizeof(double) * num_test_points);
-		for (j = 0; j < num_test_points; j++)
-		{
-			kernel_x_x_star[i][j] = 0.0;
-		} // end of j loop
 	} // end of i loop
 	
 	/* Calculate kernel K(X, X_*) */
-	CalculateKernel(kernel_type, num_training_points, num_test_points, num_dimensions, X_train, X_test, constant, length_scale, signal_variance, noise_variance, kernel_x_x_star);
+	CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_test_points, num_dimensions, X_train, X_test, kernel_x_x_star);
 	
 	printf("\nkernel_x_x_star = \n");
 	for (i = 0; i < num_training_points; i++)
@@ -350,7 +208,6 @@ int main(int argc, char* argv[])
 	
 	/* Solve L * Z = K(X, X_*) for Z */
 	double** Lk;
-	
 	Lk = malloc(sizeof(double*) * num_training_points);
 	for (i = 0; i < num_training_points; i++)
 	{
@@ -376,7 +233,6 @@ int main(int argc, char* argv[])
 	
 	/* Now solve for L * Z = y for Z */
 	double** Ly;
-	
 	Ly = malloc(sizeof(double*) * num_training_points);
 	for (i = 0; i < num_training_points; i++)
 	{
@@ -403,7 +259,7 @@ int main(int argc, char* argv[])
 		mu[i][0] = 0.0;
 	} // end of i loop
 	
-	MatrixMultiplication(num_test_points, 1, num_training_points, Lk, Ly, 1, 0, mu);
+	MatrixMatrixMultiplication(num_test_points, 1, num_training_points, Lk, Ly, 1, 0, mu);
 	
 	printf("\nmu = \n");
 	for (i = 0; i < num_test_points; i++)
@@ -418,14 +274,10 @@ int main(int argc, char* argv[])
 	for (i = 0; i < num_test_points; i++)
 	{
 		kernel_x_star_x_star[i] = malloc(sizeof(double) * num_test_points);
-		for (j = 0; j < num_test_points; j++)
-		{
-			kernel_x_star_x_star[i][j] = 0.0;
-		} // end of j loop
 	} // end of i loop
 	
 	/* Calculate kernel K(X_*, X_*) */
-	CalculateKernel(kernel_type, num_test_points, num_test_points, num_dimensions, X_test, X_test, constant, length_scale, signal_variance, noise_variance, kernel_x_star_x_star);
+	CalculateKernel(kernel_type, kernel_hyperparameters, num_test_points, num_test_points, num_dimensions, X_test, X_test, kernel_x_star_x_star);
 	
 	printf("\nkernel_x_star_x_star = \n");
 	for (i = 0; i < num_test_points; i++)
@@ -450,7 +302,7 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	MatrixMultiplication(num_test_points, num_test_points, num_training_points, Lk, Lk, 1, 0, covariance);
+	MatrixMatrixMultiplication(num_test_points, num_test_points, num_training_points, Lk, Lk, 1, 0, covariance);
 	
 	printf("\ncovariance = \n");
 	for (i = 0; i < num_test_points; i++)
@@ -526,7 +378,7 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	MatrixMultiplication(num_test_points, num_samples, num_test_points, L_prior, random_normal_samples, 0, 0, f_prior);
+	MatrixMatrixMultiplication(num_test_points, num_samples, num_test_points, L_prior, random_normal_samples, 0, 0, f_prior);
 	
 	/* Sample from posterior */
 	double** L_posterior;
@@ -565,7 +417,13 @@ int main(int argc, char* argv[])
 		} // end of j loop
 	} // end of i loop
 	
-	MatrixMultiplication(num_test_points, num_samples, num_test_points, L_posterior, random_normal_samples, 0, 0, f_posterior);
+	MatrixMatrixMultiplication(num_test_points, num_samples, num_test_points, L_posterior, random_normal_samples, 0, 0, f_posterior);
+	
+	/*********************************************************************************************************/
+	/************************************* OPTIMIZE KERNEL HYPERPARAMETERS ***********************************/
+	/*********************************************************************************************************/
+	
+	OptimizeKernelHyperparameters(kernel_type, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, kernel_hyperparameters);
 	
 	/*********************************************************************************************************/
 	/********************************************** WRITE OUTPUTS ********************************************/
@@ -656,6 +514,8 @@ int main(int argc, char* argv[])
 	free(y);
 	free(X_train);
 	
+	free(kernel_hyperparameters);
+	
 	return 0;
 } // end of main
 
@@ -663,34 +523,248 @@ int main(int argc, char* argv[])
 /*********************************************** FUNCTIONS ***********************************************/
 /*********************************************************************************************************/
 
-/* This function calculates various similarity kernels between two matrices */
-void CalculateKernel(int kernel_type, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double constant, double length_scale, double signal_variance, double noise_variance, double** kernel)
+/* This function reads the model hyperparameters */
+void ReadModelHyperparameters(unsigned int* num_training_points, unsigned int* num_test_points, unsigned int* num_dimensions, unsigned int* num_samples, int* kernel_type)
 {
+	int system_return = 0;
+	
+	/* Get the number of training points */
+	FILE* infile_num_training_points = fopen("inputs/num_training_points.txt", "r");
+	system_return = fscanf(infile_num_training_points, "%u", num_training_points);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/num_training_points.txt\n");
+	}
+	fclose(infile_num_training_points);
+	printf("num_training_points = %u\n", (*num_training_points));
+	
+	/* Get the number of test points */
+	FILE* infile_num_test_points = fopen("inputs/num_test_points.txt", "r");
+	system_return = fscanf(infile_num_test_points, "%u", num_test_points);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/num_test_points.txt\n");
+	}
+	fclose(infile_num_test_points);
+	printf("num_test_points = %u\n", (*num_test_points));
+	
+	/* Get the number of dimensions */
+	FILE* infile_num_dimensions = fopen("inputs/num_dimensions.txt", "r");
+	system_return = fscanf(infile_num_dimensions, "%u", num_dimensions);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/num_dimensions.txt\n");
+	}
+	fclose(infile_num_dimensions);
+	printf("num_dimensions = %u\n", (*num_dimensions));
+	
+	/* Get the number of samples */
+	FILE* infile_num_samples = fopen("inputs/num_samples.txt", "r");
+	system_return = fscanf(infile_num_samples, "%u", num_samples);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/num_samples.txt\n");
+	}
+	fclose(infile_num_samples);
+	printf("num_samples = %u\n", (*num_samples));
+	
+	/* Get the kernel type */
+	FILE* infile_kernel_type = fopen("inputs/kernel_type.txt", "r");
+	system_return = fscanf(infile_kernel_type, "%d", kernel_type);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/kernel_type.txt\n");
+	}
+	fclose(infile_kernel_type);
+	printf("kernel_type = %d\n", (*kernel_type));
+	
+	return;
+} // end of ReadModelHyperparameters function
+
+/* This function reads the intial kernel hyperparameters */
+void ReadInitialKernelHyperparameters(int kernel_type, unsigned int* num_kernel_hyperparameters, double** kernel_hyperparameters)
+{
+	int system_return = 0;
+	
 	if (kernel_type == 0) // linear
 	{
-		LinearKernel(a_rows, b_rows, a_cols, A, B, constant, kernel);
+		/* Linear kernel hyperparameters */
+		(*num_kernel_hyperparameters) = 1;
+		
+		(*kernel_hyperparameters) = malloc(sizeof(double) * (*num_kernel_hyperparameters));
+		
+		/* Get constant */
+		FILE* infile_constant = fopen("inputs/constant.txt", "r");
+		system_return = fscanf(infile_constant, "%lf", &(*kernel_hyperparameters)[0]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/constant.txt\n");
+		}
+		fclose(infile_constant);
+		printf("constant = %lf\n", (*kernel_hyperparameters)[0]);
 	}
 	else // squared exponential
 	{
-		SquaredExponentialKernel(a_rows, b_rows, a_cols, A, B, length_scale, signal_variance, noise_variance, kernel);
+		/* Squared exponential kernel hyperparameters */
+		(*num_kernel_hyperparameters) = 3;
+		
+		(*kernel_hyperparameters) = malloc(sizeof(double) * (*num_kernel_hyperparameters));
+
+		/* Get length-scale */
+		FILE* infile_length_scale = fopen("inputs/length_scale.txt", "r");
+		system_return = fscanf(infile_length_scale, "%lf", &(*kernel_hyperparameters)[0]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/length_scale.txt\n");
+		}
+		fclose(infile_length_scale);
+		printf("length_scale = %lf\n", (*kernel_hyperparameters)[0]);
+
+		/* Get signal variance */
+		FILE* infile_signal_variance = fopen("inputs/signal_variance.txt", "r");
+		system_return = fscanf(infile_signal_variance, "%lf", &(*kernel_hyperparameters)[1]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/signal_variance.txt\n");
+		}
+		fclose(infile_signal_variance);
+		printf("signal_variance = %lf\n", (*kernel_hyperparameters)[1]);
+
+		/* Get noise variance */
+		FILE* infile_noise_variance = fopen("inputs/noise_variance.txt", "r");
+		system_return = fscanf(infile_noise_variance, "%lf", &(*kernel_hyperparameters)[2]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/noise_variance.txt\n");
+		}
+		fclose(infile_noise_variance);
+		printf("noise_variance = %lf\n", (*kernel_hyperparameters)[2]);	
+	}
+	
+	return;
+} // end of ReadInitialKernelHyperparameters function
+
+/* This function reads the training features and targets */
+void ReadTrainingData(unsigned int num_training_points, unsigned int num_dimensions, double*** X_train, double*** y)
+{
+	unsigned int i, j, system_return = 0;
+	
+	/* Get the X_train values */
+	printf("\nX_train = \n");
+	FILE* infile_X_train = fopen("inputs/X_train.txt", "r");
+	(*X_train) = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		(*X_train)[i] = malloc(sizeof(double) * num_dimensions);
+		for (j = 0; j < num_dimensions; j++)
+		{
+			system_return = fscanf(infile_X_train, "%lf\t", &(*X_train)[i][j]);
+			if (system_return == -1)
+			{
+				printf("Failed reading file inputs/X_train.txt\n");
+			}
+			else
+			{
+				printf("%lf\t", (*X_train)[i][j]);
+			}
+		} // end of j loop
+		printf("\n");
+	} // end of i loop
+	fclose(infile_X_train);
+	
+	/* Now get y noisy function values */
+	printf("\ny = \n");
+	FILE* infile_y = fopen("inputs/y.txt", "r");
+	(*y) = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		(*y)[i] = malloc(sizeof(double) * 1);
+		system_return = fscanf(infile_y, "%lf\n", &(*y)[i][0]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/y.txt\n");
+		}
+		else
+		{
+			printf("%lf\n", (*y)[i][0]);
+		}
+	} // end of i loop
+	fclose(infile_y);
+	
+	return;
+} // end of ReadTrainingData function
+
+/* This function reads in the test features */
+void ReadTestData(unsigned int num_test_points, unsigned int num_dimensions, double*** X_test)
+{
+	unsigned int i, j, system_return = 0;
+	
+	/* Get the X_test values */
+	printf("\nX_test = \n");
+	FILE* infile_X_test = fopen("inputs/X_test.txt", "r");
+	(*X_test) = malloc(sizeof(double*) * num_test_points);
+	for (i = 0; i < num_test_points; i++)
+	{
+		(*X_test)[i] = malloc(sizeof(double) * num_dimensions);
+		for (j = 0; j < num_dimensions; j++)
+		{
+			system_return = fscanf(infile_X_test, "%lf\t", &(*X_test)[i][j]);
+			if (system_return == -1)
+			{
+				printf("Failed reading file inputs/X_test.txt\n");
+			}
+			else
+			{
+				printf("%lf\t", (*X_test)[i][j]);
+			}
+		} // end of j loop
+		printf("\n");
+	} // end of i loop
+	fclose(infile_X_test);
+	
+	return;
+} // end of ReadTestData function
+
+/* This function calculates various similarity kernels between two matrices */
+void CalculateKernel(int kernel_type, double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel)
+{
+	unsigned int i, j;
+	
+	/* Reset kernel */
+	for (i = 0; i < a_rows; i++)
+	{
+		for (j = 0; j < b_rows; j++)
+		{
+			kernel[i][j] = 0.0;
+		} // end of j loop
+	} // end of i loop
+	
+	/* Build kernel based on type with corresponding kernel hyperparameters */
+	if (kernel_type == 0) // linear
+	{
+		LinearKernel(kernel_hyperparameters, a_rows, b_rows, a_cols, A, B, kernel);
+	}
+	else // squared exponential
+	{
+		SquaredExponentialKernel(kernel_hyperparameters, a_rows, b_rows, a_cols, A, B, kernel);
 	}
 	
 	return;
 } // end of CalculateKernel function
 
 /* This function applies the linear kernel between two matrices */
-void LinearKernel(unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double constant, double** kernel)
+void LinearKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel)
 {
 	unsigned int i, j;
 	
-	MatrixMultiplication(a_rows, b_rows, a_cols, A, B, 0, 1, kernel);
+	MatrixMatrixMultiplication(a_rows, b_rows, a_cols, A, B, 0, 1, kernel);
 	
 	/* Add constant */
 	for (i = 0; i < a_rows; i++)
 	{
 		for (j = 0; j < b_rows; j++)
 		{
-			kernel[i][j] += constant;
+			kernel[i][j] += kernel_hyperparameters[0];
 		} // end of j loop
 	} // end of i loop
 	
@@ -698,12 +772,12 @@ void LinearKernel(unsigned int a_rows, unsigned int b_rows, unsigned int a_cols,
 } // end of LinearKernel function
 
 /* This function applies the squared exponential kernel between two matrices */
-void SquaredExponentialKernel(unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double length_scale, double signal_variance, double noise_variance, double** kernel)
+void SquaredExponentialKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel)
 {
 	unsigned int i, j, k;
 	double a_squared_sum, b_squared_sum;
 	
-	MatrixMultiplication(a_rows, b_rows, a_cols, A, B, 0, 1, kernel);
+	MatrixMatrixMultiplication(a_rows, b_rows, a_cols, A, B, 0, 1, kernel);
 	
 	for (i = 0; i < a_rows; i++)
 	{
@@ -720,15 +794,15 @@ void SquaredExponentialKernel(unsigned int a_rows, unsigned int b_rows, unsigned
 			kernel[i][j] = a_squared_sum + b_squared_sum - 2.0 * kernel[i][j];
 			
 			/* Take exponential with length-scale scaling it */
-			kernel[i][j] = exp(-0.5 / (length_scale * length_scale) * kernel[i][j]);
+			kernel[i][j] = exp(-0.5 / (kernel_hyperparameters[0] * kernel_hyperparameters[0]) * kernel[i][j]);
 			
 			/* Scale by the signal variance and shift by the noise variance */
-			kernel[i][j] *= signal_variance;
+			kernel[i][j] *= kernel_hyperparameters[1];
 			
 			/* Shift by the noise variance */
 			if (i == j)
 			{
-				kernel[i][j] += noise_variance;
+				kernel[i][j] += kernel_hyperparameters[2];
 			}
 		} // end of j loop
 	} // end of i loop
@@ -1066,7 +1140,7 @@ int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, d
 matrix A using the Cholesky factorization A = L * L**T computed by DPOTRF.
 Modified from dpotri.
 */
-int dpotri(unsigned int n, double** a)
+int LowerCholeskyInverse(unsigned int n, double** a)
 {
 	/* Quick return if possible */
 	if (n == 0)
@@ -1075,13 +1149,13 @@ int dpotri(unsigned int n, double** a)
 	}
 	
 	/* Invert the triangular Cholesky factor L */
-	return dtrtri(n, a);
-} // end of dpotri function
+	return LowerTriangularInverseSingularityCheck(n, a);
+} // end of LowerCholeskyInverse function
 
 /* This function computes the inverse of a real lower triangular matrix A.
 Modified from dtrtri.
 */
-int dtrtri(unsigned int n, double** a)
+int LowerTriangularInverseSingularityCheck(unsigned int n, double** a)
 {
 	unsigned int i;
 	
@@ -1094,14 +1168,14 @@ int dtrtri(unsigned int n, double** a)
 		}
 	} // end of i loop
 	
-	return dtrti2(n, a);
-} // end of dtrtri function
+	return LowerTriangularInverse(n, a);
+} // end of LowerTriangularInverseSingularityCheck function
 
 /* 
 This function computes the inverse of a real lower triangular matrix.
 Modified from dtrti2.
 */
-int dtrti2(unsigned int n, double** a)
+int LowerTriangularInverse(unsigned int n, double** a)
 {
 	int j;
 	double ajj;
@@ -1118,14 +1192,14 @@ int dtrti2(unsigned int n, double** a)
 		if (j < n - 1)
 		{
 			/* Compute elements j + 1:n of j-th column. */
-			dtrmv(n - 1 - j, a, j);
+			MatrixVectorMultiplication(n - 1 - j, a, j);
 			
-			dscal(n - 1 - j, ajj, a, j + 1, j);
+			ScaleVectorByConstant(n - 1 - j, ajj, a, j + 1, j);
 		}
 	} // end of j loop
 	
 	return 0;
-} // end of dtrti2 function
+} // end of LowerTriangularInverse function
 
 /*
 This function performs the matrix-vector operation x := A * x,
@@ -1133,7 +1207,7 @@ where x is an n element vector and A is an n by n non-unit,
 lower triangular matrix.
 Modified from dtrmv.
 */
-int dtrmv(unsigned int n, double** a, unsigned int col_offset)
+int MatrixVectorMultiplication(unsigned int n, double** a, unsigned int col_offset)
 {
 	/* n specifies the order of the matrix A */
 	
@@ -1163,13 +1237,13 @@ int dtrmv(unsigned int n, double** a, unsigned int col_offset)
 		}
 	} // end of j loop
 	
-} // end of dtrmv function
+} // end of MatrixVectorMultiplication function
 
 /*
 This function scales a vector by a constant.
 Modified from dscal.
 */
-void dscal(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset)
+void ScaleVectorByConstant(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset)
 {
 	unsigned int i;
 	for (i = 0; i < n; i++) // moving down rows, starting at the offset
@@ -1178,7 +1252,7 @@ void dscal(unsigned int n, double da, double** a, unsigned int row_offset, unsig
 	} // end of i loop
 	
 	return;
-} // end of dscal function
+} // end of ScaleVectorByConstant function
 
 /* This function efficiently recombines a lower cholesky decomposition inverse A^-1 = L^-1 * L^-T */
 void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, double** A)
@@ -1197,124 +1271,383 @@ void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, doub
 		} // end of j loop
 	} // end of i loop
 	
-	return
+	return;
 } // end of RecombineCholeskyDecompositionInverse function
 
-void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double length_scale, double signal_variance, double noise_variance)
+/* This function optimizes kernel hyperparameters */
+void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double* kernel_hyperparameters)
 {
 	unsigned int i, j;
 	
+	/* Read kernel hyperparameter optimization parameters */
+	double gradient_tolerance = 0.0, learning_rate = 0.0;
+	unsigned int max_iterations = 0;
+	
+	ReadKernelHyperparameterOptimizationParameters(&gradient_tolerance, &max_iterations, &learning_rate);
+	
+	/* Create array to hold alpha * alpha**T */
+	double** alpha_alpha_t;
+	alpha_alpha_t = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		alpha_alpha_t[i] = malloc(sizeof(double) * num_training_points);
+		for (j = 0; j < num_training_points; j++)
+		{
+			alpha_alpha_t[i][j] = 0.0;
+		} // end of j loop
+	} // end of i loop
+
+	/* Calculate K(X, X) inverse */
+	double** kernel_x_x_inv;
+	kernel_x_x_inv = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		kernel_x_x_inv[i] = malloc(sizeof(double) * num_training_points);
+		for (j = 0; j < num_training_points; j++)
+		{
+			kernel_x_x_inv[i][j] = 0.0;
+		} // end of j loop
+	} // end of i loop
+	
+	double** d_kernel_d_kernel_hyperparameter;
+	d_kernel_d_kernel_hyperparameter = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		d_kernel_d_kernel_hyperparameter[i] = malloc(sizeof(double) * num_training_points);
+		for (j = 0; j < num_training_points; j++)
+		{
+			d_kernel_d_kernel_hyperparameter[i][j] = 0.0;
+		} // end of j loop
+	} // end of i loop
+	
+	/* Create extra array that MAY be needed to hold intermediate results depending on kernel type */
+	double** d_kernel_d_kernel_hyperparameter_temp;
+	
 	if (kernel_type == 0) // linear
 	{
-		return; // maybe tune constant c???
-	}
+		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters);
+	} // end of linear
 	else // squared exponential
 	{
-		/* Length-scale */
-		double** d_kernel_d_length_scale_temp;
-		d_kernel_d_length_scale_temp = malloc(sizeof(double*) * num_training_points);
+		/* Allocate extra array that will be needed to hold intermediate results */
+		d_kernel_d_kernel_hyperparameter_temp = malloc(sizeof(double*) * num_training_points);
 		for (i = 0; i < num_training_points; i++)
 		{
-			d_kernel_d_length_scale_temp[i] = malloc(sizeof(double) * num_training_points);
+			d_kernel_d_kernel_hyperparameter_temp[i] = malloc(sizeof(double) * num_training_points);
 			for (j = 0; j < num_training_points; j++)
 			{
-				d_kernel_d_length_scale_temp[i][j] = 0.0;
+				d_kernel_d_kernel_hyperparameter_temp[i][j] = 0.0;
 			} // end of j loop
 		} // end of i loop
 		
-		double a_squared_sum, b_squared_sum;
-		
-		MatrixMultiplication(num_training_points, num_training_points, num_dimensions, X_train, X_train, 0, 1, d_kernel_d_length_scale_temp);
-
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				a_squared_sum = 0.0;
-				b_squared_sum = 0.0;
-				for (k = 0; k < num_dimensions; k++)
-				{
-					a_squared_sum += A[i][k] * A[i][k];
-					b_squared_sum += B[j][k] * B[j][k];
-				} // end of k loop
-
-				kernel[i][j] = a_squared_sum + b_squared_sum - 2.0 * kernel[i][j];
-			} // end of j loop
-		} // end of i loop
-		
-		double** d_kernel_d_length_scale;
-		d_kernel_d_length_scale = malloc(sizeof(double*) * num_training_points);
-		for (i = 0; i < num_training_points; i++)
-		{
-			d_kernel_d_length_scale[i] = malloc(sizeof(double) * num_training_points);
-			for (j = 0; j < num_training_points; j++)
-			{
-				d_kernel_d_length_scale[i][j] = 0.0;
-			} // end of j loop
-		} // end of i loop
-		
-		MatrixMultiplication(num_training_points, num_training_points, num_training_points, kernel_x_x, d_kernel_d_length_scale_temp, 0, 0, d_kernel_d_length_scale);
-		
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				d_kernel_d_length_scale[i][j] /= pow(length_scale, 3);
-			} // end of j loop
-		} // end of i loop
-			
-		/* Signal variance */
-		double** d_kernel_d_signal_variance;
-		d_kernel_d_signal_variance = malloc(sizeof(double*) * num_training_points);
-		for (i = 0; i < num_training_points; i++)
-		{
-			d_kernel_d_signal_variance[i] = malloc(sizeof(double) * num_training_points);
-			for (j = 0; j < num_training_points; j++)
-			{
-				if (i == j)
-				{
-					d_kernel_d_signal_variance[i][j] = 2.0 * (kernel_x_x[i][j] - noise_variance * noise_variance) / signal_variance;
-				}
-				else
-				{
-					d_kernel_d_signal_variance[i][j] = 2.0 * kernel_x_x[i][j] / signal_variance;
-				}
-			} // end of j loop
-		} // end of i loop
-		
-		/* Noise variance */
-		double** d_kernel_d_noise_variance;
-		d_kernel_d_noise_variance = malloc(sizeof(double*) * num_training_points);
-		for (i = 0; i < num_training_points; i++)
-		{
-			d_kernel_d_noise_variance[i] = malloc(sizeof(double) * num_training_points);
-			for (j = 0; j < num_training_points; j++)
-			{
-				if (i == j)
-				{
-					d_kernel_d_noise_variance[i][j] = 2.0 * noise_variance;
-				}
-				else
-				{
-					d_kernel_d_noise_variance[i][j] = 0.0;
-				}
-			} // end of j loop
-		} // end of i loop
+		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters);
 		
 		/* Free dynamic memory */
 		for (i = 0; i < num_training_points; i++)
 		{
-			free(d_kernel_d_noise_variance[i]);
-			free(d_kernel_d_signal_variance[i]);
-			free(d_kernel_d_length_scale[i]);
+			free(d_kernel_d_kernel_hyperparameter_temp[i]);
 		} // end of i loop
-		free(d_kernel_d_noise_variance);
-		free(d_kernel_d_signal_variance);
-		free(d_kernel_d_length_scale);
-	}
+		free(d_kernel_d_kernel_hyperparameter_temp);
+	} // end of squared exponential
+	
+	/* Free dynamic memory */
+	for (i = 0; i < num_training_points; i++)
+	{
+		free(d_kernel_d_kernel_hyperparameter[i]);
+		free(kernel_x_x_inv[i]);
+		free(alpha_alpha_t[i]);
+	} // end of i loop
+	free(d_kernel_d_kernel_hyperparameter);
+	free(kernel_x_x_inv);
+	free(alpha_alpha_t);
 	
 	return;
 } // end of OptimizeKernelHyperparameters function
+
+/* This function reads the kernel hyperparameter optimization parameters */
+void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate)
+{
+	int system_return = 0;
+	/* Get the gradient tolerance */
+	FILE* infile_gradient_tolerance = fopen("inputs/gradient_tolerance.txt", "r");
+	system_return = fscanf(infile_gradient_tolerance, "%u", gradient_tolerance);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/gradient_tolerance.txt\n");
+	}
+	fclose(infile_gradient_tolerance);
+	printf("gradient_tolerance = %u\n", (*gradient_tolerance));
+	
+	/* Get the maxmium number of iterations */
+	FILE* infile_max_iterations = fopen("inputs/max_iterations.txt", "r");
+	system_return = fscanf(infile_max_iterations, "%u", max_iterations);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/max_iterations.txt\n");
+	}
+	fclose(infile_max_iterations);
+	printf("max_iterations = %u\n", (*max_iterations));
+	
+	/* Get the learning rate */
+	FILE* infile_learning_rate = fopen("inputs/learning_rate.txt", "r");
+	system_return = fscanf(infile_learning_rate, "%u", learning_rate);
+	if (system_return == -1)
+	{
+		printf("Failed reading file inputs/learning_rate.txt\n");
+	}
+	fclose(infile_learning_rate);
+	printf("learning_rate = %u\n", (*learning_rate));
+	
+	return;
+} // end of ReadKernelHyperparameterOptimizationParameters function
+
+/* This function performs the kernel hyperparameter optimzation loop */
+void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double* kernel_hyperparameters)
+{
+	unsigned int i, j, k = 0;
+	int error = 0;
+	double gnorm = DBL_MAX;
+	
+	while (gnorm > gradient_tolerance && k < max_iterations)
+	{
+		/* Reset gradient infinity norm */
+		gnorm = 0.0;
+		
+		/* Calculate kernel K(X, X) */
+		CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_training_points, num_dimensions, X_train, X_train, kernel_x_x);
+		
+		/* Perform Cholesky decomposition on our real symmetric positive definite matrix K(X, X) = L * L**T */
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				L[i][j] = kernel_x_x[i][j];
+			} // end of j loop
+		} // end of i loop
+
+		error = CholeskyDecomposition(num_training_points, L);
+		
+		/* Now solve for L * Z = y for Z */
+		for (i = 0; i < num_training_points; i++)
+		{
+			Ly[i][0] = y[i][0];
+		} // end of i loop
+
+		error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, Ly);
+		printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+
+		printf("\nLy = \n");
+		for (i = 0; i < num_training_points; i++)
+		{
+			printf("%e\n", Ly[i][0]);
+		} // end of i loop
+		
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				alpha_alpha_t[i][j] = 0.0;
+			} // end of j loop
+		} // end of i loop
+
+		/* Calculate alpha * alpha**T */
+		MatrixMatrixMultiplication(num_training_points, num_training_points, 1, Ly, Ly, 0, 1, alpha_alpha_t);
+		
+		printf("\nalpha_alpha_t = \n");
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				printf("%e\t", alpha_alpha_t[i][j]);
+			} // end of j loop
+			printf("\n");
+		} // end of i loop
+
+		/* Calculate K(X, X) inverse */
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				kernel_x_x_inv[i][j] = L[i][j];
+			} // end of j loop
+		} // end of i loop
+
+		error = LowerCholeskyInverse(num_training_points, kernel_x_x_inv);
+		if (error != 0)
+		{
+			printf("ERROR: LowerCholeskyInverse returned error code %d\n", error);
+		}
+
+		printf("\nkernel_x_x_inv = \n");
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				printf("%e\t", kernel_x_x_inv[i][j]);
+			} // end of j loop
+			printf("\n");
+		} // end of i loop
+
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				alpha_alpha_t[i][j] -= kernel_x_x_inv[i][j];
+			} // end of j loop
+		} // end of i loop
+		
+		if (kernel_type == 0) // linear
+		{
+			UpdateLinearKernelConstantHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+		} // end of linear
+		else // squared exponential
+		{
+			/* Length-scale */
+			gnorm = UpdateSquaredExponentialKernelLengthScaleHyperparameter(num_training_points, num_dimensions, X_train, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, learning_rate, kernel_hyperparameters, gnorm);
+			
+			/* Signal variance */
+			gnorm = UpdateSquaredExponentialKernelSignalVarianceHyperparameter(num_training_points, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+			
+			/* Noise variance */
+			gnorm = UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+		} // end of squared exponential
+		
+		/* Increment iteration count */
+		k++;
+	} // end of while loop
+	
+	return;
+} // end of KernelHyperparameterOptimizerLoop function
+
+/* This function updates the constant hyperparameter of the linear kernel */
+double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+{
+	unsigned int i, j;
+	
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			d_kernel_d_kernel_hyperparameter[i][j] = kernel_hyperparameters[0];
+		} // end of j loop
+	} // end of i loop
+	
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameters, gnorm);
+	
+	return gnorm;
+} // end of UpdateLinearKernelConstantHyperparameter function
+
+/* This function updates the length-scale hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, double* kernel_hyperparameters, double gnorm)
+{
+	unsigned int i, j, k;
+	double a_squared_sum = 0.0, b_squared_sum = 0.0;
+	
+	MatrixMatrixMultiplication(num_training_points, num_training_points, num_dimensions, X_train, X_train, 0, 1, d_kernel_d_kernel_hyperparameter_temp);
+
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			a_squared_sum = 0.0;
+			b_squared_sum = 0.0;
+			for (k = 0; k < num_dimensions; k++)
+			{
+				a_squared_sum += X_train[i][k] * X_train[i][k];
+				b_squared_sum += X_train[j][k] * X_train[j][k];
+			} // end of k loop
+			
+			d_kernel_d_kernel_hyperparameter_temp[i][j] = a_squared_sum + b_squared_sum - 2.0 * d_kernel_d_kernel_hyperparameter_temp[i][j];
+		} // end of j loop
+	} // end of i loop
+
+	MatrixMatrixMultiplication(num_training_points, num_training_points, num_training_points, kernel_x_x, d_kernel_d_kernel_hyperparameter_temp, 0, 0, d_kernel_d_kernel_hyperparameter);
+
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			d_kernel_d_kernel_hyperparameter[i][j] /= pow(kernel_hyperparameters[0], 3);
+		} // end of j loop
+	} // end of i loop
+	
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameters, gnorm);
+	
+	return gnorm;
+} // end of UpdateSquaredExponentialKernelLengthScaleHyperparameter function
+
+/* This function updates the signal variance hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+{
+	unsigned int i, j;
+	
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			if (i == j)
+			{
+				d_kernel_d_kernel_hyperparameter[i][j] = 2.0 * (kernel_x_x[i][j] - kernel_hyperparameters[2] * kernel_hyperparameters[2]) / kernel_hyperparameters[1];
+			}
+			else
+			{
+				d_kernel_d_kernel_hyperparameter[i][j] = 2.0 * kernel_x_x[i][j] / kernel_hyperparameters[1];
+			}
+		} // end of j loop
+	} // end of i loop
+	
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 1, kernel_hyperparameters, gnorm);
+	
+	return gnorm;
+} // end of UpdateSquaredExponentialKernelSignalVarianceHyperparameter function
+
+/* This function updates the noise variance hyperparameter of the squared exponential kernel */
+double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+{
+	unsigned int i, j;
+	
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			if (i == j)
+			{
+				d_kernel_d_kernel_hyperparameter[i][j] = 2.0 * kernel_hyperparameters[2];
+			}
+			else
+			{
+				d_kernel_d_kernel_hyperparameter[i][j] = 0.0;
+			}
+		} // end of j loop
+	} // end of i loop
+	
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 2, kernel_hyperparameters, gnorm);
+	
+	return gnorm;
+} // end of UpdateSquaredExponentialKernelNoiseVarianceHyperparameter function
+
+/* This function updates a kernel hyperparameter with gradient ascent */
+double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, double* kernel_hyperparameters, double gnorm)
+{
+	int error = 0;
+	double d_log_marginal_likelihood_d_hyperparameter = 0.0;
+	
+	/* Calculate d_log_marginal_likelihood_d_hyperparameter */
+	error = MatrixMatrixMultiplcationTrace(num_training_points, num_training_points, num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, 0, 0, &d_log_marginal_likelihood_d_hyperparameter);
+	if (error != 0)
+	{
+		printf("ERROR: MatrixMatrixMultiplcationTrace returned error code %d\n", error);
+	}
+
+	kernel_hyperparameters[hyperparameter_index] += learning_rate * d_log_marginal_likelihood_d_hyperparameter;
+	
+	if (fabs(d_log_marginal_likelihood_d_hyperparameter) > gnorm)
+	{
+		gnorm = fabs(d_log_marginal_likelihood_d_hyperparameter);
+	}
+	
+	return gnorm;
+} // end of GradientAscentKernelHyperparameter function
 
 /* This function uses the iterative conjugate gradient method that solves A * x = b */
 void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x)
@@ -1332,7 +1665,7 @@ void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x)
 		r[i] = malloc(sizeof(double) * 1);
 	} // end of i loop
 	
-	MatrixMultiplication(n, 1, n, A, x, 0, 0, r);
+	MatrixMatrixMultiplication(n, 1, n, A, x, 0, 0, r);
 	
 	for (i = 0; i < n; i++)
 	{
@@ -1356,9 +1689,10 @@ void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x)
 		Ap[i] = malloc(sizeof(double) * 1);
 	} // end of i loop
 	
+	double alpha;
 	for (i = 0; i < n; i++)
 	{
-		MatrixMultiplication(n, 1, n, A, p, 0, 0, Ap);
+		MatrixMatrixMultiplication(n, 1, n, A, p, 0, 0, Ap);
 		
 		alpha = rsold / VectorDotProductRank2(n, p, Ap, 1, 1);
 		
@@ -1397,7 +1731,7 @@ void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x)
 } // end of ConjugateGradientMethod function
 
 /* This function performs matrix multiplication between two given matrices */
-void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C)
+void MatrixMatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C)
 {
 	/* C = [m, n] */
 	/* A = [m, p] */
@@ -1469,7 +1803,77 @@ void MatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double
 	} // end of if b is transposed
 	
 	return;
-} // end of MatrixMultiplication function
+} // end of MatrixMatrixMultiplication function
+
+/* This function calculates the trace of the matrix-matrix multiplication of matrices A and B */
+int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double* trace)
+{
+	unsigned int i, j;
+	
+	/* Quick return if possible */
+	if (m <= 0 || n <= 0 || p <=0) // axis needs to have at least some length
+	{
+		return 1;
+	}
+	else if (m != n) // to ensure square matrix result for trace
+	{
+		return 2;
+	}
+	
+	(*trace) = 0.0;
+	if (transpose_A == 0)
+	{
+		if (transpose_B == 0)
+		{
+			for (i = 0; i < m; i++)
+			{
+				for (j = 0; j < p; j++)
+				{
+					(*trace) += A[i][j] * B[j][i];
+// 					printf("a(%d,%d) * b(%d,%d)\n", i, j, j, i);
+				} // end of j loop
+			} // end of i loop
+		}
+		else
+		{
+			for (i = 0; i < m; i++)
+			{
+				for (j = 0; j < p; j++)
+				{
+					(*trace) += A[i][j] * B[i][j];
+// 					printf("a(%d,%d) * b(%d,%d)\n", i, j, i, j);
+				} // end of j loop
+			} // end of i loop
+		}
+	}
+	else
+	{
+		if (transpose_B == 0)
+		{
+			for (i = 0; i < m; i++)
+			{
+				for (j = 0; j < p; j++)
+				{
+					(*trace) += A[j][i] * B[j][i];
+// 					printf("a(%d,%d) * b(%d,%d)\n", j, i, j, i);
+				} // end of j loop
+			} // end of i loop
+		}
+		else
+		{
+			for (i = 0; i < m; i++)
+			{
+				for (j = 0; j < p; j++)
+				{
+					(*trace) += A[j][i] * B[i][j];
+// 					printf("a(%d,%d) * b(%d,%d)\n", j, i, i, j);
+				} // end of j loop
+			} // end of i loop
+		}
+	}
+	
+	return 0;
+} // end of MatrixMatrixMultiplcationTrace function
 
 /* This function performs the dot product between two given vectors that are in 2D form */
 double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec)
