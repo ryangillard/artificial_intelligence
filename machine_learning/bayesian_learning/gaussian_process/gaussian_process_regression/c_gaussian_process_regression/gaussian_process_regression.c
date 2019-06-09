@@ -62,28 +62,28 @@ void ScaleVectorByConstant(unsigned int n, double da, double** a, unsigned int r
 void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, double** A);
 
 /* This function optimizes kernel hyperparameters */
-void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double* kernel_hyperparameters);
+void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, unsigned int num_kernel_hyperparameters, double* kernel_hyperparameters);
 
 /* This function reads the kernel hyperparameter optimization parameters */
-void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate);
+void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate, unsigned int num_kernel_hyperparameters, int*** kernel_hyperparameter_bounds_exists, double*** kernel_hyperparameter_bounds_values);
 
 /* This function performs the kernel hyperparameter optimzation loop */
-void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double* kernel_hyperparameters);
+void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, unsigned int num_kernel_hyperparameters, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters);
 
 /* This function updates the constant hyperparameter of the linear kernel */
-double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm);
 
 /* This function updates the length-scale hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, double* kernel_hyperparameters, double gnorm);
+double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm);
 
 /* This function updates the signal variance hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm);
 
 /* This function updates the noise variance hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm);
+double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm);
 
 /* This function updates a kernel hyperparameter with gradient ascent */
-double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, double* kernel_hyperparameters, double gnorm);
+double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm);
 
 /* This function uses the iterative conjugate gradient method that solves A * x = b */
 void ConjugateGradientMethod(unsigned int n, double** A, double** b, double** x);
@@ -185,6 +185,37 @@ int main(int argc, char* argv[])
 	/* Call function to perform Cholesky decomposition on our real symmetric positive definite matrix K(X, X) = L * L**T */
 	error = CholeskyDecomposition(num_training_points, L);
 	
+	printf("\nL = \n");
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			printf("%e\t", L[i][j]);
+		} // end of j loop
+		printf("\n");
+	} // end of i loop
+	
+	/* Now solve for L * Z = y for Z */
+	double** Ly;
+	Ly = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		Ly[i] = malloc(sizeof(double) * 1);
+		Ly[i][0] = y[i][0];
+	} // end of i loop
+	
+	error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, Ly);
+	if (error != 0)
+	{
+		printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+	}
+	
+	printf("\nLy = \n");
+	for (i = 0; i < num_training_points; i++)
+	{
+		printf("%e\n", Ly[i][0]);
+	} // end of i loop
+	
 	/* Now find kernel between our training and test points K(X, X_*) */
 	double** kernel_x_x_star;
 	kernel_x_x_star = malloc(sizeof(double*) * num_training_points);
@@ -219,7 +250,10 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, num_test_points, L, Lk);
-	printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+	if (error != 0)
+	{
+		printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+	}
 	
 	printf("\nLk = \n");
 	for (i = 0; i < num_training_points; i++)
@@ -229,24 +263,6 @@ int main(int argc, char* argv[])
 			printf("%e\t", Lk[i][j]);
 		} // end of j loop
 		printf("\n");
-	} // end of i loop
-	
-	/* Now solve for L * Z = y for Z */
-	double** Ly;
-	Ly = malloc(sizeof(double*) * num_training_points);
-	for (i = 0; i < num_training_points; i++)
-	{
-		Ly[i] = malloc(sizeof(double) * 1);
-		Ly[i][0] = y[i][0];
-	} // end of i loop
-	
-	error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, Ly);
-	printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
-	
-	printf("\nLy = \n");
-	for (i = 0; i < num_training_points; i++)
-	{
-		printf("%e\n", Ly[i][0]);
 	} // end of i loop
 	
 	/* Calculate mu of gaussian process at our test points */
@@ -418,12 +434,12 @@ int main(int argc, char* argv[])
 	} // end of i loop
 	
 	MatrixMatrixMultiplication(num_test_points, num_samples, num_test_points, L_posterior, random_normal_samples, 0, 0, f_posterior);
-	
+
 	/*********************************************************************************************************/
 	/************************************* OPTIMIZE KERNEL HYPERPARAMETERS ***********************************/
 	/*********************************************************************************************************/
 	
-	OptimizeKernelHyperparameters(kernel_type, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, kernel_hyperparameters);
+	OptimizeKernelHyperparameters(kernel_type, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, num_kernel_hyperparameters, kernel_hyperparameters);
 	
 	/*********************************************************************************************************/
 	/********************************************** WRITE OUTPUTS ********************************************/
@@ -828,16 +844,6 @@ int CholeskyDecomposition(int n, double** L)
 				L[i][j] = 0.0;
 			} // end of j loop
 		} // end of i loop
-		
-		printf("\nL = \n");
-		for (i = 0; i < n; i++)
-		{
-			for (j = 0; j < n; j++)
-			{
-				printf("%e\t", L[i][j]);
-			} // end of j loop
-			printf("\n");
-		} // end of i loop
 	}
 	else if (error == 1)
 	{
@@ -853,7 +859,7 @@ int CholeskyDecomposition(int n, double** L)
 	}
 	else
 	{
-		printf("ERROR: Matrix is not positive-definite!\n");
+		printf("ERROR: L matrix is not positive-definite!\n");
 	}
 	
 	return error;
@@ -1275,7 +1281,7 @@ void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, doub
 } // end of RecombineCholeskyDecompositionInverse function
 
 /* This function optimizes kernel hyperparameters */
-void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double* kernel_hyperparameters)
+void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, unsigned int num_kernel_hyperparameters, double* kernel_hyperparameters)
 {
 	unsigned int i, j;
 	
@@ -1283,7 +1289,25 @@ void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_po
 	double gradient_tolerance = 0.0, learning_rate = 0.0;
 	unsigned int max_iterations = 0;
 	
-	ReadKernelHyperparameterOptimizationParameters(&gradient_tolerance, &max_iterations, &learning_rate);
+	int** kernel_hyperparameter_bounds_exists;
+	kernel_hyperparameter_bounds_exists = malloc(sizeof(int*) * num_kernel_hyperparameters);
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		kernel_hyperparameter_bounds_exists[i] = malloc(sizeof(int) * 2);
+		kernel_hyperparameter_bounds_exists[i][0] = 0;
+		kernel_hyperparameter_bounds_exists[i][1] = 0;
+	} // end of i loop
+	
+	double** kernel_hyperparameter_bounds_values;
+	kernel_hyperparameter_bounds_values = malloc(sizeof(double*) * num_kernel_hyperparameters);
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		kernel_hyperparameter_bounds_values[i] = malloc(sizeof(double) * 2);
+		kernel_hyperparameter_bounds_values[i][0] = 0.0;
+		kernel_hyperparameter_bounds_values[i][1] = 0.0;
+	} // end of i loop
+	
+	ReadKernelHyperparameterOptimizationParameters(&gradient_tolerance, &max_iterations, &learning_rate, num_kernel_hyperparameters, &kernel_hyperparameter_bounds_exists, &kernel_hyperparameter_bounds_values);
 	
 	/* Create array to hold alpha * alpha**T */
 	double** alpha_alpha_t;
@@ -1325,7 +1349,7 @@ void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_po
 	
 	if (kernel_type == 0) // linear
 	{
-		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters);
+		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, num_kernel_hyperparameters, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters);
 	} // end of linear
 	else // squared exponential
 	{
@@ -1340,7 +1364,7 @@ void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_po
 			} // end of j loop
 		} // end of i loop
 		
-		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters);
+		KernelHyperparameterOptimizerLoop(kernel_type, gradient_tolerance, max_iterations, learning_rate, num_training_points, num_dimensions, X_train, y, kernel_x_x, L, Ly, alpha_alpha_t, kernel_x_x_inv, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, num_kernel_hyperparameters, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters);
 		
 		/* Free dynamic memory */
 		for (i = 0; i < num_training_points; i++)
@@ -1361,22 +1385,32 @@ void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_po
 	free(kernel_x_x_inv);
 	free(alpha_alpha_t);
 	
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		free(kernel_hyperparameter_bounds_exists[i]);
+		free(kernel_hyperparameter_bounds_values[i]);
+	} // end of i loop
+	free(kernel_hyperparameter_bounds_exists);
+	free(kernel_hyperparameter_bounds_values);
+	
 	return;
 } // end of OptimizeKernelHyperparameters function
 
 /* This function reads the kernel hyperparameter optimization parameters */
-void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate)
+void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, unsigned int* max_iterations, double* learning_rate, unsigned int num_kernel_hyperparameters, int*** kernel_hyperparameter_bounds_exists, double*** kernel_hyperparameter_bounds_values)
 {
+	unsigned int i;
 	int system_return = 0;
+	
 	/* Get the gradient tolerance */
 	FILE* infile_gradient_tolerance = fopen("inputs/gradient_tolerance.txt", "r");
-	system_return = fscanf(infile_gradient_tolerance, "%u", gradient_tolerance);
+	system_return = fscanf(infile_gradient_tolerance, "%lf", gradient_tolerance);
 	if (system_return == -1)
 	{
 		printf("Failed reading file inputs/gradient_tolerance.txt\n");
 	}
 	fclose(infile_gradient_tolerance);
-	printf("gradient_tolerance = %u\n", (*gradient_tolerance));
+	printf("gradient_tolerance = %lf\n", (*gradient_tolerance));
 	
 	/* Get the maxmium number of iterations */
 	FILE* infile_max_iterations = fopen("inputs/max_iterations.txt", "r");
@@ -1390,19 +1424,45 @@ void ReadKernelHyperparameterOptimizationParameters(double* gradient_tolerance, 
 	
 	/* Get the learning rate */
 	FILE* infile_learning_rate = fopen("inputs/learning_rate.txt", "r");
-	system_return = fscanf(infile_learning_rate, "%u", learning_rate);
+	system_return = fscanf(infile_learning_rate, "%lf", learning_rate);
 	if (system_return == -1)
 	{
 		printf("Failed reading file inputs/learning_rate.txt\n");
 	}
 	fclose(infile_learning_rate);
-	printf("learning_rate = %u\n", (*learning_rate));
+	printf("learning_rate = %lf\n", (*learning_rate));
+	
+	/* Get hyperparameter bounds existence */
+	FILE* infile_kernel_hyperparameter_bounds_exists = fopen("inputs/kernel_hyperparameter_bounds_exists.txt", "r");
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		system_return = fscanf(infile_kernel_hyperparameter_bounds_exists, "%d\t%d\n", &(*kernel_hyperparameter_bounds_exists)[i][0], &(*kernel_hyperparameter_bounds_exists)[i][1]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/kernel_hyperparameter_bounds_exists.txt\n");
+		}
+		printf("i = %u, kernel_hyperparameter_bounds_exists[i][0] = %d, kernel_hyperparameter_bounds_exists[i][1] = %d\n", i, (*kernel_hyperparameter_bounds_exists)[i][0], (*kernel_hyperparameter_bounds_exists)[i][1]);
+	} // end of i loop
+	fclose(infile_kernel_hyperparameter_bounds_exists);
+	
+	/* Get hyperparameter bounds values */
+	FILE* infile_kernel_hyperparameter_bounds_values = fopen("inputs/kernel_hyperparameter_bounds_values.txt", "r");
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		system_return = fscanf(infile_kernel_hyperparameter_bounds_values, "%lf\t%lf\n", &(*kernel_hyperparameter_bounds_values)[i][0], &(*kernel_hyperparameter_bounds_values)[i][1]);
+		if (system_return == -1)
+		{
+			printf("Failed reading file inputs/kernel_hyperparameter_bounds_values.txt\n");
+		}
+		printf("i = %u, kernel_hyperparameter_bounds_values[i][0] = %.16f, kernel_hyperparameter_bounds_values[i][1] = %.16f\n", i, (*kernel_hyperparameter_bounds_values)[i][0], (*kernel_hyperparameter_bounds_values)[i][1]);
+	} // end of i loop
+	fclose(infile_kernel_hyperparameter_bounds_values);
 	
 	return;
 } // end of ReadKernelHyperparameterOptimizationParameters function
 
 /* This function performs the kernel hyperparameter optimzation loop */
-void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double* kernel_hyperparameters)
+void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_tolerance, unsigned int max_iterations, double learning_rate, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** Ly, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, unsigned int num_kernel_hyperparameters, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters)
 {
 	unsigned int i, j, k = 0;
 	int error = 0;
@@ -1434,14 +1494,11 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_toleranc
 		} // end of i loop
 
 		error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, Ly);
-		printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
-
-		printf("\nLy = \n");
-		for (i = 0; i < num_training_points; i++)
+		if (error != 0)
 		{
-			printf("%e\n", Ly[i][0]);
-		} // end of i loop
-		
+			printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+		}
+
 		for (i = 0; i < num_training_points; i++)
 		{
 			for (j = 0; j < num_training_points; j++)
@@ -1453,16 +1510,6 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_toleranc
 		/* Calculate alpha * alpha**T */
 		MatrixMatrixMultiplication(num_training_points, num_training_points, 1, Ly, Ly, 0, 1, alpha_alpha_t);
 		
-		printf("\nalpha_alpha_t = \n");
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				printf("%e\t", alpha_alpha_t[i][j]);
-			} // end of j loop
-			printf("\n");
-		} // end of i loop
-
 		/* Calculate K(X, X) inverse */
 		for (i = 0; i < num_training_points; i++)
 		{
@@ -1478,16 +1525,6 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_toleranc
 			printf("ERROR: LowerCholeskyInverse returned error code %d\n", error);
 		}
 
-		printf("\nkernel_x_x_inv = \n");
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				printf("%e\t", kernel_x_x_inv[i][j]);
-			} // end of j loop
-			printf("\n");
-		} // end of i loop
-
 		for (i = 0; i < num_training_points; i++)
 		{
 			for (j = 0; j < num_training_points; j++)
@@ -1498,21 +1535,28 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_toleranc
 		
 		if (kernel_type == 0) // linear
 		{
-			UpdateLinearKernelConstantHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+			UpdateLinearKernelConstantHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 		} // end of linear
 		else // squared exponential
 		{
 			/* Length-scale */
-			gnorm = UpdateSquaredExponentialKernelLengthScaleHyperparameter(num_training_points, num_dimensions, X_train, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, learning_rate, kernel_hyperparameters, gnorm);
+			gnorm = UpdateSquaredExponentialKernelLengthScaleHyperparameter(num_training_points, num_dimensions, X_train, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, learning_rate, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 			
 			/* Signal variance */
-			gnorm = UpdateSquaredExponentialKernelSignalVarianceHyperparameter(num_training_points, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+			gnorm = UpdateSquaredExponentialKernelSignalVarianceHyperparameter(num_training_points, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 			
 			/* Noise variance */
-			gnorm = UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameters, gnorm);
+			gnorm = UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 		} // end of squared exponential
 		
 		/* Increment iteration count */
+		printf("gnorm = %lf at iteration %u\n", gnorm, k);
+		printf("kernel_hyperparameters = \n");
+		for (i = 0; i < num_kernel_hyperparameters; i++)
+		{
+				printf("%u\t%.16f\n", i, kernel_hyperparameters[i]);
+		} // end of i loop
+		
 		k++;
 	} // end of while loop
 	
@@ -1520,7 +1564,7 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, double gradient_toleranc
 } // end of KernelHyperparameterOptimizerLoop function
 
 /* This function updates the constant hyperparameter of the linear kernel */
-double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm)
 {
 	unsigned int i, j;
 	
@@ -1532,13 +1576,13 @@ double UpdateLinearKernelConstantHyperparameter(unsigned int num_training_points
 		} // end of j loop
 	} // end of i loop
 	
-	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameters, gnorm);
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 	
 	return gnorm;
 } // end of UpdateLinearKernelConstantHyperparameter function
 
 /* This function updates the length-scale hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, double* kernel_hyperparameters, double gnorm)
+double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm)
 {
 	unsigned int i, j, k;
 	double a_squared_sum = 0.0, b_squared_sum = 0.0;
@@ -1571,13 +1615,13 @@ double UpdateSquaredExponentialKernelLengthScaleHyperparameter(unsigned int num_
 		} // end of j loop
 	} // end of i loop
 	
-	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameters, gnorm);
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 0, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 	
 	return gnorm;
 } // end of UpdateSquaredExponentialKernelLengthScaleHyperparameter function
 
 /* This function updates the signal variance hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int num_training_points, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm)
 {
 	unsigned int i, j;
 	
@@ -1596,13 +1640,13 @@ double UpdateSquaredExponentialKernelSignalVarianceHyperparameter(unsigned int n
 		} // end of j loop
 	} // end of i loop
 	
-	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 1, kernel_hyperparameters, gnorm);
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 1, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
 	
 	return gnorm;
 } // end of UpdateSquaredExponentialKernelSignalVarianceHyperparameter function
 
 /* This function updates the noise variance hyperparameter of the squared exponential kernel */
-double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, double* kernel_hyperparameters, double gnorm)
+double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm)
 {
 	unsigned int i, j;
 	
@@ -1621,16 +1665,16 @@ double UpdateSquaredExponentialKernelNoiseVarianceHyperparameter(unsigned int nu
 		} // end of j loop
 	} // end of i loop
 	
-	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 2, kernel_hyperparameters, gnorm);
-	
+	gnorm = GradientAscentKernelHyperparameter(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, learning_rate, 2, kernel_hyperparameter_bounds_exists, kernel_hyperparameter_bounds_values, kernel_hyperparameters, gnorm);
+
 	return gnorm;
 } // end of UpdateSquaredExponentialKernelNoiseVarianceHyperparameter function
 
 /* This function updates a kernel hyperparameter with gradient ascent */
-double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, double* kernel_hyperparameters, double gnorm)
+double GradientAscentKernelHyperparameter(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double learning_rate, unsigned int hyperparameter_index, int** kernel_hyperparameter_bounds_exists, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters, double gnorm)
 {
 	int error = 0;
-	double d_log_marginal_likelihood_d_hyperparameter = 0.0;
+	double d_log_marginal_likelihood_d_hyperparameter = 0.0, step_size = 0.0;
 	
 	/* Calculate d_log_marginal_likelihood_d_hyperparameter */
 	error = MatrixMatrixMultiplcationTrace(num_training_points, num_training_points, num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, 0, 0, &d_log_marginal_likelihood_d_hyperparameter);
@@ -1638,8 +1682,22 @@ double GradientAscentKernelHyperparameter(unsigned int num_training_points, doub
 	{
 		printf("ERROR: MatrixMatrixMultiplcationTrace returned error code %d\n", error);
 	}
-
-	kernel_hyperparameters[hyperparameter_index] += learning_rate * d_log_marginal_likelihood_d_hyperparameter;
+	
+	step_size = learning_rate * d_log_marginal_likelihood_d_hyperparameter;
+	
+	/* Check hyperparameter bounds */
+	if (kernel_hyperparameters[hyperparameter_index] + step_size < kernel_hyperparameter_bounds_values[hyperparameter_index][0] && kernel_hyperparameter_bounds_exists[hyperparameter_index][0])
+	{
+		kernel_hyperparameters[hyperparameter_index] = kernel_hyperparameter_bounds_values[hyperparameter_index][0];
+	}
+	else if (kernel_hyperparameters[hyperparameter_index] + step_size > kernel_hyperparameter_bounds_values[hyperparameter_index][1] && kernel_hyperparameter_bounds_exists[hyperparameter_index][1])
+	{
+		kernel_hyperparameters[hyperparameter_index] = kernel_hyperparameter_bounds_values[hyperparameter_index][1];
+	}
+	else
+	{
+		kernel_hyperparameters[hyperparameter_index] += step_size;
+	}
 	
 	if (fabs(d_log_marginal_likelihood_d_hyperparameter) > gnorm)
 	{
@@ -1830,7 +1888,6 @@ int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int 
 				for (j = 0; j < p; j++)
 				{
 					(*trace) += A[i][j] * B[j][i];
-// 					printf("a(%d,%d) * b(%d,%d)\n", i, j, j, i);
 				} // end of j loop
 			} // end of i loop
 		}
@@ -1841,7 +1898,6 @@ int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int 
 				for (j = 0; j < p; j++)
 				{
 					(*trace) += A[i][j] * B[i][j];
-// 					printf("a(%d,%d) * b(%d,%d)\n", i, j, i, j);
 				} // end of j loop
 			} // end of i loop
 		}
@@ -1855,7 +1911,6 @@ int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int 
 				for (j = 0; j < p; j++)
 				{
 					(*trace) += A[j][i] * B[j][i];
-// 					printf("a(%d,%d) * b(%d,%d)\n", j, i, j, i);
 				} // end of j loop
 			} // end of i loop
 		}
@@ -1866,7 +1921,6 @@ int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int 
 				for (j = 0; j < p; j++)
 				{
 					(*trace) += A[j][i] * B[i][j];
-// 					printf("a(%d,%d) * b(%d,%d)\n", j, i, i, j);
 				} // end of j loop
 			} // end of i loop
 		}
