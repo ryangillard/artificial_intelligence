@@ -53,7 +53,7 @@ def read_dataset(filename, mode, batch_size, params):
 
         return features
         
-      if mode == tf.estimator.ModeKeys.TRAIN or (mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] != "tune_anomaly_thresholds"):
+      if mode == tf.estimator.ModeKeys.TRAIN or (mode == tf.estimator.ModeKeys.EVAL and params["training_mode"] != "tune_anomaly_thresholds"):
         columns = tf.decode_csv(
           records = value_column, 
           record_defaults = UNLABELED_DEFAULTS, 
@@ -722,7 +722,7 @@ def pca_anomaly_detection(features, labels, mode, params):
   export_outputs = None
   
   # 3. Loss function, training/eval ops
-  if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
+  if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction":
     with tf.variable_scope(name_or_scope = "pca_variables", reuse = tf.AUTO_REUSE):
       # Check if batch is a singleton or not, very important for covariance math
 
@@ -827,7 +827,7 @@ def pca_anomaly_detection(features, labels, mode, params):
     X_features_abs_reconstruction_error = tf.abs(
       x = X_features_centered - X_features_reconstructed)
 
-    if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "calculate_error_distribution_statistics":
+    if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "calculate_error_distribution_statistics":
       ################################################################################
 
       with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
@@ -905,17 +905,17 @@ def pca_anomaly_detection(features, labels, mode, params):
                 global_step = tf.train.get_global_step(),
                 learning_rate = params["learning_rate"],
                 optimizer = "SGD")
-    elif mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] != "tune_anomaly_thresholds":
+    elif mode == tf.estimator.ModeKeys.EVAL and params["training_mode"] != "tune_anomaly_thresholds":
       # Reconstruction loss on evaluation set
       loss = tf.losses.mean_squared_error(labels = X_time_centered, predictions = X_time_abs_reconstruction_error)
 
-      if params["evaluation_mode"] == "reconstruction":
+      if params["training_mode"] == "reconstruction":
         # Reconstruction eval metrics
         eval_metric_ops = {
           "rmse": tf.metrics.root_mean_squared_error(labels = X_time_centered, predictions = X_time_abs_reconstruction_error),
           "mae": tf.metrics.mean_absolute_error(labels = X_time_centered, predictions = X_time_abs_reconstruction_error)
         }
-    elif mode == tf.estimator.ModeKeys.PREDICT or ((mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL) and params["evaluation_mode"] == "tune_anomaly_thresholds"):
+    elif mode == tf.estimator.ModeKeys.PREDICT or ((mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL) and params["training_mode"] == "tune_anomaly_thresholds"):
       with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
         # Time based
         mahalanobis_distance_time = mahalanobis_distance(
@@ -1251,7 +1251,7 @@ def train_and_evaluate(args):
     params = {
       "seq_len": args["seq_len"],
       "learning_rate": args["learning_rate"],
-      "evaluation_mode": args["evaluation_mode"],
+      "training_mode": args["training_mode"],
       "k_principal_components": args["k_principal_components"],
       "num_time_anomaly_thresholds": args["num_time_anomaly_thresholds"],
       "num_features_anomaly_thresholds": args["num_features_anomaly_thresholds"],
@@ -1264,7 +1264,7 @@ def train_and_evaluate(args):
       "eps": args["eps"],
       "f_score_beta": args["f_score_beta"]})
   
-  if args["evaluation_mode"] == "reconstruction":
+  if args["training_mode"] == "reconstruction":
     # Create train spec to read in our training data
     train_spec = tf.estimator.TrainSpec(
       input_fn = read_dataset(
@@ -1289,7 +1289,7 @@ def train_and_evaluate(args):
     tf.estimator.train_and_evaluate(
       estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
   else:
-    if args["evaluation_mode"] == "calculate_error_distribution_statistics":
+    if args["training_mode"] == "calculate_error_distribution_statistics":
       # Get final mahalanobis statistics over the entire validation_1 dataset
       train_spec = tf.estimator.TrainSpec(
         input_fn = read_dataset(
@@ -1301,7 +1301,7 @@ def train_and_evaluate(args):
 
       # Don't create exporter for serving yet since anomaly thresholds aren't trained yet
       exporter = None
-    elif args["evaluation_mode"] == "tune_anomaly_thresholds":
+    elif args["training_mode"] == "tune_anomaly_thresholds":
       # Tune anomaly thresholds using valdiation_2 and validation_anomaly datasets
       train_spec = tf.estimator.TrainSpec(
         input_fn = read_dataset(

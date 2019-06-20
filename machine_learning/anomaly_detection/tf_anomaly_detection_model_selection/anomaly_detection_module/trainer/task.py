@@ -149,8 +149,8 @@ if __name__ == "__main__":
   
   # Anomaly detection
   parser.add_argument(
-    "--evaluation_mode",
-    help = "Which evaluation mode we are in (reconstruction, calculate_error_distribution_statistics, tune_anomaly_thresholds)",
+    "--training_mode",
+    help = "Which training mode we are in (reconstruction, calculate_error_distribution_statistics, tune_anomaly_thresholds)",
     type = str,
     default = "reconstruction"
   )

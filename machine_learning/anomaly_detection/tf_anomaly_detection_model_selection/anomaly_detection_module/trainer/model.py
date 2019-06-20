@@ -53,7 +53,7 @@ def read_dataset(filename, mode, batch_size, params):
 
         return features
         
-      if mode == tf.estimator.ModeKeys.TRAIN or (mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] != "tune_anomaly_thresholds"):
+      if mode == tf.estimator.ModeKeys.TRAIN or (mode == tf.estimator.ModeKeys.EVAL and params["training_mode"] != "tune_anomaly_thresholds"):
         columns = tf.decode_csv(
           records = value_column, 
           record_defaults = UNLABELED_DEFAULTS, 
@@ -500,7 +500,7 @@ def dense_autoencoder_model(X, mode, params, cur_batch_size, num_features, dummy
   # shape = (cur_batch_size * num_features, seq_len)
   X_features_recon = dense_autoencoder(X_features, params["seq_len"], params)
   
-  if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
+  if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction":
     X_time_recon_3d = tf.reshape(
       tensor = X_time_recon, 
       shape = [cur_batch_size, params["seq_len"], num_features])
@@ -694,9 +694,9 @@ def lstm_encoder_decoder_autoencoder_model(X, mode, params, cur_batch_size, num_
   
   # Train our decoder now
   
-  # Encoder-decoders work differently during training/evaluation and inference 
+  # Encoder-decoders work differently during training, evaluation, and inference 
   # so we will have two separate subgraphs for each
-  if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
+  if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction":
     # Break 3-D labels tensor into a list of 2-D tensors of shape = (cur_batch_size, num_features)
     unstacked_labels = tf.unstack(value = Y, num = params["seq_len"], axis = 1)
 
@@ -767,7 +767,7 @@ def lstm_encoder_decoder_autoencoder_model(X, mode, params, cur_batch_size, num_
     tensor = logits, 
     shape = [cur_batch_size, params["seq_len"], num_features])
   
-  if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
+  if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction":
     loss = tf.losses.mean_squared_error(labels = Y, predictions = predictions)
 
     train_op = tf.contrib.layers.optimize_loss(
@@ -898,7 +898,7 @@ def pca_model(X, mode, params, cur_batch_size, num_features, dummy_variable):
       trainable = False)
     
   # 3. Loss function, training/eval ops
-  if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction":
+  if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction":
     with tf.variable_scope(name_or_scope = "pca_variables", reuse = tf.AUTO_REUSE):
       # Check if batch is a singleton or not, very important for covariance math
 
@@ -1223,7 +1223,7 @@ def anomaly_detection(features, labels, mode, params):
   loss, train_op, X_time_orig, X_time_recon, X_features_orig, X_features_recon = \
     model_function(X, mode, params, cur_batch_size, num_features, dummy_variable)
   
-  if not (mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "reconstruction"):
+  if not (mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "reconstruction"):
     # shape = (cur_batch_size * seq_len, num_features)
     X_time_abs_recon_err = tf.abs(
       x = X_time_orig - X_time_recon)
@@ -1233,7 +1233,7 @@ def anomaly_detection(features, labels, mode, params):
     X_features_abs_recon_err = tf.abs(
       x = X_features_orig - X_features_recon)
     
-    if mode == tf.estimator.ModeKeys.TRAIN and params["evaluation_mode"] == "calculate_error_distribution_statistics":
+    if mode == tf.estimator.ModeKeys.TRAIN and params["training_mode"] == "calculate_error_distribution_statistics":
       ################################################################################
 
       with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
@@ -1311,17 +1311,17 @@ def anomaly_detection(features, labels, mode, params):
                 global_step = tf.train.get_global_step(),
                 learning_rate = params["learning_rate"],
                 optimizer = "SGD")
-    elif mode == tf.estimator.ModeKeys.EVAL and params["evaluation_mode"] != "tune_anomaly_thresholds":
+    elif mode == tf.estimator.ModeKeys.EVAL and params["training_mode"] != "tune_anomaly_thresholds":
       # Reconstruction loss on evaluation set
       loss = tf.losses.mean_squared_error(labels = X_time_orig, predictions = X_time_recon)
 
-      if params["evaluation_mode"] == "reconstruction":
+      if params["training_mode"] == "reconstruction":
         # Reconstruction eval metrics
         eval_metric_ops = {
           "rmse": tf.metrics.root_mean_squared_error(labels = X_time_orig, predictions = X_time_recon),
           "mae": tf.metrics.mean_absolute_error(labels = X_time_orig, predictions = X_time_recon)
         }
-    elif mode == tf.estimator.ModeKeys.PREDICT or ((mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL) and params["evaluation_mode"] == "tune_anomaly_thresholds"):
+    elif mode == tf.estimator.ModeKeys.PREDICT or ((mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL) and params["training_mode"] == "tune_anomaly_thresholds"):
       with tf.variable_scope(name_or_scope = "mahalanobis_distance_variables", reuse = tf.AUTO_REUSE):
         # Time based
         mahalanobis_distance_time = mahalanobis_distance(
@@ -1656,7 +1656,7 @@ def train_and_evaluate(args):
     model_dir = args["output_dir"],
     params = {key: val for key, val in args.items()})
   
-  if args["evaluation_mode"] == "reconstruction":
+  if args["training_mode"] == "reconstruction":
     # Create train spec to read in our training data
     train_spec = tf.estimator.TrainSpec(
       input_fn = read_dataset(
@@ -1681,7 +1681,7 @@ def train_and_evaluate(args):
     tf.estimator.train_and_evaluate(
       estimator = estimator, train_spec = train_spec, eval_spec = eval_spec)
   else:
-    if args["evaluation_mode"] == "calculate_error_distribution_statistics":
+    if args["training_mode"] == "calculate_error_distribution_statistics":
       # Get final mahalanobis statistics over the entire validation_1 dataset
       train_spec = tf.estimator.TrainSpec(
         input_fn = read_dataset(
@@ -1693,7 +1693,7 @@ def train_and_evaluate(args):
 
       # Don't create exporter for serving yet since anomaly thresholds aren't trained yet
       exporter = None
-    elif args["evaluation_mode"] == "tune_anomaly_thresholds":
+    elif args["training_mode"] == "tune_anomaly_thresholds":
       # Tune anomaly thresholds using valdiation_2 and validation_anomaly datasets
       train_spec = tf.estimator.TrainSpec(
         input_fn = read_dataset(
