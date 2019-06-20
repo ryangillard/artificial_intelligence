@@ -27,7 +27,7 @@ void CalculateKernel(int kernel_type, double* kernel_hyperparameters, unsigned i
 void LinearKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
 
 /* This function applies the squared exponential kernel between two matrices */
-void SquaredExponentiaK_inv_k_starernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
+void SquaredExponentialKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
 
 /* This function performs the Cholesky decomposition A = L * L**T */
 int CholeskyDecomposition(int n, double** L);
@@ -102,7 +102,7 @@ int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int 
 double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec);
 
 /* This function calculate log marginal likelihood of gaussian process of training points */
-double CalculateLogMarginalLikelihood(unsigned int num_training_points, double** L, double** K_inv_y);
+double CalculateLogMarginalLikelihood(unsigned int num_training_points, double** y, double** L, double** K_inv_y);
 
 /* This function returns a random uniform number within range [0,1] */
 double UnifRand(void);
@@ -354,7 +354,7 @@ int main(int argc, char* argv[])
 	
 	/* Calculate log marginal likelihood of gaussian process of training points */
 	double log_marginal_likelihood = 0.0;
-	log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, L, K_inv_y);	
+	log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, y, L, K_inv_y);	
 	
 	printf("\nlog_marginal_likelihood = %.16f\n", log_marginal_likelihood);
 	printf("\nmarginal_likelihood = %.16f\n", exp(log_marginal_likelihood));
@@ -772,7 +772,7 @@ void CalculateKernel(int kernel_type, double* kernel_hyperparameters, unsigned i
 	}
 	else // squared exponential
 	{
-		SquaredExponentiaK_inv_k_starernel(kernel_hyperparameters, a_rows, b_rows, a_cols, A, B, kernel);
+		SquaredExponentialKernel(kernel_hyperparameters, a_rows, b_rows, a_cols, A, B, kernel);
 	}
 	
 	return;
@@ -798,7 +798,7 @@ void LinearKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned 
 } // end of LinearKernel function
 
 /* This function applies the squared exponential kernel between two matrices */
-void SquaredExponentiaK_inv_k_starernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel)
+void SquaredExponentialKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel)
 {
 	unsigned int i, j, k;
 	double a_squared_sum, b_squared_sum;
@@ -828,7 +828,7 @@ void SquaredExponentiaK_inv_k_starernel(double* kernel_hyperparameters, unsigned
 	} // end of i loop
 	
 	return;
-} // end of SquaredExponentiaK_inv_k_starernel function
+} // end of SquaredExponentialKernel function
 
 /* This function performs the Cholesky decomposition A = L * L**T */
 int CholeskyDecomposition(int n, double** L)
@@ -1499,12 +1499,15 @@ L111:
 		/* Compute function value f for the sample problem. */
 		
 		/* Update kernel hyperparameters */
+		printf("Current kernel hyperparameters:\n");
 		for (i = 0; i < n; i++)
 		{
 			kernel_hyperparameters[i] = x[i];
+			printf("%.12f\n", kernel_hyperparameters[i]);
 		} // end of i loop
 		
 		/* Calculate kernel K(X, X) */
+		printf("kernel_x_x:\n");
 		CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_training_points, num_dimensions, X_train, X_train, kernel_x_x);
 		if (kernel_type == 1) // squared exponential
 		{
@@ -1517,7 +1520,9 @@ L111:
 					{
 						kernel_x_x[i][j] += kernel_hyperparameters[2] * kernel_hyperparameters[2];
 					}
+					printf("%.12f\t", kernel_x_x[i][j]);
 				} // end of j loop
+				printf("\n");
 			} // end of i loop
 		}
 		
@@ -1546,7 +1551,7 @@ L111:
 		
 		/* Evaluate log marginal likelihood with current hyperparameters */
 		iterations++;
-		log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, L, K_inv_y);
+		log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, y, L, K_inv_y);
 		printf("\niterations = %u, log_marginal_likelihood = %.16f\n", iterations, log_marginal_likelihood);
 		
 		/* Maximize log marginal likelihood so minimize the negative */
@@ -1604,6 +1609,7 @@ L111:
 		/* Update gradients */
 		for (i = 0; i < n; i++)
 		{
+			printf("i = %u, d_negative_log_marginal_likelihood_d_kernel_hyperparameter = %lf\n", i, d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i]);
 			g[i] = d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i];
 		} // end of i loop
 		
@@ -1968,22 +1974,24 @@ double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_v
 } // end of VectorDotProductRank2 function
 
 /* This function calculate log marginal likelihood of gaussian process of training points */
-double CalculateLogMarginalLikelihood(unsigned int num_training_points, double** L, double** K_inv_y)
+double CalculateLogMarginalLikelihood(unsigned int num_training_points, double** y, double** L, double** K_inv_y)
 {
 	unsigned int i;
 	double log_marginal_likelihood = 0.0;
 
 	/* Find first term, -0.5 * y**T * (K(X, X) + sigma_n^2 * I)^-1 * y */
-	log_marginal_likelihood = -0.5 * VectorDotProductRank2(num_training_points, K_inv_y, K_inv_y, 1, 1);
+	log_marginal_likelihood = 0.5 * VectorDotProductRank2(num_training_points, y, K_inv_y, 1, 1);
 
 	/* Next add second term, -0.5 * log(det(K(X, X) + sigma_n^2 * I)) */
 	for (i = 0; i < num_training_points; i++)
 	{
-		log_marginal_likelihood -= log(L[i][i]);
+		log_marginal_likelihood += log(L[i][i]);
 	} // end of i loop
 
 	/* Lastly add third term, the normalizing factor: -0.5 * n * log(2 * Pi) */
-	log_marginal_likelihood -= 0.5 * num_training_points * log(2.0 * M_PI);
+	log_marginal_likelihood += 0.5 * num_training_points * log(2.0 * M_PI);
+	
+	log_marginal_likelihood = -log_marginal_likelihood;
 	
 	return log_marginal_likelihood;
 } // end of CalculateLogMarginalLikelihood function
