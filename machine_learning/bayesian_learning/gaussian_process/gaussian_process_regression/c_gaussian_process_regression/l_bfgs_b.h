@@ -87,9 +87,9 @@
 #endif
 
 /* Function prototypes */
-void setulb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* wa, long int* iwa, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave);
+void setulb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* wa, long int* iwa, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave, long int maxls);
 
-void mainlb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* ws, double* wy, double* sy, double* ss, double* wt, double* wn, double* snd, double* z__, double* r__, double* d__, double* t, double* xp, double* wa, long int* index, long int* iwhere, long int* indx2, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave);
+void mainlb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* ws, double* wy, double* sy, double* ss, double* wt, double* wn, double* snd, double* z__, double* r__, double* d__, double* t, double* xp, double* wa, long int* index, long int* iwhere, long int* indx2, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave, long int maxls);
 
 void active(long int n, double* l, double* u, long int* nbd, double* x, long int* iwhere, long int iprint, long int* prjctd, long int* cnstnd, long int* boxed);
 

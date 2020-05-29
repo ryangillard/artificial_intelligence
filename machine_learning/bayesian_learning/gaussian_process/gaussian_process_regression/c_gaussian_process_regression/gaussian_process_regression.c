@@ -2,116 +2,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <float.h>
+#include "gaussian_process_regression.h"
 #include "l_bfgs_b.h"
 
-/*********************************************************************************************************/
-/********************************************** PROTOTYPES ***********************************************/
-/*********************************************************************************************************/
-
-/* This function reads the model hyperparameters */
-void ReadModelHyperparameters(unsigned int* num_training_points, unsigned int* num_test_points, unsigned int* num_dimensions, unsigned int* num_samples, int* kernel_type);
-
-/* This function reads the intial kernel hyperparameters */
-void ReadInitiaK_inv_k_starernelHyperparameters(int kernel_type, unsigned int* num_kernel_hyperparameters, double** kernel_hyperparameters);
-
-/* This function reads the training features and targets */
-void ReadTrainingData(unsigned int num_training_points, unsigned int num_dimensions, double*** X_train, double*** y);
-
-/* This function reads in the test features */
-void ReadTestData(unsigned int num_test_points, unsigned int num_dimensions, double*** X_test);
-
-/* This function calculates various similarity kernels between two matrices */
-void CalculateKernel(int kernel_type, double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
-
-/* This function applies the linear kernel between two matrices */
-void LinearKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
-
-/* This function applies the squared exponential kernel between two matrices */
-void SquaredExponentialKernel(double* kernel_hyperparameters, unsigned int a_rows, unsigned int b_rows, unsigned int a_cols, double** A, double** B, double** kernel);
-
-/* This function performs the Cholesky decomposition A = L * L**T */
-int CholeskyDecomposition(int n, double** L);
-
-/* This function computes the Cholesky factorization of a real symmetric positive definite matrix A using the recursive algorithm. */
-int RecursiveCholeskyFactorization(int n, double** a, int a_row_offset, int a_col_offset);
-
-/* This function solves the matrix equation X * A**T = B for triangular matrix A */
-int SolveTriangularMatrixEquation(int left_side, int transa, int m, int n, double** a, double** b, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset);
-
-/* This function performs the symmetric rank k operation C := -A * A**T + C */
-int SymmetricRankKOperation(int n, int k, double** a, int read_row_offset, int read_col_offset, int write_row_offset, int write_col_offset);
-
-/* This solves a system of linear equations A * X = B with A = L*L**T */
-int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, double** b);
-
-/* This function computes the inverse of a real symmetric positive definite matrix A using the Cholesky factorization A = L * L**T. */
-int LowerCholeskyInverse(unsigned int n, double** a);
-
-/* This function computes the inverse of a real lower triangular matrix A */
-int LowerTriangularInverseSingularityCheck(unsigned int n, double** a);
-
-/* This function computes the inverse of a real lower triangular matrix */
-int LowerTriangularInverse(unsigned int n, double** a);
-
-/* This function performs the matrix-vector operation x := A * x, where A is an n by n non-unit, lower triangular matrix. */
-int MatrixVectorMultiplication(unsigned int n, double** a, unsigned int col_offset);
-
-/* This function scales a vector by a constant. */
-void ScaleVectorByConstant(unsigned int n, double da, double** a, unsigned int row_offset, unsigned int col_offset);
-
-/* This function efficiently recombines a lower cholesky decomposition inverse A^-1 = L^-1 * L^-T */
-void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, double** A);
-
-/* This function optimizes kernel hyperparameters */
-void OptimizeKernelHyperparameters(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** K_inv_y, unsigned int num_kernel_hyperparameters, double* kernel_hyperparameters);
-
-/* This function reads the kernel hyperparameter optimization parameters */
-void ReadKernelHyperparameterOptimizationParameters(unsigned int num_kernel_hyperparameters, int** kernel_hyperparameter_bounds_type, double*** kernel_hyperparameter_bounds_values);
-
-/* This function performs the kernel hyperparameter optimzation loop */
-void KernelHyperparameterOptimizerLoop(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** K_inv_y, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, unsigned int num_kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter, int* kernel_hyperparameter_bounds_type, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters);
-
-/* This function calculates the gradient of the negative log marginal likelihood with respect to the linear kernel's hyperparameters */
-void CalculateNegativeLogMarginalLikelihoodLinearKernelHyperparameterGradients(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double* kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
-
-/* This function calculates the gradient of the linear kernel with respect to the constant hyperparameter */
-void CalculateLinearKernelConstantHyperparameterGradient(unsigned int num_training_points, double** d_kernel_d_kernel_hyperparameter);
-
-/* This function calculates the gradient of the negative log marginal likelihood with respect to the squared exponential kernel's hyperparameters */
-void CalculateNegativeLogMarginalLikelihoodSquaredExponentialKernelHyperparameterGradients(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, double* kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
-
-/* This function calculates the gradient of the squared exponential kernel with respect to the length-scale hyperparameter */
-void CalculateSquaredExponentialKernelLengthScaleHyperparameterGradient(unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** kernel_x_x, double* kernel_hyperparameters, double** d_kernel_d_kernel_hyperparameter_temp, double** d_kernel_d_kernel_hyperparameter);
-
-/* This function calculates the gradient of the squared exponential kernel with respect to the signal variance hyperparameter */
-void CalculateSquaredExponentialKernelSignalVarianceHyperparameterGradient(unsigned int num_training_points, double** kernel_x_x, double* kernel_hyperparameters, double** d_kernel_d_kernel_hyperparameter);
-
-/* This function calculates the gradient of the squared exponential kernel with respect to the noise variance hyperparameter */
-void CalculateSquaredExponentialKernelNoiseVarianceHyperparameterGradient(unsigned int num_training_points, double* kernel_hyperparameters, double** d_kernel_d_kernel_hyperparameter);
-
-/* This function calculates the negative log marginal likelihood gradient with respect to a kernel's hyperparameter */
-void CalculateNegativeLogMarginalLikelihoodGradient(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, unsigned int hyperparameter_index, double* kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
-
-/* This function performs matrix multiplication between two given matrices */
-void MatrixMatrixMultiplication(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double** C);
-
-/* This function calculates the trace of the matrix-matrix multiplication of matrices A and B */
-int MatrixMatrixMultiplcationTrace(unsigned int m, unsigned int n, unsigned int p, double** A, double** B, int transpose_A, int transpose_B, double* trace);
-
-/* This function performs the dot product between two given vectors that are in 2D form */
-double VectorDotProductRank2(unsigned int n, double** A, double** B, int a_col_vec, int b_col_vec);
-
-/* This function calculate log marginal likelihood of gaussian process of training points */
-double CalculateLogMarginalLikelihood(unsigned int num_training_points, double** y, double** L, double** K_inv_y);
-
-/* This function returns a random uniform number within range [0,1] */
-double UnifRand(void);
-
-/* This function returns a random normal number with given mean and standard deviation */
-double RNorm(double mu, double sigma);
-
-/* This function returns a random normal number with zero mean and unit standard deviation */
-double NormRand(void);
+int approximate_grad = 1;
 
 /*********************************************************************************************************/
 /************************************************* MAIN **************************************************/
@@ -139,7 +33,7 @@ int main(int argc, char* argv[])
 	unsigned int num_kernel_hyperparameters = 0;
 	double* kernel_hyperparameters;
 	
-	ReadInitiaK_inv_k_starernelHyperparameters(kernel_type, &num_kernel_hyperparameters, &kernel_hyperparameters);
+	ReadInitialKernelHyperparameters(kernel_type, &num_kernel_hyperparameters, &kernel_hyperparameters);
 	
 	/* Get training data */
 	double** X_train;
@@ -608,7 +502,7 @@ void ReadModelHyperparameters(unsigned int* num_training_points, unsigned int* n
 } // end of ReadModelHyperparameters function
 
 /* This function reads the intial kernel hyperparameters */
-void ReadInitiaK_inv_k_starernelHyperparameters(int kernel_type, unsigned int* num_kernel_hyperparameters, double** kernel_hyperparameters)
+void ReadInitialKernelHyperparameters(int kernel_type, unsigned int* num_kernel_hyperparameters, double** kernel_hyperparameters)
 {
 	int system_return = 0;
 	
@@ -668,7 +562,7 @@ void ReadInitiaK_inv_k_starernelHyperparameters(int kernel_type, unsigned int* n
 	}
 	
 	return;
-} // end of ReadInitiaK_inv_k_starernelHyperparameters function
+} // end of ReadInitialKernelHyperparameters function
 
 /* This function reads the training features and targets */
 void ReadTrainingData(unsigned int num_training_points, unsigned int num_dimensions, double*** X_train, double*** y)
@@ -880,9 +774,9 @@ where L is lower triangular.
 This is the recursive version of the algorithm. It divides
 the matrix into four submatrices:
 
-       [  A11 | A12  ]  where A11 is n1 by n1 and A22 is n2 by n2
+	   [  A11 | A12  ]  where A11 is n1 by n1 and A22 is n2 by n2
    A = [ -----|----- ]  with n1 = n / 2 and n2 = n - n1
-       [  A21 | A22  ]  
+	   [  A21 | A22  ]  
 
 The function calls itself to factor A11. Update and scale A21, 
 update A22, then calls itself to factor A22.
@@ -1147,51 +1041,31 @@ int SolveLowerCholeskyFactorizationMatrixEquation(int n, int nrhs, double** a, d
 	return 0;
 } // end of SolveLowerCholeskyFactorizationMatrixEquation function
 
-/* This function computes the inverse of a real symmetric positive definite
-matrix A using the Cholesky factorization A = L * L**T computed by DPOTRF.
-Modified from dpotri.
-*/
-int LowerCholeskyInverse(unsigned int n, double** a)
-{
-	/* Quick return if possible */
-	if (n == 0)
-	{
-		return -1;
-	}
-	
-	/* Invert the triangular Cholesky factor L */
-	return LowerTriangularInverseSingularityCheck(n, a);
-} // end of LowerCholeskyInverse function
-
-/* This function computes the inverse of a real lower triangular matrix A.
-Modified from dtrtri.
-*/
-int LowerTriangularInverseSingularityCheck(unsigned int n, double** a)
-{
-	unsigned int i;
-	
-	/* Check for singularity */
-	for (i = 0; i < n; i++)
-	{
-		if (a[i][i] == 0.0)
-		{
-			return i;
-		}
-	} // end of i loop
-	
-	return LowerTriangularInverse(n, a);
-} // end of LowerTriangularInverseSingularityCheck function
-
 /* 
 This function computes the inverse of a real lower triangular matrix.
 Modified from dtrti2.
 */
 int LowerTriangularInverse(unsigned int n, double** a)
 {
-	int j;
+	int i, j;
 	double ajj;
 	
 	int x, y;
+	
+	/* Quick return if possible */
+	if (n == 0)
+	{
+		return -1;
+	}
+	
+	/* Check for singularity */
+	for (i = 0; i < n; i++)
+	{
+		if (a[i][i] == 0.0)
+		{
+			return -i;
+		}
+	} // end of i loop
 	
 	/* Compute inverse of lower triangular matrix. */
 	for (j = n - 1; j >= 0; j--) // moving left through columns, starting from the end
@@ -1269,16 +1143,26 @@ void ScaleVectorByConstant(unsigned int n, double da, double** a, unsigned int r
 void RecombineLowerCholeskyDecompositionInverse(unsigned int n, double** L, double** A)
 {
 	unsigned int i, j, k;
-	
+
+	/* Build upper triangular product */
 	for (i = 0; i < n; i++)
 	{
-		for (j = 0; j < i + 1; j++)
+		for (j = i; j < n; j++)
 		{
 			A[i][j] = 0.0;
-			for (k = 0; k < j + 1; k++)
+			for (k = j; k < n; k++)
 			{
-				A[i][j] += L[i][k] * L[j][k];
+				A[i][j] += L[k][i] * L[k][j];
 			} // end of k loop
+		} // end of j loop
+	} // end of i loop
+
+	/* Copy for transpose since symmetric */
+	for (i = 0; i < n; i++)
+	{
+		for (j = i; j < n; j++)
+		{
+			A[j][i] = A[i][j];
 		} // end of j loop
 	} // end of i loop
 	
@@ -1429,9 +1313,18 @@ void ReadKernelHyperparameterOptimizationParameters(unsigned int num_kernel_hype
 /* This function performs the kernel hyperparameter optimzation loop */
 void KernelHyperparameterOptimizerLoop(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double** X_train, double** y, double** kernel_x_x, double** L, double** K_inv_y, double** alpha_alpha_t, double** kernel_x_x_inv, double** d_kernel_d_kernel_hyperparameter, double** d_kernel_d_kernel_hyperparameter_temp, unsigned int num_kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter, int* kernel_hyperparameter_bounds_type, double** kernel_hyperparameter_bounds_values, double* kernel_hyperparameters)
 {
-	unsigned int i, j, iterations = 0;
-	int error = 0;
+	unsigned int i, j, n_iterations = 0, n_function_evals = 0;
+	int error = 0, warnflag = 0;
 	double log_marginal_likelihood = 0.0;
+	
+	int maxcor=10;
+	double ftol=2.2204460492503131e-09;
+	double gtol=1e-5;
+	double eps=1e-8;
+	int maxfun=15000;
+	int maxiter=15000;
+	int maxls=20;
+	double epsilon = eps;
 	
 	// long int nmax = 1024, mmax = 17;
 	/* nmax is the dimension of the largest problem to be solved. */
@@ -1452,14 +1345,14 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, unsigned int num_trainin
 	iprint = 101;
 	
 	/* We specify the tolerances in the stopping criteria. */
-	factr = 1e1;
-	pgtol = 1e-5;
+	factr = ftol / DBL_EPSILON;
+	pgtol = gtol;
 	
 	/* We specify the dimension n of the sample problem and the number */
 	/* m of limited memory corrections stored.  (n and m should not */
 	/* exceed the limits nmax and mmax respectively.) */
+	m = maxcor;
 	n = num_kernel_hyperparameters;
-	m = 5;
 	
 	/* We now provide nbd which defines the bounds on the variables: */
 	/* l specifies the lower bounds, */
@@ -1482,151 +1375,137 @@ void KernelHyperparameterOptimizerLoop(int kernel_type, unsigned int num_trainin
 	/* We start the iteration by initializing task. */
 	*task = (long int)START;
 	
-	/*		------- the beginning of the loop ---------- */
-L111:
-	/* This is the call to the L-BFGS-B code. */
-	setulb(n, m, x, l, u, nbd, &f, g, factr, pgtol, wa, iwa, task, iprint, csave, lsave, isave, dsave);
-	
-	if (IS_FG(*task))
+	while(1)
 	{
-		/* The minimization routine has returned to request the */
-		/* function f and gradient g values at the current x. */
-		
-		/************************************************/
-		/********************FUNCTION********************/
-		/************************************************/
-		
-		/* Compute function value f for the sample problem. */
-		
-		/* Update kernel hyperparameters */
-		printf("Current kernel hyperparameters:\n");
-		for (i = 0; i < n; i++)
+		/* This is the call to the L-BFGS-B code. */
+		setulb(n, m, x, l, u, nbd, &f, g, factr, pgtol, wa, iwa, task, iprint, csave, lsave, isave, dsave, maxls);
+
+		if (IS_FG(*task))
 		{
-			kernel_hyperparameters[i] = x[i];
-			printf("%.12f\n", kernel_hyperparameters[i]);
-		} // end of i loop
-		
-		/* Calculate kernel K(X, X) */
-		printf("kernel_x_x:\n");
-		CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_training_points, num_dimensions, X_train, X_train, kernel_x_x);
-		if (kernel_type == 1) // squared exponential
-		{
-			for (i = 0; i < num_training_points; i++)
+			/* The minimization routine has returned to request the */
+			/* function f and gradient g values at the current x. */
+
+			/************************************************/
+			/********************FUNCTION********************/
+			/************************************************/
+
+			/* Compute function value f for the sample problem. */
+
+			/* Update kernel hyperparameters */
+			printf("\nCurrent kernel hyperparameters:\n");
+			for (i = 0; i < n; i++)
 			{
-				for (j = 0; j < num_training_points; j++)
-				{
-					/* Shift by the noise variance */
-					if (i == j)
-					{
-						kernel_x_x[i][j] += kernel_hyperparameters[2] * kernel_hyperparameters[2];
-					}
-					printf("%.12f\t", kernel_x_x[i][j]);
-				} // end of j loop
-				printf("\n");
+				kernel_hyperparameters[i] = x[i];
+				printf("%.12f\n", kernel_hyperparameters[i]);
 			} // end of i loop
+
+			f = CalculateNegativeLogLikelihoodFromTrainData(kernel_type, num_training_points, num_dimensions, kernel_hyperparameters, X_train, y, kernel_x_x, L, K_inv_y, &n_function_evals);
+			printf("\nn_iterations = %u, neg_log_marginal_likelihood = %.16f\n", n_iterations, f);
+
+			/************************************************/
+			/********************GRADIENT********************/
+			/************************************************/
+
+			if (approximate_grad == 1)
+			{
+				/* Compute gradient g for the sample problem. */
+				CalculateNegativeLogLikelihoodFPrime(kernel_type, num_training_points, num_dimensions, num_kernel_hyperparameters, kernel_hyperparameters, X_train, y, kernel_x_x, L, K_inv_y, epsilon, f, &n_function_evals, g);
+			}
+			else
+			{
+				/* Calculate alpha * alpha**T */
+				for (i = 0; i < num_training_points; i++)
+				{
+					for (j = 0; j < num_training_points; j++)
+					{
+						alpha_alpha_t[i][j] = 0.0;
+					} // end of j loop
+				} // end of i loop
+
+				MatrixMatrixMultiplication(num_training_points, num_training_points, 1, K_inv_y, K_inv_y, 0, 1, alpha_alpha_t);
+
+				error = LowerTriangularInverse(num_training_points, L);
+				if (error != 0)
+				{
+					printf("ERROR: LowerCholeskyInverse returned error code %d\n", error);
+				}
+
+				printf("\nL_inv:\n");
+				for (i = 0; i < num_training_points; i++)
+				{
+					for (j = 0; j < num_training_points; j++)
+					{
+						printf("%12g\t", L[i][j]);
+					} // end of j loop
+					printf("\n");
+				} // end of i loop
+
+				RecombineLowerCholeskyDecompositionInverse(num_training_points, L, kernel_x_x_inv);
+
+				printf("\nkernel_x_x_inv:\n");
+				for (i = 0; i < num_training_points; i++)
+				{
+					for (j = 0; j < num_training_points; j++)
+					{
+						printf("%12g\t", kernel_x_x_inv[i][j]);
+						alpha_alpha_t[i][j] -= kernel_x_x_inv[i][j];
+					} // end of j loop
+					printf("\n");
+				} // end of i loop
+
+				if (kernel_type == 0) // linear
+				{
+					CalculateNegativeLogMarginalLikelihoodLinearKernelHyperparameterGradients(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, kernel_hyperparameters, d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
+				} // end of linear
+				else // squared exponential
+				{
+					CalculateNegativeLogMarginalLikelihoodSquaredExponentialKernelHyperparameterGradients(num_training_points, num_dimensions, X_train, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters, d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
+				} // end of squared exponential
+
+				/* Update gradients */
+				for (i = 0; i < n; i++)
+				{
+					printf("i = %u, g = %12g, d_negative_log_marginal_likelihood_d_kernel_hyperparameter = %12g\n", i, g[i], d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i]);
+					g[i] = d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i];
+				} // end of i loop
+			}
 		}
-		
-		/* Perform Cholesky decomposition on our real symmetric positive definite matrix K(X, X) = L * L**T */
-		for (i = 0; i < num_training_points; i++)
+		else if ((*task) == NEW_X)
 		{
-			for (j = 0; j < num_training_points; j++)
+			/* The minimization routine has returned with a new iterate, */
+			/* and we have opted to continue the iteration. */
+			n_iterations++;
+			
+			if (n_iterations >= maxiter)
 			{
-				L[i][j] = kernel_x_x[i][j];
-			} // end of j loop
-		} // end of i loop
-
-		error = CholeskyDecomposition(num_training_points, L);
-		
-		/* Now solve for L * Z = y for Z */
-		for (i = 0; i < num_training_points; i++)
-		{
-			K_inv_y[i][0] = y[i][0];
-		} // end of i loop
-
-		error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, K_inv_y);
-		if (error != 0)
-		{
-			printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+				*task = (long int)STOP_ITER;
+				printf("STOP: TOTAL NO. of ITERATIONS REACHED LIMIT");
+			}
+			else if (n_function_evals > maxfun)
+			{
+				*task = (long int)STOP_ITER;
+				printf("STOP: TOTAL NO. of f AND g EVALUATIONS EXCEEDS LIMIT");
+			}
 		}
-		
-		/* Evaluate log marginal likelihood with current hyperparameters */
-		iterations++;
-		log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, y, L, K_inv_y);
-		printf("\niterations = %u, log_marginal_likelihood = %.16f\n", iterations, log_marginal_likelihood);
-		
-		/* Maximize log marginal likelihood so minimize the negative */
-		f = -log_marginal_likelihood;
-		
-		/************************************************/
-		/********************GRADIENT********************/
-		/************************************************/
-		
-		/* Compute gradient g for the sample problem. */
-		
-		/* Calculate alpha * alpha**T */
-		for (i = 0; i < num_training_points; i++)
+		else
 		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				alpha_alpha_t[i][j] = 0.0;
-			} // end of j loop
-		} // end of i loop
-		
-		MatrixMatrixMultiplication(num_training_points, num_training_points, 1, K_inv_y, K_inv_y, 0, 1, alpha_alpha_t);
-		
-		/* Calculate K(X, X) inverse */
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				kernel_x_x_inv[i][j] = L[i][j];
-			} // end of j loop
-		} // end of i loop
-
-		error = LowerCholeskyInverse(num_training_points, kernel_x_x_inv);
-		if (error != 0)
-		{
-			printf("ERROR: LowerCholeskyInverse returned error code %d\n", error);
+			break;
 		}
-
-		for (i = 0; i < num_training_points; i++)
-		{
-			for (j = 0; j < num_training_points; j++)
-			{
-				alpha_alpha_t[i][j] -= kernel_x_x_inv[i][j];
-			} // end of j loop
-		} // end of i loop
-		
-		if (kernel_type == 0) // linear
-		{
-			CalculateNegativeLogMarginalLikelihoodLinearKernelHyperparameterGradients(num_training_points, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, kernel_hyperparameters, d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
-		} // end of linear
-		else // squared exponential
-		{
-			CalculateNegativeLogMarginalLikelihoodSquaredExponentialKernelHyperparameterGradients(num_training_points, num_dimensions, X_train, kernel_x_x, alpha_alpha_t, d_kernel_d_kernel_hyperparameter, d_kernel_d_kernel_hyperparameter_temp, kernel_hyperparameters, d_negative_log_marginal_likelihood_d_kernel_hyperparameter);
-		} // end of squared exponential
-		
-		/* Update gradients */
-		for (i = 0; i < n; i++)
-		{
-			printf("i = %u, d_negative_log_marginal_likelihood_d_kernel_hyperparameter = %lf\n", i, d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i]);
-			g[i] = d_negative_log_marginal_likelihood_d_kernel_hyperparameter[i];
-		} // end of i loop
-		
-		/* Go back to the minimization routine. */
-		goto L111;
 	}
-
-	if ((*task) == NEW_X)
-	{
-		/* The minimization routine has returned with a new iterate, */
-		/* and we have opted to continue the iteration. */
-		goto L111;
-	}
-	
-	/*		   ---------- the end of the loop ------------- */
 	
 	/* If task is neither FG nor NEW_X we terminate execution. */
+	if (*task == CONV_GRAD || *task == CONV_F)
+	{
+		warnflag = 0;
+	}
+	else if (n_function_evals > maxfun || n_iterations >= maxiter)
+	{
+		warnflag = 1;
+	}
+	else
+	{
+		warnflag = 2;
+	}
 
 	/* Final update of kernel hyperparameters */
 	for (i = 0; i < n; i++)
@@ -1634,8 +1513,118 @@ L111:
 		kernel_hyperparameters[i] = x[i];
 	} // end of i loop
 	
+	/* Print optimization result final report */
+	printf("Optimize Result:\n");
+	if (warnflag == 0)
+	{
+		printf("Success: TRUE\n");
+	}
+	else
+	{
+		printf("Success: FALSE\n");
+	}
+	printf("task: %d\n", (*task));
+	printf("f: %.12g\n", f);
+	printf("g:\n");
+	for (i = 0; i < n; i++)
+	{
+		printf("%.12g\n", g[i]);
+	} // end of i loop
+	printf("n_function_evals: %u\n", n_function_evals);
+	printf("n_iterations: %u\n", n_iterations);
+	printf("x:\n");
+	for (i = 0; i < n; i++)
+	{
+		printf("%.12g\n", kernel_hyperparameters[i]);
+	} // end of i loop
+	
 	return;
 } // end of KernelHyperparameterOptimizerLoop function
+
+/* This function calculates the negative log likelihood from training data */
+double CalculateNegativeLogLikelihoodFromTrainData(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, double* kernel_hyperparameters, double** X_train, double** y, double** kernel_x_x, double** L, double** K_inv_y, unsigned int* n_function_evals)
+{
+	unsigned int i, j, error = 0;
+	double log_marginal_likelihood, f;
+
+	/* Calculate kernel K(X, X) */
+	printf("kernel_x_x:\n");
+	CalculateKernel(kernel_type, kernel_hyperparameters, num_training_points, num_training_points, num_dimensions, X_train, X_train, kernel_x_x);
+	if (kernel_type == 1) // squared exponential
+	{
+		for (i = 0; i < num_training_points; i++)
+		{
+			for (j = 0; j < num_training_points; j++)
+			{
+				/* Shift by the noise variance */
+				if (i == j)
+				{
+					kernel_x_x[i][j] += kernel_hyperparameters[2] * kernel_hyperparameters[2];
+				}
+				printf("%.12f\t", kernel_x_x[i][j]);
+			} // end of j loop
+			printf("\n");
+		} // end of i loop
+	}
+
+	/* Perform Cholesky decomposition on our real symmetric positive definite matrix K(X, X) = L * L**T */
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			L[i][j] = kernel_x_x[i][j];
+		} // end of j loop
+	} // end of i loop
+
+	error = CholeskyDecomposition(num_training_points, L);
+
+	printf("L:\n");
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			printf("%.12f\t", L[i][j]);
+		} // end of j loop
+		printf("\n");
+	} // end of i loop
+
+	/* Now solve for L * Z = y for Z */
+	for (i = 0; i < num_training_points; i++)
+	{
+		K_inv_y[i][0] = y[i][0];
+	} // end of i loop
+
+	error = SolveLowerCholeskyFactorizationMatrixEquation(num_training_points, 1, L, K_inv_y);
+	if (error != 0)
+	{
+		printf("ERROR: SolveLowerCholeskyFactorizationMatrixEquation, error = %d\n", error);
+	}
+
+	/* Evaluate log marginal likelihood with current hyperparameters */
+	log_marginal_likelihood = CalculateLogMarginalLikelihood(num_training_points, y, L, K_inv_y);
+
+	/* Maximize log marginal likelihood so minimize the negative */
+	f = -log_marginal_likelihood;
+	
+	(*n_function_evals)++;
+	
+	return f;
+}
+
+/* This function calculates an approximation of the gradient of the negative log likelihood */
+void CalculateNegativeLogLikelihoodFPrime(int kernel_type, unsigned int num_training_points, unsigned int num_dimensions, unsigned int num_kernel_hyperparameters, double* kernel_hyperparameters, double** X_train, double** y, double** kernel_x_x, double** L, double** K_inv_y, double epsilon, double f0, unsigned int* n_function_evals, double* g)
+{
+	unsigned int i;
+	
+	for (i = 0; i < num_kernel_hyperparameters; i++)
+	{
+		kernel_hyperparameters[i] += epsilon;
+		g[i] = (CalculateNegativeLogLikelihoodFromTrainData(kernel_type, num_training_points, num_dimensions, kernel_hyperparameters, X_train, y, kernel_x_x, L, K_inv_y, n_function_evals) - f0) / epsilon;
+		kernel_hyperparameters[i] -= epsilon;
+	} // end of i loop
+	
+	return;
+}
 
 /* This function calculates the gradient of the negative log marginal likelihood with respect to the linear kernel's hyperparameters */
 void CalculateNegativeLogMarginalLikelihoodLinearKernelHyperparameterGradients(unsigned int num_training_points, double** alpha_alpha_t, double** d_kernel_d_kernel_hyperparameter, double* kernel_hyperparameters, double* d_negative_log_marginal_likelihood_d_kernel_hyperparameter)
@@ -1688,6 +1677,28 @@ void CalculateSquaredExponentialKernelLengthScaleHyperparameterGradient(unsigned
 	unsigned int i, j, k;
 	double gradient = 0.0, a_squared_sum = 0.0, b_squared_sum = 0.0;
 	
+	double** tempa;
+	tempa = malloc(sizeof(double*) * num_training_points);
+	for (i = 0; i < num_training_points; i++)
+	{
+		tempa[i] = malloc(sizeof(double) * num_training_points);
+	} // end of i loop
+
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			if (i == j)
+			{
+				tempa[i][j] = (kernel_x_x[i][j] - kernel_hyperparameters[2] * kernel_hyperparameters[2]);
+			}
+			else
+			{
+				tempa[i][j] = kernel_x_x[i][j];
+			}
+		} // end of j loop
+	} // end of i loop
+	
 	MatrixMatrixMultiplication(num_training_points, num_training_points, num_dimensions, X_train, X_train, 0, 1, d_kernel_d_kernel_hyperparameter_temp);
 
 	for (i = 0; i < num_training_points; i++)
@@ -1706,7 +1717,7 @@ void CalculateSquaredExponentialKernelLengthScaleHyperparameterGradient(unsigned
 		} // end of j loop
 	} // end of i loop
 
-	MatrixMatrixMultiplication(num_training_points, num_training_points, num_training_points, kernel_x_x, d_kernel_d_kernel_hyperparameter_temp, 0, 0, d_kernel_d_kernel_hyperparameter);
+	MatrixMatrixMultiplication(num_training_points, num_training_points, num_training_points, tempa, d_kernel_d_kernel_hyperparameter_temp, 0, 0, d_kernel_d_kernel_hyperparameter);
 
 	for (i = 0; i < num_training_points; i++)
 	{
@@ -1714,6 +1725,22 @@ void CalculateSquaredExponentialKernelLengthScaleHyperparameterGradient(unsigned
 		{
 			d_kernel_d_kernel_hyperparameter[i][j] /= pow(kernel_hyperparameters[0], 3);
 		} // end of j loop
+	} // end of i loop
+	
+	for (i = 0; i < num_training_points; i++)
+	{
+		free(tempa[i]);
+	} // end of i loop
+	free(tempa);
+	
+	printf("\n\ndK_y/dtheta_1:\n");
+	for (i = 0; i < num_training_points; i++)
+	{
+		for (j = 0; j < num_training_points; j++)
+		{
+			printf("%12g\t", d_kernel_d_kernel_hyperparameter[i][j]);
+		} // end of j loop
+		printf("\n");
 	} // end of i loop
 	
 	return;
@@ -1779,7 +1806,7 @@ void CalculateNegativeLogMarginalLikelihoodGradient(unsigned int num_training_po
 	}
 	else
 	{
-		d_negative_log_marginal_likelihood_d_kernel_hyperparameter[hyperparameter_index] = -d_log_marginal_likelihood_d_hyperparameter;
+		d_negative_log_marginal_likelihood_d_kernel_hyperparameter[hyperparameter_index] = -0.5 * d_log_marginal_likelihood_d_hyperparameter;
 	}
 	
 	return;
@@ -2153,9 +2180,9 @@ double NormRand(void)
 	return (s == 1.0) ? -y : y;
 }	// end of NormRand function
 
-void setulb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* wa, long int* iwa, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave)
+void setulb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* wa, long int* iwa, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave, long int maxls)
 {
-    /*
+	/*
 	************ 
 
 	Subroutine setulb 
@@ -2171,7 +2198,7 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	m is an integer variable. 
 	  On entry m is the maximum number of variable metric corrections 
-	    used to define the limited memory matrix. 
+		used to define the limited memory matrix. 
 	  On exit m is unchanged. 
 
 	x is a double precision array of dimension n. 
@@ -2188,11 +2215,11 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	nbd is an integer array of dimension n. 
 	  On entry nbd represents the type of bounds imposed on the 
-	    variables, and must be specified as follows: 
-	    nbd(i)=0 if x(i) is unbounded, 
-	           1 if x(i) has only a lower bound, 
-	           2 if x(i) has both lower and upper bounds, and 
-	           3 if x(i) has only an upper bound. 
+		variables, and must be specified as follows: 
+		nbd(i)=0 if x(i) is unbounded, 
+			   1 if x(i) has only a lower bound, 
+			   2 if x(i) has both lower and upper bounds, and 
+			   3 if x(i) has only an upper bound. 
 	  On exit nbd is unchanged. 
 
 	f is a double precision variable. 
@@ -2205,23 +2232,23 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	factr is a double precision variable. 
 	  On entry factr >= 0 is specified by the user.  The iteration 
-	    will stop when 
+		will stop when 
 
-	    (f^k - f^{k+1})/max{|f^k|,|f^{k+1}|,1} <= factr*epsmch 
+		(f^k - f^{k+1})/max{|f^k|,|f^{k+1}|,1} <= factr*epsmch 
 
-	    where epsmch is the machine precision, which is automatically 
-	    generated by the code. Typical values for factr: 1.d+12 for 
-	    low accuracy; 1.d+7 for moderate accuracy; 1.d+1 for extremely 
-	    high accuracy. 
+		where epsmch is the machine precision, which is automatically 
+		generated by the code. Typical values for factr: 1.d+12 for 
+		low accuracy; 1.d+7 for moderate accuracy; 1.d+1 for extremely 
+		high accuracy. 
 	  On exit factr is unchanged. 
 
 	pgtol is a double precision variable. 
 	  On entry pgtol >= 0 is specified by the user.  The iteration 
-	    will stop when 
+		will stop when 
 
-	            max{|proj g_i | i = 1, ..., n} <= pgtol 
+				max{|proj g_i | i = 1, ..., n} <= pgtol 
 
-	    where pg_i is the ith component of the projected gradient. 
+		where pg_i is the ith component of the projected gradient. 
 	  On exit pgtol is unchanged. 
 
 	wa is a double precision working array of length 
@@ -2234,76 +2261,76 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	iprint is an integer variable that must be set by the user. 
 	  It controls the frequency and type of output generated: 
-	   iprint<0    no output is generated; 
-	   iprint=0    print only one line at the last iteration; 
+	   iprint<0	no output is generated; 
+	   iprint=0	print only one line at the last iteration; 
 	   0<iprint<99 print also f and |proj g| every iprint iterations; 
 	   iprint=99   print details of every iteration except n-vectors; 
 	   iprint=100  print also the changes of active set and final x; 
 	   iprint>100  print details of every iteration including x and g; 
 	  When iprint > 0, the file iterate.dat will be created to 
-	                   summarize the iteration. 
+					   summarize the iteration. 
 
 	csave is a working string of characters of length 60. 
 
 	lsave is a logical working array of dimension 4. 
 	  On exit with 'task' = NEW_X, the following information is 
-	                                                        available: 
-	    If lsave(1) = .true.  then  the initial X has been replaced by 
-	                                its projection in the feasible set; 
-	    If lsave(2) = .true.  then  the problem is constrained; 
-	    If lsave(3) = .true.  then  each variable has upper and lower 
-	                                bounds; 
+															available: 
+		If lsave(1) = .true.  then  the initial X has been replaced by 
+									its projection in the feasible set; 
+		If lsave(2) = .true.  then  the problem is constrained; 
+		If lsave(3) = .true.  then  each variable has upper and lower 
+									bounds; 
 
 	isave is an integer working array of dimension 44. 
 	  On exit with 'task' = NEW_X, the following information is 
-	                                                        available: 
-	    isave(22) = the total number of intervals explored in the 
-	                    search of Cauchy points; 
-	    isave(26) = the total number of skipped BFGS updates before 
-	                    the current iteration; 
-	    isave(30) = the number of current iteration; 
-	    isave(31) = the total number of BFGS updates prior the current 
-	                    iteration; 
-	    isave(33) = the number of intervals explored in the search of 
-	                    Cauchy point in the current iteration; 
-	    isave(34) = the total number of function and gradient 
-	                    evaluations; 
-	    isave(36) = the number of function value or gradient 
-	                             evaluations in the current iteration; 
-	    if isave(37) = 0  then the subspace argmin is within the box; 
-	    if isave(37) = 1  then the subspace argmin is beyond the box; 
-	    isave(38) = the number of free variables in the current 
-	                    iteration; 
-	    isave(39) = the number of active constraints in the current 
-	                    iteration; 
-	    n + 1 - isave(40) = the number of variables leaving the set of 
-	                      active constraints in the current iteration; 
-	    isave(41) = the number of variables entering the set of active 
-	                    constraints in the current iteration. 
+															available: 
+		isave(22) = the total number of intervals explored in the 
+						search of Cauchy points; 
+		isave(26) = the total number of skipped BFGS updates before 
+						the current iteration; 
+		isave(30) = the number of current iteration; 
+		isave(31) = the total number of BFGS updates prior the current 
+						iteration; 
+		isave(33) = the number of intervals explored in the search of 
+						Cauchy point in the current iteration; 
+		isave(34) = the total number of function and gradient 
+						evaluations; 
+		isave(36) = the number of function value or gradient 
+								 evaluations in the current iteration; 
+		if isave(37) = 0  then the subspace argmin is within the box; 
+		if isave(37) = 1  then the subspace argmin is beyond the box; 
+		isave(38) = the number of free variables in the current 
+						iteration; 
+		isave(39) = the number of active constraints in the current 
+						iteration; 
+		n + 1 - isave(40) = the number of variables leaving the set of 
+						  active constraints in the current iteration; 
+		isave(41) = the number of variables entering the set of active 
+						constraints in the current iteration. 
 
 	dsave is a double precision working array of dimension 29. 
 	  On exit with 'task' = NEW_X, the following information is 
-	                                                        available: 
-	    dsave(1) = current 'theta' in the BFGS matrix; 
-	    dsave(2) = f(x) in the previous iteration; 
-	    dsave(3) = factr*epsmch; 
-	    dsave(4) = 2-norm of the line search direction vector; 
-	    dsave(5) = the machine precision epsmch generated by the code; 
-	    dsave(7) = the accumulated time spent on searching for 
-	                                                    Cauchy points; 
-	    dsave(8) = the accumulated time spent on 
-	                                            subspace minimization; 
-	    dsave(9) = the accumulated time spent on line search; 
-	    dsave(11) = the slope of the line search function at 
-	                             the current point of line search; 
-	    dsave(12) = the maximum relative step length imposed in 
-	                                                      line search; 
-	    dsave(13) = the infinity norm of the projected gradient; 
-	    dsave(14) = the relative step length in the line search; 
-	    dsave(15) = the slope of the line search function at 
-	                            the starting point of the line search; 
-	    dsave(16) = the square of the 2-norm of the line search 
-	                                                 direction vector. 
+															available: 
+		dsave(1) = current 'theta' in the BFGS matrix; 
+		dsave(2) = f(x) in the previous iteration; 
+		dsave(3) = factr*epsmch; 
+		dsave(4) = 2-norm of the line search direction vector; 
+		dsave(5) = the machine precision epsmch generated by the code; 
+		dsave(7) = the accumulated time spent on searching for 
+														Cauchy points; 
+		dsave(8) = the accumulated time spent on 
+												subspace minimization; 
+		dsave(9) = the accumulated time spent on line search; 
+		dsave(11) = the slope of the line search function at 
+								 the current point of line search; 
+		dsave(12) = the maximum relative step length imposed in 
+														  line search; 
+		dsave(13) = the infinity norm of the projected gradient; 
+		dsave(14) = the relative step length in the line search; 
+		dsave(15) = the slope of the line search function at 
+								the starting point of the line search; 
+		dsave(16) = the square of the 2-norm of the line search 
+													 direction vector. 
 
 	Subprograms called: 
 
@@ -2324,13 +2351,13 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 	  (Postscript files of these papers are available via anonymous 
 	   ftp to eecs.nwu.edu in the directory pub/lbfgs/lbfgs_bcm.) 
 
-	                      *  *  * 
+						  *  *  * 
 
 	NEOS, November 1994. (Latest revision June 1996.) 
 	Optimization Technology Center. 
 	Argonne National Laboratory and Northwestern University. 
 	Written by 
-	                   Ciyou Zhu 
+					   Ciyou Zhu 
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal. 
 
 
@@ -2392,14 +2419,14 @@ void setulb(long int n, long int m, double* x, double* l, double* u, long int* n
 	lxp = isave[15];
 	lwa = isave[16];
 	
-	mainlb(n, m, x, l, u, nbd, f, g, factr, pgtol, &wa[lws], &wa[lwy], &wa[lsy], &wa[lss], &wa[lwt], &wa[lwn], &wa[lsnd], &wa[lz], &wa[lr], &wa[ld], &wa[lt], &wa[lxp], &wa[lwa], &iwa[1], &iwa[n + 1], &iwa[(n << 1) + 1], task, iprint, csave, &lsave[1], &isave[22], &dsave[1]);
+	mainlb(n, m, x, l, u, nbd, f, g, factr, pgtol, &wa[lws], &wa[lwy], &wa[lsy], &wa[lss], &wa[lwt], &wa[lwn], &wa[lsnd], &wa[lz], &wa[lr], &wa[ld], &wa[lt], &wa[lxp], &wa[lwa], &iwa[1], &iwa[n + 1], &iwa[(n << 1) + 1], task, iprint, csave, &lsave[1], &isave[22], &dsave[1], maxls);
 	
 	return;
 } // end of setulb function
 
-void mainlb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* ws, double* wy, double* sy, double* ss, double* wt, double* wn, double* snd, double* z__, double* r__, double* d__, double* t, double* xp, double* wa, long int* index, long int* iwhere, long int* indx2, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave)
+void mainlb(long int n, long int m, double* x, double* l, double* u, long int* nbd, double* f, double* g, double factr, double pgtol, double* ws, double* wy, double* sy, double* ss, double* wt, double* wn, double* snd, double* z__, double* r__, double* d__, double* t, double* xp, double* wa, long int* index, long int* iwhere, long int* indx2, long int* task, long int iprint, long int* csave, long int* lsave, long int* isave, double* dsave, long int maxls)
 {
-    /*
+	/*
 	************ 
 	
 	Subroutine mainlb 
@@ -2413,7 +2440,7 @@ void mainlb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	m is an integer variable. 
 	  On entry m is the maximum number of variable metric 
-	     corrections allowed in the limited memory matrix. 
+		 corrections allowed in the limited memory matrix. 
 	  On exit m is unchanged. 
 
 	x is a double precision array of dimension n. 
@@ -2430,11 +2457,11 @@ void mainlb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	nbd is an integer array of dimension n. 
 	  On entry nbd represents the type of bounds imposed on the 
-	    variables, and must be specified as follows: 
-	    nbd(i)=0 if x(i) is unbounded, 
-	           1 if x(i) has only a lower bound, 
-	           2 if x(i) has both lower and upper bounds, 
-	           3 if x(i) has only an upper bound. 
+		variables, and must be specified as follows: 
+		nbd(i)=0 if x(i) is unbounded, 
+			   1 if x(i) has only a lower bound, 
+			   2 if x(i) has both lower and upper bounds, 
+			   3 if x(i) has only an upper bound. 
 	  On exit nbd is unchanged. 
 
 	f is a double precision variable. 
@@ -2447,66 +2474,66 @@ void mainlb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	factr is a double precision variable. 
 	  On entry factr >= 0 is specified by the user.  The iteration 
-	    will stop when 
+		will stop when 
 
-	    (f^k - f^{k+1})/max{|f^k|,|f^{k+1}|,1} <= factr*epsmch 
+		(f^k - f^{k+1})/max{|f^k|,|f^{k+1}|,1} <= factr*epsmch 
 
-	    where epsmch is the machine precision, which is automatically 
-	    generated by the code. 
+		where epsmch is the machine precision, which is automatically 
+		generated by the code. 
 	  On exit factr is unchanged. 
 
 	pgtol is a double precision variable. 
 	  On entry pgtol >= 0 is specified by the user.  The iteration 
-	    will stop when 
+		will stop when 
 
-	            max{|proj g_i | i = 1, ..., n} <= pgtol 
+				max{|proj g_i | i = 1, ..., n} <= pgtol 
 
-	    where pg_i is the ith component of the projected gradient. 
+		where pg_i is the ith component of the projected gradient. 
 	  On exit pgtol is unchanged. 
 
 	ws, wy, sy, and wt are double precision working arrays used to 
 	  store the following information defining the limited memory 
-	     BFGS matrix: 
-	     ws, of dimension n x m, stores S, the matrix of s-vectors; 
-	     wy, of dimension n x m, stores Y, the matrix of y-vectors; 
-	     sy, of dimension m x m, stores S'Y; 
-	     ss, of dimension m x m, stores S'S; 
-	     yy, of dimension m x m, stores Y'Y; 
-	     wt, of dimension m x m, stores the Cholesky factorization 
-	                             of (theta*S'S+LD^(-1)L'); see eq. 
-	                             (2.26) in [3]. 
+		 BFGS matrix: 
+		 ws, of dimension n x m, stores S, the matrix of s-vectors; 
+		 wy, of dimension n x m, stores Y, the matrix of y-vectors; 
+		 sy, of dimension m x m, stores S'Y; 
+		 ss, of dimension m x m, stores S'S; 
+		 yy, of dimension m x m, stores Y'Y; 
+		 wt, of dimension m x m, stores the Cholesky factorization 
+								 of (theta*S'S+LD^(-1)L'); see eq. 
+								 (2.26) in [3]. 
 
 	wn is a double precision working array of dimension 2m x 2m 
 	  used to store the LEL^T factorization of the indefinite matrix 
-	            K = [-D -Y'ZZ'Y/theta     L_a'-R_z'  ] 
-	                [L_a -R_z           theta*S'AA'S ] 
+				K = [-D -Y'ZZ'Y/theta	 L_a'-R_z'  ] 
+					[L_a -R_z		   theta*S'AA'S ] 
 
-	  where     E = [-I  0] 
-	                [ 0  I] 
+	  where	 E = [-I  0] 
+					[ 0  I] 
 
 	snd is a double precision working array of dimension 2m x 2m 
 	  used to store the lower triangular part of 
-	            N = [Y' ZZ'Y   L_a'+R_z'] 
-	                [L_a +R_z  S'AA'S   ] 
+				N = [Y' ZZ'Y   L_a'+R_z'] 
+					[L_a +R_z  S'AA'S   ] 
 
 	zn,rn,dn,tn, xpn,wa(8*m) are double precision working arrays. 
 	  z  is used at different times to store the Cauchy point and 
-	     the Newton point. 
+		 the Newton point. 
 	  xp is used to safeguard the projected Newton direction 
 
 	sg(m),sgo(m),yg(m),ygo(m) are double precision working arrays. 
 
 	index is an integer working array of dimension n. 
 	  In subroutine freev, index is used to store the free and fixed 
-	     variables at the Generalized Cauchy Point (GCP). 
+		 variables at the Generalized Cauchy Point (GCP). 
 
 	iwhere is an integer working array of dimension n used to record 
 	  the status of the vector x for GCP computation. 
 	  iwhere(i)=0 or -3 if x(i) is free and has bounds, 
-	            1       if x(i) is fixed at l(i), and l(i) .ne. u(i) 
-	            2       if x(i) is fixed at u(i), and u(i) .ne. l(i) 
-	            3       if x(i) is always fixed, i.e.,  u(i)=x(i)=l(i) 
-	           -1       if x(i) is always free, i.e., no bounds on it. 
+				1	   if x(i) is fixed at l(i), and l(i) .ne. u(i) 
+				2	   if x(i) is fixed at u(i), and u(i) .ne. l(i) 
+				3	   if x(i) is always fixed, i.e.,  u(i)=x(i)=l(i) 
+			   -1	   if x(i) is always free, i.e., no bounds on it. 
 
 	indx2 is an integer working array of dimension n. 
 	  Within subroutine cauchy, indx2 corresponds to the array iorder. 
@@ -2519,14 +2546,14 @@ void mainlb(long int n, long int m, double* x, double* l, double* u, long int* n
 
 	iprint is an INTEGER variable that must be set by the user. 
 	  It controls the frequency and type of output generated: 
-	   iprint<0    no output is generated; 
-	   iprint=0    print only one line at the last iteration; 
+	   iprint<0	no output is generated; 
+	   iprint=0	print only one line at the last iteration; 
 	   0<iprint<99 print also f and |proj g| every iprint iterations; 
 	   iprint=99   print details of every iteration except n-vectors; 
 	   iprint=100  print also the changes of active set and final x; 
 	   iprint>100  print details of every iteration including x and g; 
 	  When iprint > 0, the file iterate.dat will be created to 
-	                   summarize the iteration. 
+					   summarize the iteration. 
 
 	csave is a working string of characters of length 60. 
 
@@ -2568,13 +2595,13 @@ void mainlb(long int n, long int m, double* x, double* l, double* u, long int* n
 	  (Postscript files of these papers are available via anonymous 
 	   ftp to eecs.nwu.edu in the directory pub/lbfgs/lbfgs_bcm.) 
 
-	                      *  *  * 
+						  *  *  * 
 
 	NEOS, November 1994. (Latest revision June 1996.) 
 	Optimization Technology Center. 
 	Argonne National Laboratory and Northwestern University. 
 	Written by 
-	                   Ciyou Zhu 
+					   Ciyou Zhu 
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 	
 	************ 
@@ -2882,7 +2909,7 @@ L333:
 	
 	/* Form  the LEL^T factorization of the indefinite */
 	/* matrix	K = [-D -Y'ZZ'Y/theta	 L_a'-R_z'  ] */
-	/*	 		    [L_a -R_z		   theta*S'AA'S ] */
+	/*	 			[L_a -R_z		   theta*S'AA'S ] */
 	/* where E = [-I  0] */
 	/*			 [ 0  I] */
 	
@@ -2960,7 +2987,7 @@ L555:
 L666:
 	lnsrlb(n, &l[1], &u[1], &nbd[1], x, f, &fold, &gd, &gdold, &g[1], &d__[1], &r__[1], &t[1], &z__[1], &stp, &dnorm, &dtd, &xstep, &stpmx, iter, &ifun, &iback, &nfgv, &info, task, boxed, cnstnd, csave, &isave[22], &dsave[17]);
 	
-	if (info != 0 || iback >= 20)
+	if (info != 0 || iback >= maxls)
 	{
 		/* Restore the previous iterate. */
 		dcopy(n, &t[1], 1, x, 1);
@@ -3117,8 +3144,8 @@ L777:
 	}
 	
 	/* Now the inverse of the middle matrix in B is */
-	/* [D^(1/2)	        O] [-D^(1/2)  D^(-1/2)*L'] */
-	/* [-L * D^(-1/2)   J] [0		           J'] */
+	/* [D^(1/2)			O] [-D^(1/2)  D^(-1/2)*L'] */
+	/* [-L * D^(-1/2)   J] [0				   J'] */
 L888:
 	/* -------------------- the end of the loop ----------------------------- */
 	goto L222;
@@ -3172,7 +3199,7 @@ L1000:
 
 void active(long int n, double* l, double* u, long int* nbd, double* x, long int* iwhere, long int iprint, long int* prjctd, long int* cnstnd, long int* boxed)
 {
-    /*
+	/*
 	************ 
 
 	Subroutine active
@@ -3183,18 +3210,18 @@ void active(long int n, double* l, double* u, long int* nbd, double* x, long int
 	iwhere is an integer array of dimension n.
 	  On entry iwhere is unspecified.
 	  On exit iwhere(i)=-1  if x(i) has no bounds
-	                    3   if l(i)=u(i)
-	                    0   otherwise.
+						3   if l(i)=u(i)
+						0   otherwise.
 	  In cauchy, iwhere is given finer gradations.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -3300,7 +3327,7 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 	  
 	m is an integer variable.
 	  On entry m is the maximum number of variable metric corrections
-	    used to define the limited memory matrix.
+		used to define the limited memory matrix.
 	  On exit m is unchanged.
 
 	sy is a double precision array of dimension m x m.
@@ -3309,12 +3336,12 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 
 	wt is a double precision array of dimension m x m.
 	  On entry wt specifies the upper triangular matrix J' which is 
-	    the Cholesky factor of (thetaS'S+LD^(-1)L').
+		the Cholesky factor of (thetaS'S+LD^(-1)L').
 	  On exit wt is unchanged.
 
 	col is an integer variable.
 	  On entry col specifies the number of s-vectors (or y-vectors)
-	    stored in the compact L-BFGS formula.
+		stored in the compact L-BFGS formula.
 	  On exit col is unchanged.
 
 	v is a double precision array of dimension 2col.
@@ -3327,22 +3354,22 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 
 	info is an integer variable.
 	  On entry info is unspecified.
-	  On exit info = 0       for normal return,
-	               = nonzero for abnormal return when the system
-	                           to be solved by dtrsl is singular.
+	  On exit info = 0	   for normal return,
+				   = nonzero for abnormal return when the system
+							   to be solved by dtrsl is singular.
 
 	Subprograms called:
 
 	  Linpack ... dtrsl.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -3371,8 +3398,8 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 		return;
 	}
 	
-	/* PART I: solve [  D^(1/2)	       O ] [ p1 ] = [ v1 ] */
-	/*			     [ -L * D^(-1/2)   J ] [ p2 ]   [ v2 ]. */
+	/* PART I: solve [  D^(1/2)		   O ] [ p1 ] = [ v1 ] */
+	/*				 [ -L * D^(-1/2)   J ] [ p2 ]   [ v2 ]. */
 	/* solve Jp2 = v2 + LD^(-1)v1. */
 	p[col + 1] = v[col + 1];
 	for (i = 1; i < col; ++i)
@@ -3400,7 +3427,7 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 	}
 	
 	/* PART II: solve [ -D^(1/2)   D^(-1/2)*L'  ] [ p1 ] = [ p1 ] */
-	/*                [  0		   J'		    ] [ p2 ]   [ p2 ]. */
+	/*				[  0		   J'			] [ p2 ]   [ p2 ]. */
 	/* Solve J^Tp2 = p2. */
 	dtrsl(&wt[wt_offset], m, col, &p[col + 1], 1, info);
 	if (*info != 0)
@@ -3409,7 +3436,7 @@ void bmv(long int m, double* sy, double* wt, long int col, double* v, double* p,
 	}
 	
 	/* Compute p1 = -D^(-1/2)(p1 - D^(-1/2)L'p2) */
-	/*            = -D^(-1/2)p1 + D^(-1)L'p2. */
+	/*			= -D^(-1/2)p1 + D^(-1)L'p2. */
 	for (i = 0; i < col; ++i)
 	{
 		p[i + 1] = -p[i + 1] / sqrt(sy[i + 1 + (i + 1) * sy_dim1]);
@@ -3442,7 +3469,7 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 	  generalized Cauchy point (GCP), defined as the first local
 	  minimizer of the quadratic
 
-	             Q(x + s) = g's + 1/2 s'Bs
+				 Q(x + s) = g's + 1/2 s'Bs
 
 	  along the projected gradient direction P(x-tg,l,u).
 	  The routine returns the GCP in xcp. 
@@ -3465,11 +3492,11 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	nbd is an integer array of dimension n.
 	  On entry nbd represents the type of bounds imposed on the
-	    variables, and must be specified as follows:
-	    nbd(i)=0 if x(i) is unbounded,
-	           1 if x(i) has only a lower bound,
-	           2 if x(i) has both lower and upper bounds, and
-	           3 if x(i) has only an upper bound. 
+		variables, and must be specified as follows:
+		nbd(i)=0 if x(i) is unbounded,
+			   1 if x(i) has only a lower bound,
+			   2 if x(i) has both lower and upper bounds, and
+			   3 if x(i) has only an upper bound. 
 	  On exit nbd is unchanged.
 
 	g is a double precision array of dimension n.
@@ -3479,23 +3506,23 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 	iorder is an integer working array of dimension n.
 	  iorder will be used to store the breakpoints in the piecewise
 	  linear path and free variables encountered. On exit,
-	    iorder(1),...,iorder(nleft) are indices of breakpoints
-	                           which have not been encountered; 
-	    iorder(nleft+1),...,iorder(nbreak) are indices of
-	                                encountered breakpoints; and
-	    iorder(nfree),...,iordern are indices of variables which
-	            have no bound constraits along the search direction.
+		iorder(1),...,iorder(nleft) are indices of breakpoints
+							   which have not been encountered; 
+		iorder(nleft+1),...,iorder(nbreak) are indices of
+									encountered breakpoints; and
+		iorder(nfree),...,iordern are indices of variables which
+				have no bound constraits along the search direction.
 
 	iwhere is an integer array of dimension n.
 	  On entry iwhere indicates only the permanently fixed (iwhere=3)
 	  or free (iwhere= -1) components of x.
 	  On exit iwhere records the status of the current x variables.
 	  iwhere(i)=-3  if x(i) is free and has bounds, but is not moved
-	            0   if x(i) is free and has bounds, and is moved
-	            1   if x(i) is fixed at l(i), and l(i) .ne. u(i)
-	            2   if x(i) is fixed at u(i), and u(i) .ne. l(i)
-	            3   if x(i) is always fixed, i.e.,  u(i)=x(i)=l(i)
-	            -1  if x(i) is always free, i.e., it has no bounds.
+				0   if x(i) is free and has bounds, and is moved
+				1   if x(i) is fixed at l(i), and l(i) .ne. u(i)
+				2   if x(i) is fixed at u(i), and u(i) .ne. l(i)
+				3   if x(i) is always fixed, i.e.,  u(i)=x(i)=l(i)
+				-1  if x(i) is always free, i.e., it has no bounds.
 
 	t is a double precision working array of dimension n. 
 	  t will be used to store the break points.
@@ -3508,17 +3535,17 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	m is an integer variable.
 	  On entry m is the maximum number of variable metric corrections 
-	    used to define the limited memory matrix.
+		used to define the limited memory matrix.
 	  On exit m is unchanged.
 
 	ws, wy, sy, and wt are double precision arrays.
 	  On entry they store information that defines the
-	                        limited memory BFGS matrix:
-	    ws(n,m) stores S, a set of s-vectors;
-	    wy(n,m) stores Y, a set of y-vectors;
-	    sy(m,m) stores S'Y;
-	    wt(m,m) stores the
-	            Cholesky factorization of (theta*S'S+LD^(-1)L').
+							limited memory BFGS matrix:
+		ws(n,m) stores S, a set of s-vectors;
+		wy(n,m) stores Y, a set of y-vectors;
+		sy(m,m) stores S'Y;
+		wt(m,m) stores the
+				Cholesky factorization of (theta*S'S+LD^(-1)L').
 	  On exit these arrays are unchanged.
 
 	theta is a double precision variable.
@@ -3527,12 +3554,12 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	col is an integer variable.
 	  On entry col is the actual number of variable metric
-	    corrections stored so far.
+		corrections stored so far.
 	  On exit col is unchanged.
 
 	head is an integer variable.
 	  On entry head is the location of the first s-vector (or y-vector)
-	    in S (or Y).
+		in S (or Y).
 	  On exit col is unchanged.
 
 	p is a double precision working array of dimension 2m.
@@ -3543,13 +3570,13 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	wbp is a double precision working array of dimension 2m.
 	  wbp will be used to store the row of W corresponding
-	    to a breakpoint.
+		to a breakpoint.
 
 	v is a double precision working array of dimension 2m.
 
 	nseg is an integer variable.
 	  On exit nseg records the number of quadratic segments explored
-	    in searching for the GCP.
+		in searching for the GCP.
 
 	sg and yg are double precision arrays of dimension m.
 	  On entry sg  and yg store S'g and Y'g correspondingly.
@@ -3557,14 +3584,14 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
  
 	iprint is an INTEGER variable that must be set by the user.
 	  It controls the frequency and type of output generated:
-	   iprint<0    no output is generated;
-	   iprint=0    print only one line at the last iteration;
+	   iprint<0	no output is generated;
+	   iprint=0	print only one line at the last iteration;
 	   0<iprint<99 print also f and |proj g| every iprint iterations;
 	   iprint=99   print details of every iteration except n-vectors;
 	   iprint=100  print also the changes of active set and final x;
 	   iprint>100  print details of every iteration including x and g;
 	  When iprint > 0, the file iterate.dat will be created to
-	                   summarize the iteration.
+					   summarize the iteration.
 
 	sbgnrm is a double precision variable.
 	  On entry sbgnrm is the norm of the projected gradient at x.
@@ -3572,9 +3599,9 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	info is an integer variable.
 	  On entry info is 0.
-	  On exit info = 0       for normal return,
-	               = nonzero for abnormal return when the the system
-	                         used in routine bmv is singular.
+	  On exit info = 0	   for normal return,
+				   = nonzero for abnormal return when the the system
+							 used in routine bmv is singular.
 
 	Subprograms called:
  
@@ -3597,13 +3624,13 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 	  (Postscript files of these papers are available via anonymous
 	   ftp to eecs.nwu.edu in the directory pub/lbfgs/lbfgs_bcm.)
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -3649,7 +3676,7 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 
 	/* Check the status of the variables, reset iwhere[i] if necessary;
 	   Compute the Cauchy direction d and the breakpoints t; initialize
-	     the derivative f1 and the vector p = W'd (for theta = 1). */
+		 the derivative f1 and the vector p = W'd (for theta = 1). */
 	if (sbgnrm <= 0.)
 	{
 		if (iprint >= 0)
@@ -3681,8 +3708,8 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 	}
 	
 	/* In the following loop we determine for each variable its bound
-	     status and its breakpoint, and update p accordingly.
-	     Smallest breakpoint is identified. */
+		 status and its breakpoint, and update p accordingly.
+		 Smallest breakpoint is identified. */
 	for (i = 0; i < n; ++i)
 	{
 		neggi = -g[i];
@@ -3784,8 +3811,8 @@ void cauchy(long int n, double* x, double* l, double* u, long int* nbd, double* 
 	}
 	
 	/* The indices of the nonzero components of d are now stored
-	     in iorder(1),...,iorder(nbreak) and iorder(nfree),...,iordern.
-	     The smallest of the nbreak breakpoints is in t(ibkmin)=bkmin. */
+		 in iorder(1),...,iorder(nbreak) and iorder(nfree),...,iordern.
+		 The smallest of the nbreak breakpoints is in t(ibkmin)=bkmin. */
 	if (theta != 1.)
 	{
 		/* Complete the initialization of p for theta != 1. */
@@ -4041,20 +4068,20 @@ void cmprlb(long int n, long int m, double* x, double* g, double* ws, double* wy
 	Subroutine cmprlb 
 
 	  This subroutine computes r=-Z'B(xcp-xk)-Z'g by using 
-	    wa(2m+1)=W'(xcp-x) from subroutine cauchy.
+		wa(2m+1)=W'(xcp-x) from subroutine cauchy.
 
 	Subprograms called:
 
 	  L-BFGS-B Library ... bmv.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -4147,49 +4174,49 @@ void errclb(long int n, long int m, double factr, double *l, double *u, long int
 	************ 
 	*/
 	
-    /* Local variables */
-    static long int i;
+	/* Local variables */
+	static long int i;
 
 	/* Check the input arguments for errors. */
-    if (n <= 0)
+	if (n <= 0)
 	{
 		*task = ERROR_N0;
 	}
 	
-    if (m <= 0)
+	if (m <= 0)
 	{
 		*task = ERROR_M0;
 	}
 	
-    if (factr < 0.)
+	if (factr < 0.)
 	{
 		*task = ERROR_FACTR;
 	}
 	
-    /* Check the validity of the arrays nbd(i), u(i), and l(i). */
-    for (i = 0; i < n; ++i)
+	/* Check the validity of the arrays nbd(i), u(i), and l(i). */
+	for (i = 0; i < n; ++i)
 	{
-        if (nbd[i] < 0 || nbd[i] > 3)
+		if (nbd[i] < 0 || nbd[i] > 3)
 		{
-            /* Return */
-            *task = ERROR_NBD;
-            *info = -6;
-            *k = i;
-        }
+			/* Return */
+			*task = ERROR_NBD;
+			*info = -6;
+			*k = i;
+		}
 		
-        if (nbd[i] == 2)
+		if (nbd[i] == 2)
 		{
-            if (l[i] > u[i])
+			if (l[i] > u[i])
 			{
-                /* Return */
-                *task = ERROR_FEAS;
-                *info = -7;
-                *k = i;
-            }
-        }
-    }
+				/* Return */
+				*task = ERROR_FEAS;
+				*info = -7;
+				*k = i;
+			}
+		}
+	}
 	
-    return;
+	return;
 } // end of errclb function */
 /* ======================= The end of errclb ============================= */
 
@@ -4202,10 +4229,10 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 
 	This subroutine forms  the LEL^T factorization of the indefinite
 
-	  matrix    K = [-D -Y'ZZ'Y/theta     L_a'-R_z'  ]
-	                [L_a -R_z           theta*S'AA'S ]
-	                                               where E = [-I  0]
-	                                                         [ 0  I]
+	  matrix	K = [-D -Y'ZZ'Y/theta	 L_a'-R_z'  ]
+					[L_a -R_z		   theta*S'AA'S ]
+												   where E = [-I  0]
+															 [ 0  I]
 	The matrix K can be shown to be equal to the matrix M^[-1]N
 	  occurring in section 5.1 of [1], as well as to the matrix
 	  Mbar^[-1] Nbar in section 5.3.
@@ -4224,18 +4251,18 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 
 	nenter is an integer variable.
 	  On entry nenter is the number of variables entering the 
-	    free set.
+		free set.
 	  On exit nenter is unchanged. 
 
 	ileave is an integer variable.
 	  On entry indx2(ileave),...,indx2n are the variables leaving
-	    the free set.
+		the free set.
 	  On exit ileave is unchanged. 
 
 	indx2 is an integer array of dimension n.
 	  On entry indx2(1),...,indx2(nenter) are the variables entering
-	    the free set, while indx2(ileave),...,indx2n are the
-	    variables leaving the free set.
+		the free set, while indx2(ileave),...,indx2n are the
+		variables leaving the free set.
 	  On exit indx2 is unchanged. 
 
 	iupdat is an integer variable.
@@ -4249,22 +4276,22 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 	wn is a double precision array of dimension 2m x 2m.
 	  On entry wn is unspecified.
 	  On exit the upper triangle of wn stores the LEL^T factorization
-	    of the 2*col x 2*col indefinite matrix
-	                [-D -Y'ZZ'Y/theta     L_a'-R_z'  ]
-	                [L_a -R_z           theta*S'AA'S ]
+		of the 2*col x 2*col indefinite matrix
+					[-D -Y'ZZ'Y/theta	 L_a'-R_z'  ]
+					[L_a -R_z		   theta*S'AA'S ]
 
 	wn1 is a double precision array of dimension 2m x 2m.
 	  On entry wn1 stores the lower triangular part of 
-	                [Y' ZZ'Y   L_a'+R_z']
-	                [L_a+R_z   S'AA'S   ]
-	    in the previous iteration.
+					[Y' ZZ'Y   L_a'+R_z']
+					[L_a+R_z   S'AA'S   ]
+		in the previous iteration.
 	  On exit wn1 stores the corresponding updated matrices.
 	  The purpose of wn1 is just to store these inner products
 	  so they can be easily updated and inserted into wn.
 
 	m is an integer variable.
 	  On entry m is the maximum number of variable metric corrections
-	    used to define the limited memory matrix.
+		used to define the limited memory matrix.
 	  On exit m is unchanged.
 
 	ws, wy, sy, and wtyy are double precision arrays;
@@ -4272,22 +4299,22 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 	col is an integer variable;
 	head is an integer variable.
 	  On entry they store the information defining the
-	                                     limited memory BFGS matrix:
-	    ws(n,m) stores S, a set of s-vectors;
-	    wy(n,m) stores Y, a set of y-vectors;
-	    sy(m,m) stores S'Y;
-	    wtyy(m,m) stores the Cholesky factorization
-	                              of (theta*S'S+LD^(-1)L')
-	    theta is the scaling factor specifying B_0 = theta I;
-	    col is the number of variable metric corrections stored;
-	    head is the location of the 1st s- (or y-) vector in S (or Y).
+										 limited memory BFGS matrix:
+		ws(n,m) stores S, a set of s-vectors;
+		wy(n,m) stores Y, a set of y-vectors;
+		sy(m,m) stores S'Y;
+		wtyy(m,m) stores the Cholesky factorization
+								  of (theta*S'S+LD^(-1)L')
+		theta is the scaling factor specifying B_0 = theta I;
+		col is the number of variable metric corrections stored;
+		head is the location of the 1st s- (or y-) vector in S (or Y).
 	  On exit they are unchanged.
 
 	info is an integer variable.
 	  On entry info is unspecified.
 	  On exit info =  0 for normal return;
-	               = -1 when the 1st Cholesky factorization failed;
-	               = -2 when the 2st Cholesky factorization failed.
+				   = -1 when the 1st Cholesky factorization failed;
+				   = -2 when the 2st Cholesky factorization failed.
 
 	Subprograms called:
 
@@ -4307,13 +4334,13 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 	  (Postscript files of these papers are available via anonymous
 	   ftp to eecs.nwu.edu in the directory pub/lbfgs/lbfgs_bcm.)
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -4349,10 +4376,10 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 	wn -= wn_offset;
 
 	/* Form the lower triangular part of
-	          WN1 = [Y' ZZ'Y   L_a'+R_z'] 
-	                [L_a+R_z   S'AA'S   ]
+			  WN1 = [Y' ZZ'Y   L_a'+R_z'] 
+					[L_a+R_z   S'AA'S   ]
 	   where L_a is the strictly lower triangular part of S'AA'Y
-	         R_z is the upper triangular part of S'ZZ'Y. */
+			 R_z is the upper triangular part of S'ZZ'Y. */
 	
 	if (updatd)
 	{
@@ -4506,8 +4533,8 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 		ipntr = ipntr % m + 1;
 	}
 	
-	/* Form the upper triangle of WN = [D+Y' ZZ'Y/theta    -L_a'+R_z'] */
-	/*                                 [-L_a +R_z		 S'AA'S*theta] */
+	/* Form the upper triangle of WN = [D+Y' ZZ'Y/theta	-L_a'+R_z'] */
+	/*								 [-L_a +R_z		 S'AA'S*theta] */
 	m2 = m << 1;
 	for (iy = 1; iy <= col; ++iy)
 	{
@@ -4534,7 +4561,7 @@ void formk(long int n, long int nsub, long int* ind, long int nenter, long int i
 	}
 	
 	/* Form the upper triangle of WN= [  LL'			L^-1(-L_a' + R_z')] */
-	/*								  [(-L_a + R_z)L'^-1    S'AA'S * theta] */
+	/*								  [(-L_a + R_z)L'^-1	S'AA'S * theta] */
 	/* First Cholesky factor (1,1) block of wn to get LL' */
 	/* with L' stored in the upper triangle of wn. */
 	dpofa(&wn[wn_offset], m2, col, info);
@@ -4582,22 +4609,22 @@ void formt(long int m, double* wt, double* sy, double* ss, long int col, double 
 	Subroutine formt
 
 	  This subroutine forms the upper half of the pos. def. and symm.
-	    T = theta*SS + L*D^(-1)*L', stores T in the upper triangle
-	    of the array wt, and performs the Cholesky factorization of T
-	    to produce J*J', with J' stored in the upper triangle of wt.
+		T = theta*SS + L*D^(-1)*L', stores T in the upper triangle
+		of the array wt, and performs the Cholesky factorization of T
+		to produce J*J', with J' stored in the upper triangle of wt.
 
 	Subprograms called:
 
 	  Linpack ... dpofa.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -4623,7 +4650,7 @@ void formt(long int m, double* wt, double* sy, double* ss, long int col, double 
 	wt -= wt_offset;
 
 	/* Form the upper half of  T = theta*SS + L*D^(-1)*L',
-	     store T in the upper triangle of the array wt. */
+		 store T in the upper triangle of the array wt. */
 	for (j = 0; j < col; ++j)
 	{
 		wt[(j + 1) * wt_dim1 + 1] = theta * ss[(j + 1) * ss_dim1 + 1];
@@ -4672,25 +4699,25 @@ void freev(long int n, long int* nfree, long int* index, long int* nenter, long 
 	  for i=1,...,nfree, index(i) are the indices of free variables
 	  for i=nfree+1,...,n, index(i) are the indices of bound variables
 	  On entry after the first iteration, index gives 
-	    the free variables at the previous iteration.
+		the free variables at the previous iteration.
 	  On exit it gives the free variables based on the determination
-	    in cauchy using the array iwhere.
+		in cauchy using the array iwhere.
 
 	indx2 is an integer array of dimension n
 	  On entry indx2 is unspecified.
 	  On exit with iter>0, indx2 indicates which variables
-	     have changed status since the previous iteration.
+		 have changed status since the previous iteration.
 	  For i= 1,...,nenter, indx2(i) have changed from bound to free.
 	  For i= ileave+1,...,n, indx2(i) have changed from free to bound.
  
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -4785,30 +4812,30 @@ void hpsolb(long int n, double* t, long int* iorder, long int iheap)
 	t is a double precision array of dimension n.
 	  On entry t stores the elements to be sorted,
 	  On exit tn stores the least elements of t, and t(1) to t(n-1)
-	    stores the remaining elements in the form of a heap.
+		stores the remaining elements in the form of a heap.
 
 	iorder is an integer array of dimension n.
 	  On entry iorder(i) is the index of t(i).
 	  On exit iorder(i) is still the index of t(i), but iorder may be
-	    permuted in accordance with t.
+		permuted in accordance with t.
 
 	iheap is an integer variable specifying the task.
 	  On entry iheap should be set as follows:
-	    iheap .eq. 0 if t(1) to tn is not in the form of a heap,
-	    iheap .ne. 0 if otherwise.
+		iheap .eq. 0 if t(1) to tn is not in the form of a heap,
+		iheap .ne. 0 if otherwise.
 	  On exit iheap is unchanged.
 
 
 	References:
 	  Algorithm 232 of CACM (J. W. J. Williams): HEAPSORT.
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 	************
@@ -4909,13 +4936,13 @@ void lnsrlb(long int n, double* l, double* u, long int* nbd, double* x, double* 
 	  Linpack ... dtrsl, ddot.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -5025,9 +5052,19 @@ L556:
 		}
 		else
 		{
+			/* take step and prevent rounding error beyond bound */
 			for (i = 0; i < n; ++i)
 			{
 				x[i] = *stp * d__[i] + t[i];
+				if (nbd[i] == 1 || nbd[i] == 2)
+				{
+					x[i] = fmax(x[i], l[i]);
+				}
+
+				if (nbd[i] == 2 || nbd[i] == 3)
+				{
+					x[i] = fmin(x[i], u[i]);
+				}
 			}
 		}
 	}
@@ -5048,20 +5085,20 @@ void matupd(long int n, long int m, double* ws, double* wy, double* sy, double* 
 	Subroutine matupd
 
 	  This subroutine updates matrices WS and WY, and forms the
-	    middle matrix in B.
+		middle matrix in B.
 
 	Subprograms called:
 
 	  Linpack ... dcopy, ddot.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -5325,17 +5362,17 @@ void prn3lb(long int n, double* x, double f, long int task, long int iprint, lon
 	
 	if (iprint >= 0)
 	{
-		printf("           * * * \n");
+		printf("		   * * * \n");
 		printf("Tit   = total number of iterations\n");
 		printf("Tnf   = total number of function evaluations\n");
 		printf("Tnint = total number of segments explored during Cauchy searches\n");
 		printf("Skip  = number of BFGS updates skipped\n");
 		printf("Nact  = number of active bounds at final generalized Cauchy point\n");
 		printf("Projg = norm of the final projected gradient\n");
-		printf("F     = final function value\n");
-		printf("           * * * \n");
+		printf("F	 = final function value\n");
+		printf("		   * * * \n");
 
-		printf("   N    Tit   Tnf  Tnint  Skip  Nact      Projg        F\n");
+		printf("   N	Tit   Tnf  Tnint  Skip  Nact	  Projg		F\n");
 		printf("%5ld %5ld %5ld %5ld %5ld %5ld\t%6.2e %9.5e\n", n, iter, nfgv, nintol, nskip, nact, sbgnrm, f);
 		
 		if (iprint >= 100)
@@ -5379,7 +5416,7 @@ L999:
 				printf(" Derivative >= 0, backtracking line search impossible.\n");
 				printf("  Previous x, f and g restored.\n");
 				printf(" Possible causes: 1 error in function or gradient evaluation;\n");
-				printf("                  2 rounding errors dominate computation.\n");
+				printf("				  2 rounding errors dominate computation.\n");
 			}
 			
 			if (info == -5)
@@ -5409,15 +5446,15 @@ L999:
 				printf(" Line search cannot locate an adequate point after 20 function\n");
 				printf("  and gradient evaluations.  Previous x, f and g restored.\n");
 				printf(" Possible causes: 1 error in function or gradient evaluation;\n");
-				printf("                  2 rounding error dominate computation.\n");
+				printf("				  2 rounding error dominate computation.\n");
 			}
 		}
 
 		if (iprint >= 1)
 		{
-			printf("Cauchy                time %.3e seconds.\n", cachyt);
+			printf("Cauchy				time %.3e seconds.\n", cachyt);
 			printf("Subspace minimization time %.3e seconds.\n", sbtime);
-			printf("Line search           time %.3e seconds.\n", lnscht);
+			printf("Line search		   time %.3e seconds.\n", lnscht);
 		}
 		printf(" Total User time %.3e seconds.\n", time);
 	}
@@ -5436,13 +5473,13 @@ void projgr(long int n, double* l, double* u, long int* nbd, double* x, double* 
 	  gradient.
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -5497,21 +5534,21 @@ void subsm(long int n, long int m, long int nsub, long int* ind, double* l, doub
 
 	  (P)   min Q(x) = r'(x-xcp) + 1/2 (x-xcp)' B (x-xcp)
 
-	        subject to l<=x<=u
-	                  x_i=xcp_i for all i in A(xcp)
-	                
+			subject to l<=x<=u
+					  x_i=xcp_i for all i in A(xcp)
+					
 	  along the subspace unconstrained Newton direction 
 	  
-	     d = -(Z'BZ)^(-1) r.
+		 d = -(Z'BZ)^(-1) r.
 
 	  The formula for the Newton direction, given the L-BFGS matrix
 	  and the Sherman-Morrison formula, is
 
-	     d = (1/theta)r + (1/theta*2) Z'WK^(-1)W'Z r.
+		 d = (1/theta)r + (1/theta*2) Z'WK^(-1)W'Z r.
  
 	  where
-	            K = [-D -Y'ZZ'Y/theta     L_a'-R_z'  ]
-	                [L_a -R_z           theta*S'AA'S ]
+				K = [-D -Y'ZZ'Y/theta	 L_a'-R_z'  ]
+					[L_a -R_z		   theta*S'AA'S ]
 
 	Note that this procedure for computing d differs 
 	from that described in [1]. One can show that the matrix K is
@@ -5523,7 +5560,7 @@ void subsm(long int n, long int m, long int nsub, long int* ind, double* l, doub
 
 	m is an integer variable.
 	  On entry m is the maximum number of variable metric corrections
-	    used to define the limited memory matrix.
+		used to define the limited memory matrix.
 	  On exit m is unchanged.
 
 	nsub is an integer variable.
@@ -5544,30 +5581,30 @@ void subsm(long int n, long int m, long int nsub, long int* ind, double* l, doub
 
 	nbd is a integer array of dimension n.
 	  On entry nbd represents the type of bounds imposed on the
-	    variables, and must be specified as follows:
-	    nbd(i)=0 if x(i) is unbounded,
-	           1 if x(i) has only a lower bound,
-	           2 if x(i) has both lower and upper bounds, and
-	           3 if x(i) has only an upper bound.
+		variables, and must be specified as follows:
+		nbd(i)=0 if x(i) is unbounded,
+			   1 if x(i) has only a lower bound,
+			   2 if x(i) has both lower and upper bounds, and
+			   3 if x(i) has only an upper bound.
 	  On exit nbd is unchanged.
 
 	x is a double precision array of dimension n.
 	  On entry x specifies the Cauchy point xcp. 
 	  On exit x(i) is the minimizer of Q over the subspace of
-	                                                   free variables. 
+													   free variables. 
 
 	d is a double precision array of dimension n.
 	  On entry d is the reduced gradient of Q at xcp.
 	  On exit d is the Newton direction of Q. 
 
-    xp is a double precision array of dimension n.
+	xp is a double precision array of dimension n.
 	  used to safeguard the projected Newton direction 
 
-    xx is a double precision array of dimension n
+	xx is a double precision array of dimension n
 	  On entry it holds the current iterate
 	  On output it is unchanged
 
-    gg is a double precision array of dimension n
+	gg is a double precision array of dimension n
 	  On entry it holds the gradient at the current iterate
 	  On output it is unchanged
 
@@ -5576,48 +5613,48 @@ void subsm(long int n, long int m, long int nsub, long int* ind, double* l, doub
 	col is an integer variable;
 	head is an integer variable.
 	  On entry they store the information defining the
-	                                     limited memory BFGS matrix:
-	    ws(n,m) stores S, a set of s-vectors;
-	    wy(n,m) stores Y, a set of y-vectors;
-	    theta is the scaling factor specifying B_0 = theta I;
-	    col is the number of variable metric corrections stored;
-	    head is the location of the 1st s- (or y-) vector in S (or Y).
+										 limited memory BFGS matrix:
+		ws(n,m) stores S, a set of s-vectors;
+		wy(n,m) stores Y, a set of y-vectors;
+		theta is the scaling factor specifying B_0 = theta I;
+		col is the number of variable metric corrections stored;
+		head is the location of the 1st s- (or y-) vector in S (or Y).
 	  On exit they are unchanged.
 
 	iword is an integer variable.
 	  On entry iword is unspecified.
 	  On exit iword specifies the status of the subspace solution.
-	    iword = 0 if the solution is in the box,
-	            1 if some bound is encountered.
+		iword = 0 if the solution is in the box,
+				1 if some bound is encountered.
 
 	wv is a double precision working array of dimension 2m.
 
 	wn is a double precision array of dimension 2m x 2m.
 	  On entry the upper triangle of wn stores the LEL^T factorization
-	    of the indefinite matrix
+		of the indefinite matrix
 
-	         K = [-D -Y'ZZ'Y/theta     L_a'-R_z'  ]
-	             [L_a -R_z           theta*S'AA'S ]
-	                                               where E = [-I  0]
-	                                                         [ 0  I]
+			 K = [-D -Y'ZZ'Y/theta	 L_a'-R_z'  ]
+				 [L_a -R_z		   theta*S'AA'S ]
+												   where E = [-I  0]
+															 [ 0  I]
 	  On exit wn is unchanged.
 
 	iprint is an INTEGER variable that must be set by the user.
 	  It controls the frequency and type of output generated:
-	   iprint<0    no output is generated;
-	   iprint=0    print only one line at the last iteration;
+	   iprint<0	no output is generated;
+	   iprint=0	print only one line at the last iteration;
 	   0<iprint<99 print also f and |proj g| every iprint iterations;
 	   iprint=99   print details of every iteration except n-vectors;
 	   iprint=100  print also the changes of active set and final x;
 	   iprint>100  print details of every iteration including x and g;
 	  When iprint > 0, the file iterate.dat will be created to
-	                   summarize the iteration.
+					   summarize the iteration.
 
 	info is an integer variable.
 	  On entry info is unspecified.
-	  On exit info = 0       for normal return,
-	               = nonzero for abnormal return 
-	                             when the matrix K is ill-conditioned.
+	  On exit info = 0	   for normal return,
+				   = nonzero for abnormal return 
+								 when the matrix K is ill-conditioned.
 
 	Subprograms called:
 
@@ -5632,13 +5669,13 @@ void subsm(long int n, long int m, long int nsub, long int* ind, double* l, doub
 
 
 
-	                      *  *  *
+						  *  *  *
 
 	NEOS, November 1994. (Latest revision June 1996.)
 	Optimization Technology Center.
 	Argonne National Laboratory and Northwestern University.
 	Written by
-	                   Ciyou Zhu
+					   Ciyou Zhu
 	in collaboration with R.H. Byrd, P. Lu-Chen and J. Nocedal.
 
 
@@ -5904,7 +5941,7 @@ void dcsrch(double* f, double* g, double* stp, double ftol, double gtol, double 
 	endpoints stx and sty. The interval is initially chosen 
 	so that it contains a minimizer of the modified function
 
-	      psi(stp) = f(stp) - f(0) - ftol*stp*f'(0).
+		  psi(stp) = f(stp) - f(0) - ftol*stp*f'(0).
 
 	If psi(stp) <= 0 and f'(stp) >= 0 for some step, then the
 	interval is chosen so that it contains a minimizer of f. 
@@ -5912,11 +5949,11 @@ void dcsrch(double* f, double* g, double* stp, double ftol, double gtol, double 
 	The algorithm is designed to find a step that satisfies 
 	the sufficient decrease condition 
 
-	      f(stp) <= f(0) + ftol*stp*f'(0),
+		  f(stp) <= f(0) + ftol*stp*f'(0),
 
 	and the curvature condition
 
-	      abs(f'(stp)) <= gtol*abs(f'(0)).
+		  abs(f'(stp)) <= gtol*abs(f'(0)).
 
 	If ftol is less than gtol and if, for example, the function
 	is bounded below, then there is always a step which satisfies
@@ -5932,84 +5969,84 @@ void dcsrch(double* f, double* g, double* stp, double ftol, double gtol, double 
 	10 continue
 	   call dcsrch( ... )
 	   if (task .eq. 'FG') then
-	      Evaluate the function and the gradient at stp 
-	      goto 10
-	      end if
+		  Evaluate the function and the gradient at stp 
+		  goto 10
+		  end if
 
 	NOTE: The user must no alter work arrays between calls.
 
 	The subroutine statement is
 
 	   subroutine dcsrch(f,g,stp,ftol,gtol,xtol,stpmin,stpmax,
-	                     task,isave,dsave)
+						 task,isave,dsave)
 	where
 
 	  f is a double precision variable.
-	    On initial entry f is the value of the function at 0.
-	       On subsequent entries f is the value of the 
-	       function at stp.
-	    On exit f is the value of the function at stp.
+		On initial entry f is the value of the function at 0.
+		   On subsequent entries f is the value of the 
+		   function at stp.
+		On exit f is the value of the function at stp.
 
 	  g is a double precision variable.
-	    On initial entry g is the derivative of the function at 0.
-	       On subsequent entries g is the derivative of the 
-	       function at stp.
-	    On exit g is the derivative of the function at stp.
+		On initial entry g is the derivative of the function at 0.
+		   On subsequent entries g is the derivative of the 
+		   function at stp.
+		On exit g is the derivative of the function at stp.
 
 	  stp is a double precision variable. 
-	    On entry stp is the current estimate of a satisfactory 
-	       step. On initial entry, a positive initial estimate 
-	       must be provided. 
-	    On exit stp is the current estimate of a satisfactory step
-	       if task = 'FG'. If task = 'CONV' then stp satisfies
-	       the sufficient decrease and curvature condition.
+		On entry stp is the current estimate of a satisfactory 
+		   step. On initial entry, a positive initial estimate 
+		   must be provided. 
+		On exit stp is the current estimate of a satisfactory step
+		   if task = 'FG'. If task = 'CONV' then stp satisfies
+		   the sufficient decrease and curvature condition.
 
 	  ftol is a double precision variable.
-	    On entry ftol specifies a nonnegative tolerance for the 
-	       sufficient decrease condition.
-	    On exit ftol is unchanged.
+		On entry ftol specifies a nonnegative tolerance for the 
+		   sufficient decrease condition.
+		On exit ftol is unchanged.
 
 	  gtol is a double precision variable.
-	    On entry gtol specifies a nonnegative tolerance for the 
-	       curvature condition. 
-	    On exit gtol is unchanged.
+		On entry gtol specifies a nonnegative tolerance for the 
+		   curvature condition. 
+		On exit gtol is unchanged.
 
 	  xtol is a double precision variable.
-	    On entry xtol specifies a nonnegative relative tolerance
-	       for an acceptable step. The subroutine exits with a
-	       warning if the relative difference between sty and stx
-	       is less than xtol.
-	    On exit xtol is unchanged.
+		On entry xtol specifies a nonnegative relative tolerance
+		   for an acceptable step. The subroutine exits with a
+		   warning if the relative difference between sty and stx
+		   is less than xtol.
+		On exit xtol is unchanged.
 
 	  stpmin is a double precision variable.
-	    On entry stpmin is a nonnegative lower bound for the step.
-	    On exit stpmin is unchanged.
+		On entry stpmin is a nonnegative lower bound for the step.
+		On exit stpmin is unchanged.
 
 	  stpmax is a double precision variable.
-	    On entry stpmax is a nonnegative upper bound for the step.
-	    On exit stpmax is unchanged.
+		On entry stpmax is a nonnegative upper bound for the step.
+		On exit stpmax is unchanged.
 
 	  task is a character variable of length at least 60.
-	    On initial entry task must be set to 'START'.
-	    On exit task indicates the required action:
+		On initial entry task must be set to 'START'.
+		On exit task indicates the required action:
 
-	       If task(1:2) = 'FG' then evaluate the function and 
-	       derivative at stp and call dcsrch again.
+		   If task(1:2) = 'FG' then evaluate the function and 
+		   derivative at stp and call dcsrch again.
 
-	       If task(1:4) = 'CONV' then the search is successful.
+		   If task(1:4) = 'CONV' then the search is successful.
 
-	       If task(1:4) = 'WARN' then the subroutine is not able
-	       to satisfy the convergence conditions. The exit value of
-	       stp contains the best point found during the search.
+		   If task(1:4) = 'WARN' then the subroutine is not able
+		   to satisfy the convergence conditions. The exit value of
+		   stp contains the best point found during the search.
 
-	       If task(1:5) = 'ERROR' then there is an error in the
-	       input arguments.
+		   If task(1:5) = 'ERROR' then there is an error in the
+		   input arguments.
 
-	    On exit with convergence, a warning or an error, the
-	       variable task contains additional information.
+		On exit with convergence, a warning or an error, the
+		   variable task contains additional information.
 
 	  isave is an integer work array of dimension 2.
-	    
+		
 	  dsave is a double precision work array of dimension 13.
 
 	Subprograms called
@@ -6258,7 +6295,7 @@ void dcstep(double* stx, double* fx, double* dx, double* sty, double* fy, double
 	The parameter stp contains the current step. 
 	The subroutine assumes that if brackt is set to .true. then
 
-	      min(stx,sty) < stp < max(stx,sty),
+		  min(stx,sty) < stp < max(stx,sty),
 
 	and that the derivative at stx is negative in the direction 
 	of the step.
@@ -6266,66 +6303,66 @@ void dcstep(double* stx, double* fx, double* dx, double* sty, double* fy, double
 	The subroutine statement is
 
 	  subroutine dcstep(stx,fx,dx,sty,fy,dy,stp,fp,dp,brackt,
-	                    stpmin,stpmax)
+						stpmin,stpmax)
 
 	where
 
 	  stx is a double precision variable.
-	    On entry stx is the best step obtained so far and is an
-	       endpoint of the interval that contains the minimizer. 
-	    On exit stx is the updated best step.
+		On entry stx is the best step obtained so far and is an
+		   endpoint of the interval that contains the minimizer. 
+		On exit stx is the updated best step.
 
 	  fx is a double precision variable.
-	    On entry fx is the function at stx.
-	    On exit fx is the function at stx.
+		On entry fx is the function at stx.
+		On exit fx is the function at stx.
 
 	  dx is a double precision variable.
-	    On entry dx is the derivative of the function at 
-	       stx. The derivative must be negative in the direction of 
-	       the step, that is, dx and stp - stx must have opposite 
-	       signs.
-	    On exit dx is the derivative of the function at stx.
+		On entry dx is the derivative of the function at 
+		   stx. The derivative must be negative in the direction of 
+		   the step, that is, dx and stp - stx must have opposite 
+		   signs.
+		On exit dx is the derivative of the function at stx.
 
 	  sty is a double precision variable.
-	    On entry sty is the second endpoint of the interval that 
-	       contains the minimizer.
-	    On exit sty is the updated endpoint of the interval that 
-	       contains the minimizer.
+		On entry sty is the second endpoint of the interval that 
+		   contains the minimizer.
+		On exit sty is the updated endpoint of the interval that 
+		   contains the minimizer.
 
 	  fy is a double precision variable.
-	    On entry fy is the function at sty.
-	    On exit fy is the function at sty.
+		On entry fy is the function at sty.
+		On exit fy is the function at sty.
 
 	  dy is a double precision variable.
-	    On entry dy is the derivative of the function at sty.
-	    On exit dy is the derivative of the function at the exit sty.
+		On entry dy is the derivative of the function at sty.
+		On exit dy is the derivative of the function at the exit sty.
 
 	  stp is a double precision variable.
-	    On entry stp is the current step. If brackt is set to .true.
-	       then on input stp must be between stx and sty. 
-	    On exit stp is a new trial step.
+		On entry stp is the current step. If brackt is set to .true.
+		   then on input stp must be between stx and sty. 
+		On exit stp is a new trial step.
 
 	  fp is a double precision variable.
-	    On entry fp is the function at stp
-	    On exit fp is unchanged.
+		On entry fp is the function at stp
+		On exit fp is unchanged.
 
 	  dp is a double precision variable.
-	    On entry dp is the the derivative of the function at stp.
-	    On exit dp is unchanged.
+		On entry dp is the the derivative of the function at stp.
+		On exit dp is unchanged.
 
 	  brackt is an logical variable.
-	    On entry brackt specifies if a minimizer has been bracketed.
-	       Initially brackt must be set to .false.
-	    On exit brackt specifies if a minimizer has been bracketed.
-	       When a minimizer is bracketed brackt is set to .true.
+		On entry brackt specifies if a minimizer has been bracketed.
+		   Initially brackt must be set to .false.
+		On exit brackt specifies if a minimizer has been bracketed.
+		   When a minimizer is bracketed brackt is set to .true.
 
 	  stpmin is a double precision variable.
-	    On entry stpmin is a lower bound for the step.
-	    On exit stpmin is unchanged.
+		On entry stpmin is a lower bound for the step.
+		On exit stpmin is unchanged.
 
 	  stpmax is a double precision variable.
-	    On entry stpmax is an upper bound for the step.
-	    On exit stpmax is unchanged.
+		On entry stpmax is an upper bound for the step.
+		On exit stpmax is unchanged.
 
 	MINPACK-1 Project. June 1983
 	Argonne National Laboratory. 
@@ -6846,27 +6883,27 @@ void dpofa(double* a, long int lda, long int n, long int* info)
 
 	on entry
 
-	   a       double precision(lda, n)
-	           the symmetric matrix to be factored.  only the
-	           diagonal and upper triangle are used.
+	   a	   double precision(lda, n)
+			   the symmetric matrix to be factored.  only the
+			   diagonal and upper triangle are used.
 
-	   lda     integer
-	           the leading dimension of the array  a .
+	   lda	 integer
+			   the leading dimension of the array  a .
 
-	   n       integer
-	           the order of the matrix  a .
+	   n	   integer
+			   the order of the matrix  a .
 
 	on return
 
-	   a       an upper triangular matrix  r  so that  a = trans(r)*r
-	           where  trans(r)  is the transpose.
-	           the strict lower triangle is unaltered.
-	           if  info .ne. 0 , the factorization is not complete.
+	   a	   an upper triangular matrix  r  so that  a = trans(r)*r
+			   where  trans(r)  is the transpose.
+			   the strict lower triangle is unaltered.
+			   if  info .ne. 0 , the factorization is not complete.
 
-	   info    integer
-	           = 0  for normal return.
-	           = k  signals an error condition.  the leading minor
-	                of order  k  is not positive definite.
+	   info	integer
+			   = 0  for normal return.
+			   = k  signals an error condition.  the leading minor
+					of order  k  is not positive definite.
 
 	**********
 	*/
@@ -6925,48 +6962,48 @@ void dtrsl(double* t, long int ldt, long int n, double* b, long int job, long in
 
 	dtrsl solves systems of the form
 
-	              t * x = b
+				  t * x = b
 	or
-	              trans(t) * x = b
+				  trans(t) * x = b
 
 	where t is a triangular matrix of order n. here trans(t)
 	denotes the transpose of the matrix t.
 
 	on entry
 
-	    t         double precision(ldt,n)
-	              t contains the matrix of the system. the zero
-	              elements of the matrix are not referenced, and
-	              the corresponding elements of the array can be
-	              used to store other information.
+		t		 double precision(ldt,n)
+				  t contains the matrix of the system. the zero
+				  elements of the matrix are not referenced, and
+				  the corresponding elements of the array can be
+				  used to store other information.
 
-	    ldt       integer
-	              ldt is the leading dimension of the array t.
+		ldt	   integer
+				  ldt is the leading dimension of the array t.
 
-	    n         integer
-	              n is the order of the system.
+		n		 integer
+				  n is the order of the system.
 
-	    b         double precision(n).
-	              b contains the right hand side of the system.
+		b		 double precision(n).
+				  b contains the right hand side of the system.
 
-	    job       integer
-	              job specifies what kind of system is to be solved.
-	              if job is
+		job	   integer
+				  job specifies what kind of system is to be solved.
+				  if job is
 
-	                   00   solve t * x = b, t lower triangular,
-	                   01   solve t * x = b, t upper triangular,
-	                   10   solve trans(t) * x = b, t lower triangular,
-	                   11   solve trans(t) * x = b, t upper triangular.
+					   00   solve t * x = b, t lower triangular,
+					   01   solve t * x = b, t upper triangular,
+					   10   solve trans(t) * x = b, t lower triangular,
+					   11   solve trans(t) * x = b, t upper triangular.
 
 	on return
 
-	    b         b contains the solution, if info .eq. 0.
-	              otherwise b is unaltered.
+		b		 b contains the solution, if info .eq. 0.
+				  otherwise b is unaltered.
 
-	    info      integer
-	              info contains zero if the system is nonsingular.
-	              otherwise info contains the index of
-	              the first zero diagonal element of t.
+		info	  integer
+				  info contains zero if the system is nonsingular.
+				  otherwise info contains the index of
+				  the first zero diagonal element of t.
 
 	**********
 	*/
@@ -7090,10 +7127,10 @@ void timer(double *ttime)
 {
 	/* This routine computes cpu time */
 	
-    clock_t temp;
+	clock_t temp;
 
-    temp    = clock();
-    *ttime  = ((double) temp) / CLOCKS_PER_SEC;
+	temp	= clock();
+	*ttime  = ((double) temp) / CLOCKS_PER_SEC;
 	
-    return;
+	return;
 } // end of timer function */
