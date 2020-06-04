@@ -1,9 +1,171 @@
 import argparse
 import json
 import os
-import shutil
 
 from . import model
+
+
+def calc_generator_discriminator_conv_layer_properties(
+        conv_num_filters, conv_kernel_sizes, conv_strides, depth):
+    """Calculates generator and discriminator conv layer properties.
+
+    Args:
+        num_filters: list, nested list of ints of the number of filters
+            for each conv layer.
+        kernel_sizes: list, nested list of ints of the kernel sizes for
+            each conv layer.
+        strides: list, nested list of ints of the strides for each conv
+            layer.
+        depth: int, depth dimension of images.
+
+    Returns:
+        Nested lists of conv layer properties for both generator and
+            discriminator.
+    """
+    def make_generator(num_filters, kernel_sizes, strides, depth):
+        """Calculates generator conv layer properties.
+
+        Args:
+            num_filters: list, nested list of ints of the number of filters
+                for each conv layer.
+            kernel_sizes: list, nested list of ints of the kernel sizes for
+                each conv layer.
+            strides: list, nested list of ints of the strides for each conv
+                layer.
+            depth: int, depth dimension of images.
+
+        Returns:
+            Nested list of conv layer properties for generator.
+        """
+        # Get the number of growths.
+        num_growths = len(num_filters) - 1
+
+        # Make base block.
+        in_out = num_filters[0]
+        base = [
+            [kernel_sizes[0][i]] * 2 + in_out + [strides[0][i]] * 2
+            for i in range(len(num_filters[0]))
+        ]
+        blocks = [base]
+
+        # Add growth blocks.
+        for i in range(1, num_growths + 1):
+            in_out = [[blocks[i - 1][-1][-3], num_filters[i][0]]]
+            block = [[kernel_sizes[i][0]] * 2 + in_out[0] + [strides[i][0]] * 2]
+            for j in range(1, len(num_filters[i])):
+                in_out.append([block[-1][-3], num_filters[i][j]])
+                block.append(
+                    [kernel_sizes[i][j]] * 2 + in_out[j] + [strides[i][j]] * 2
+                )
+            blocks.append(block)
+
+        # Add toRBG conv.
+        blocks[-1].append([1, 1, blocks[-1][-1][-3], depth] + [1] * 2)
+
+        return blocks
+
+    def make_discriminator(generator):
+        """Calculates discriminator conv layer properties.
+
+        Args:
+            generator: list, nested list of conv layer properties for
+                generator.
+
+        Returns:
+            Nested list of conv layer properties for discriminator.
+        """
+        # Reverse generator.
+        discriminator = generator[::-1]
+
+        # Reverse input and output shapes.
+        discriminator = [
+            [
+                conv[0:2] + conv[2:4][::-1] + conv[-2:]
+                for conv in block[::-1]
+            ]
+            for block in discriminator
+        ]
+
+        return discriminator
+
+    # Calculate conv layer properties for generator using args.
+    generator = make_generator(
+        conv_num_filters, conv_kernel_sizes, conv_strides, depth
+    )
+
+    # Calculate conv layer properties for discriminator using generator
+    # properties.
+    discriminator = make_discriminator(generator)
+
+    return generator, discriminator
+
+
+def split_up_generator_conv_layer_properties(
+        generator, num_filters, strides, depth):
+    """Splits up generator conv layer properties into lists.
+
+    Args:
+        generator: list, nested list of conv layer properties for
+            generator.
+        num_filters: list, nested list of ints of the number of filters
+            for each conv layer.
+        strides: list, nested list of ints of the strides for each conv
+            layer.
+        depth: int, depth dimension of images.
+
+    Returns:
+        Nested lists of conv layer properties for generator.
+    """
+    generator_base_conv_blocks = [generator[0][0:len(num_filters[0])]]
+
+    generator_growth_conv_blocks = []
+    if len(num_filters) > 1:
+        generator_growth_conv_blocks = generator[1:-1] + [generator[-1][:-1]]
+
+    generator_to_rgb_layers = [
+        [[1] * 2 + [num_filters[i][0]] + [depth] + [strides[i][0]] * 2]
+        for i in range(len(num_filters))
+    ]
+
+    return (generator_base_conv_blocks,
+            generator_growth_conv_blocks,
+            generator_to_rgb_layers)
+
+
+def split_up_discriminator_conv_layer_properties(
+        discriminator, num_filters, strides, depth):
+    """Splits up discriminator conv layer properties into lists.
+
+    Args:
+        discriminator: list, nested list of conv layer properties for
+            discriminator.
+        num_filters: list, nested list of ints of the number of filters
+            for each conv layer.
+        strides: list, nested list of ints of the strides for each conv
+            layer.
+        depth: int, depth dimension of images.
+
+    Returns:
+        Nested lists of conv layer properties for discriminator.
+    """
+    discriminator_from_rgb_layers = [
+        [[1] * 2 + [depth] + [num_filters[i][0]] + [strides[i][0]] * 2]
+        for i in range(len(num_filters))
+    ]
+
+    if len(num_filters) > 1:
+        discriminator_base_conv_blocks = [discriminator[-1]]
+    else:
+        discriminator_base_conv_blocks = [discriminator[-1][1:]]
+
+    discriminator_growth_conv_blocks = []
+    if len(num_filters) > 1:
+        discriminator_growth_conv_blocks = [discriminator[0][1:]] + discriminator[1:-1]
+        discriminator_growth_conv_blocks = discriminator_growth_conv_blocks[::-1]
+
+    return (discriminator_from_rgb_layers,
+            discriminator_base_conv_blocks,
+            discriminator_growth_conv_blocks)
 
 
 if __name__ == "__main__":
@@ -92,43 +254,25 @@ if __name__ == "__main__":
 
     # Shared parameters.
     parser.add_argument(
-        "--base_num_filters",
-        help="Number of filters for base conv layers.",
-        type=str,
-        default="512,512"
-    )
-    parser.add_argument(
-        "--base_kernel_sizes",
-        help="Kernel sizes for base conv layers.",
-        type=str,
-        default="4,3"
-    )
-    parser.add_argument(
-        "--base_strides",
-        help="Strides for base conv layers.",
-        type=str,
-        default="1,1"
-    )
-    parser.add_argument(
         "--num_steps_until_growth",
         help="Number of steps until layer added to generator & discriminator.",
         type=int,
         default=100
     )
     parser.add_argument(
-        "--growth_num_filters",
+        "--conv_num_filters",
         help="Number of filters for growth conv layers.",
         type=str,
         default="512,512;512,512"
     )
     parser.add_argument(
-        "--growth_kernel_sizes",
+        "--conv_kernel_sizes",
         help="Kernel sizes for growth conv layers.",
         type=str,
         default="3,3;3,3"
     )
     parser.add_argument(
-        "--growth_strides",
+        "--conv_strides",
         help="Strides for growth conv layers.",
         type=str,
         default="1,1;1,1"
@@ -248,37 +392,67 @@ if __name__ == "__main__":
         for x in arguments["generator_projection_dims"].split(",")
     ]
 
-    # Fix base conv params.
-    arguments["base_num_filters"] = [
-        int(x)
-        for x in arguments["base_num_filters"].split(",")
+    # Fix conv layer property parameters.
+    arguments["conv_num_filters"] = [
+        [int(y) for y in x.split(",")]
+        for x in arguments["conv_num_filters"].split(";")
     ]
 
-    arguments["base_kernel_sizes"] = [
-        int(x)
-        for x in arguments["base_kernel_sizes"].split(",")
+    arguments["conv_kernel_sizes"] = [
+        [int(y) for y in x.split(",")]
+        for x in arguments["conv_kernel_sizes"].split(";")
     ]
 
-    arguments["base_strides"] = [
-        int(x)
-        for x in arguments["base_strides"].split(",")
+    arguments["conv_strides"] = [
+        [int(y) for y in x.split(",")]
+        for x in arguments["conv_strides"].split(";")
     ]
 
-    # Fix growth conv params.
-    arguments["growth_num_filters"] = [
-        [int (y) for y in x.split(",")]
-        for x in arguments["growth_num_filters"].split(";")
-    ]
+    # Make some assertions.
+    assert len(arguments["conv_num_filters"]) > 0
+    assert len(arguments["conv_num_filters"]) == len(arguments["conv_kernel_sizes"])
+    assert len(arguments["conv_num_filters"]) == len(arguments["conv_strides"])
 
-    arguments["growth_kernel_sizes"] = [
-        [int (y) for y in x.split(",")]
-        for x in arguments["growth_kernel_sizes"].split(";")
-    ]
+    # Truncate lists if over the 1024x1024 current limit.
+    if len(arguments["conv_num_filters"]) > 9:
+        arguments["conv_num_filters"] = arguments["conv_num_filters"][0:10]
+        arguments["conv_kernel_sizes"] = arguments["conv_kernel_sizes"][0:10]
+        arguments["conv_strides"] = arguments["conv_strides"][0:10]
 
-    arguments["growth_strides"] = [
-        [int (y) for y in x.split(",")]
-        for x in arguments["growth_strides"].split(";")
-    ]
+    # Get conv layer properties for generator and discriminator.
+    (generator,
+     discriminator) = calc_generator_discriminator_conv_layer_properties(
+        arguments["conv_num_filters"],
+        arguments["conv_kernel_sizes"],
+        arguments["conv_strides"],
+        arguments["depth"]
+    )
+
+    # Split up generator properties into separate lists.
+    (generator_base_conv_blocks,
+     generator_growth_conv_blocks,
+     generator_to_rgb_layers) = split_up_generator_conv_layer_properties(
+        generator,
+        arguments["conv_num_filters"],
+        arguments["conv_strides"],
+        arguments["depth"]
+    )
+    arguments["generator_base_conv_blocks"] = generator_base_conv_blocks
+    arguments["generator_growth_conv_blocks"] = generator_growth_conv_blocks
+    arguments["generator_to_rgb_layers"] = generator_to_rgb_layers
+
+    # Split up discriminator properties into separate lists.
+    (discriminator_from_rgb_layers,
+     discriminator_base_conv_blocks,
+     discriminator_growth_conv_blocks) = split_up_discriminator_conv_layer_properties(
+        discriminator,
+        arguments["conv_num_filters"],
+        arguments["conv_strides"],
+        arguments["depth"]
+    )
+    arguments["discriminator_from_rgb_layers"] = discriminator_from_rgb_layers
+    arguments["discriminator_base_conv_blocks"] = discriminator_base_conv_blocks
+    arguments["discriminator_growth_conv_blocks"] = discriminator_growth_conv_blocks
 
     # Fix clip_gradients.
     if arguments["generator_clip_gradients"] == "None":
@@ -304,9 +478,6 @@ if __name__ == "__main__":
                 "TF_CONFIG", "{}"
             )
         ).get("task", {}).get("trial", ""))
-
-    # Start fresh output directory.
-    shutil.rmtree(path=arguments["output_dir"], ignore_errors=True)
 
     # Run the training job.
     model.train_and_evaluate(arguments)

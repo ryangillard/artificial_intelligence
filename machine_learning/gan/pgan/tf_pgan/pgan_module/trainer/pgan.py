@@ -78,7 +78,9 @@ def train_network(loss, global_step, alpha_var, params, scope):
 
     # Ensure alpha variable gets updated.
     with tf.control_dependencies(control_inputs=[alpha_var_update_op]):
-        return loss, train_op
+        loss = tf.identity(input=loss, name="train_network_loss_identity")
+
+    return loss, train_op
 
 
 def resize_real_image(block_idx, image, params):
@@ -122,22 +124,44 @@ def resize_real_images(image, params):
     """
     print_obj("\nresize_real_images", "image", image)
     # Resize real image for each block.
-    # Switch to case based on number of steps for upsampled image.
-    resized_image = tf.switch_case(
-        branch_index=tf.cast(
+    num_stages = params["train_steps"] // params["num_steps_until_growth"]
+    if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
+        print(
+            "\nresize_real_images: NEVER GOING TO GROW, SKIP SWITCH CASE!"
+        )
+        # If we never are going to grow, no sense using the switch case.
+        resized_image = resize_real_image(0, image, params)  # 4x4
+    else:
+        # Find growth index based on global step and growth frequency.
+        growth_index = tf.cast(
             x=tf.floordiv(
                 x=tf.train.get_or_create_global_step(),
-                y=params["num_steps_until_growth"]
+                y=params["num_steps_until_growth"],
+                name="resize_real_images_global_step_floordiv"
             ),
-            dtype=tf.int32),
-        branch_fns=[
-            lambda: resize_real_image(0, image, params),
-            lambda: resize_real_image(1, image, params),
-            lambda: resize_real_image(2, image, params)
-        ],
-        name="resize_real_images_switch_case_resized_image"
-    )
-    print_obj("resize_real_images", "selected resized_image", resized_image)
+            dtype=tf.int32,
+            name="resize_real_images_growth_index"
+        )
+
+        # Switch to case based on number of steps for resized image.
+        resized_image = tf.switch_case(
+            branch_index=growth_index,
+            branch_fns=[
+                lambda: resize_real_image(0, image, params),  # 4x4
+                lambda: resize_real_image(1, image, params),  # 8x8
+                lambda: resize_real_image(2, image, params),  # 16x16
+                lambda: resize_real_image(3, image, params),  # 32x32
+                lambda: resize_real_image(4, image, params),  # 64x64
+                lambda: resize_real_image(5, image, params),  # 128x128
+                lambda: resize_real_image(6, image, params),  # 256x256
+                lambda: resize_real_image(7, image, params),  # 512x512
+                lambda: resize_real_image(8, image, params),  # 1024x1024
+            ],
+            name="resize_real_images_switch_case_resized_image"
+        )
+        print_obj(
+            "resize_real_images", "selected resized_image", resized_image
+        )
 
     return resized_image
 
@@ -182,7 +206,7 @@ def pgan_model(features, labels, mode, params):
 
         # Get predictions from generator.
         generated_images = generator.generator_network(
-            Z, alpha_var, mode, params
+            Z=Z, alpha_var=alpha_var, params=params
         )
 
         # Create predictions dictionary.
@@ -197,10 +221,7 @@ def pgan_model(features, labels, mode, params):
         }
     else:
         # Extract image from features dictionary.
-        image = features["image"]
-
-        # Convert image representation from [0, 255] to [-1, 1].
-        X = (tf.cast(x=image, dtype=tf.float32) / 255) * 2 - 1
+        X = features["image"]
 
         # Get dynamic batch size in case of partial batch.
         cur_batch_size = tf.shape(
@@ -217,37 +238,41 @@ def pgan_model(features, labels, mode, params):
             dtype=tf.float32
         )
 
-        # Establish generator network subgraph with gaussian noise.
+        # Get generated image from generator network from gaussian noise.
         print("\nCall generator with Z = {}.".format(Z))
         generator_outputs = generator.generator_network(
-            Z, alpha_var, mode, params
+            Z=Z, alpha_var=alpha_var, params=params
         )
 
-        # Upsample real images based on the current size of the GAN.
-        real_image = resize_real_images(X, params)
-
-        # Establish discriminator network subgraph with real data.
-        print("\nCall discriminator with real_image = {}.".format(
-            real_image
-        ))
-        real_logits = discriminator.discriminator_network(
-            real_image, alpha_var, params
-        )
-
-        # Get generated logits too.
+        # Get fake logits from discriminator using generator's output image.
         print("\nCall discriminator with generator_outputs = {}.".format(
             generator_outputs
         ))
-        generated_logits = discriminator.discriminator_network(
-            generator_outputs, alpha_var, params
+
+        fake_logits = discriminator.discriminator_network(
+            X=generator_outputs, alpha_var=alpha_var, params=params
+        )
+        
+        # Resize real images based on the current size of the GAN.
+        real_image = resize_real_images(X, params)
+
+        # Get real logits from discriminator using real image.
+        print("\nCall discriminator with real_image = {}.".format(
+            real_image
+        ))
+
+        real_logits = discriminator.discriminator_network(
+            X=real_image, alpha_var=alpha_var, params=params
         )
 
         # Get generator total loss.
-        generator_total_loss = generator.get_generator_loss(generated_logits)
+        generator_total_loss = generator.get_generator_loss(
+            fake_logits=fake_logits, params=params
+        )
 
         # Get discriminator total loss.
         discriminator_total_loss = discriminator.get_discriminator_loss(
-            generated_logits, real_logits, params
+            fake_logits=fake_logits, real_logits=real_logits, params=params
         )
 
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -263,7 +288,8 @@ def pgan_model(features, labels, mode, params):
                         y=params["discriminator_train_steps"]
                     ),
                     dtype=tf.int64
-                )
+                ),
+                name="pgan_model_cycle_step"
             )
 
             # Create choose generator condition.
@@ -298,7 +324,7 @@ def pgan_model(features, labels, mode, params):
 
             # Concatenate discriminator logits and labels.
             discriminator_logits = tf.concat(
-                values=[real_logits, generated_logits],
+                values=[real_logits, fake_logits],
                 axis=0,
                 name="discriminator_concat_logits"
             )
@@ -306,7 +332,7 @@ def pgan_model(features, labels, mode, params):
             discriminator_labels = tf.concat(
                 values=[
                     tf.ones_like(tensor=real_logits),
-                    tf.zeros_like(tensor=generated_logits)
+                    tf.zeros_like(tensor=fake_logits)
                 ],
                 axis=0,
                 name="discriminator_concat_labels"

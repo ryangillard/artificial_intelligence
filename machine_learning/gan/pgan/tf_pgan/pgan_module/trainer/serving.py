@@ -23,7 +23,7 @@ def serving_input_fn(params):
     }
 
     print_obj(
-        "serving_input_fn",
+        "\nserving_input_fn",
         "feature_placeholders",
         feature_placeholders
     )
