@@ -199,7 +199,8 @@ class Generator(object):
                     kernel_size=to_rgb[i][0:2],
                     strides=to_rgb[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    # Notice there is no activation for toRGB conv layers.
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -479,6 +480,45 @@ class Generator(object):
     ##########################################################################
     ##########################################################################
 
+    def pixel_norm(self, X, epsilon=1e-8):
+        """Normalizes the feature vector in each pixel to unit length.
+
+        Args:
+            X: tensor, image feature vectors.
+            epsilon: float, small value to add to denominator for numerical
+                stability.
+
+        Returns:
+            Pixel normalized feature vectors.
+        """
+        with tf.variable_scope("{}/pixel_norm".format(self.name)):
+            return X * tf.rsqrt(
+                x=tf.add(
+                    x=tf.reduce_mean(
+                        input_tensor=tf.square(x=X), axis=1, keepdims=True
+                    ),
+                    y=epsilon
+                )
+            )
+
+    def use_pixel_norm(self, X, params, epsilon=1e-8):
+        """Decides based on user parameter whether to use pixel norm or not.
+
+        Args:
+            X: tensor, image feature vectors.
+            params: dict, user passed parameters.
+            epsilon: float, small value to add to denominator for numerical
+                stability.
+
+        Returns:
+            Pixel normalized feature vectors if using pixel norm, else
+                original feature vectors.
+        """
+        if params["use_pixel_norm"]:
+            return self.pixel_norm(X=X, epsilon=epsilon)
+        else:
+            return X
+
     def use_generator_projection_layer(self, Z, params):
         """Uses projection layer to convert random noise vector into an image.
 
@@ -491,6 +531,10 @@ class Generator(object):
         """
         # Project latent vectors.
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
+            if params["normalize_latent"]:
+                # shape = (cur_batch_size, latent_size)
+                Z = self.pixel_norm(X=Z, epsilon=params["pixel_norm_epsilon"])
+
             # shape = (
             #     cur_batch_size,
             #     projection_height * projection_width * projection_depth
@@ -521,6 +565,31 @@ class Generator(object):
         )
 
         return projection_tensor_reshaped
+
+    def fused_conv2d_pixel_norm(self, input_image, conv2d_layer, params):
+        """Fused `Conv2D` layer and pixel norm operation.
+
+        Args:
+            input_image: tensor, input image of rank 4.
+            conv2d_layer: `Conv2D` layer.
+            params: dict, user passed parameters.
+
+        Returns:
+            New image tensor of rank 4.
+        """
+        conv_output = conv2d_layer(inputs=input_image)
+        print_obj("\nfused_conv2d_pixel_norm", "conv_output", conv_output)
+
+        pixel_norm_output = self.use_pixel_norm(
+            X=conv_output,
+            params=params,
+            epsilon=params["pixel_norm_epsilon"]
+        )
+        print_obj(
+            "fused_conv2d_pixel_norm", "pixel_norm_output", pixel_norm_output
+        )
+
+        return pixel_norm_output
 
     def upsample_generator_image(self, image, original_image_size, block_idx):
         """Upsamples generator image.
@@ -590,13 +659,13 @@ class Generator(object):
             to_rgb_conv_layer = self.to_rgb_conv_layers[0]
 
             # Pass inputs through layer chain.
-            block_conv = block_layers[0](inputs=projection)
-            print_obj(
-                "create_base_generator_network", "block_conv_0", block_conv
-            )
-
-            for i in range(1, len(block_layers)):
-                block_conv = block_layers[i](inputs=block_conv)
+            block_conv = projection
+            for i in range(0, len(block_layers)):
+                block_conv = self.fused_conv2d_pixel_norm(
+                    input_image=block_conv,
+                    conv2d_layer=block_layers[i],
+                    params=params
+                )
                 print_obj(
                     "create_base_generator_network",
                     "block_conv_{}".format(i),
@@ -604,7 +673,11 @@ class Generator(object):
                 )
 
             # Convert convolution to RGB image.
-            to_rgb_conv = to_rgb_conv_layer(inputs=block_conv)
+            to_rgb_conv = self.fused_conv2d_pixel_norm(
+                input_image=block_conv,
+                conv2d_layer=to_rgb_conv_layer,
+                params=params
+            )
             print_obj(
                 "create_base_generator_network", "to_rgb_conv", to_rgb_conv
             )
@@ -650,14 +723,13 @@ class Generator(object):
             base_block_conv_layers = permanent_blocks[0]
 
             # Pass inputs through layer chain.
-            block_conv = base_block_conv_layers[0](inputs=projection)
-            print_obj(
-                "create_growth_transition_generator_network",
-                "base_block_conv_{}_0".format(trans_idx),
-                block_conv
-            )
-            for i in range(1, len(base_block_conv_layers)):
-                block_conv = base_block_conv_layers[i](inputs=block_conv)
+            block_conv = projection
+            for i in range(0, len(base_block_conv_layers)):
+                block_conv = self.fused_conv2d_pixel_norm(
+                    input_image=block_conv,
+                    conv2d_layer=base_block_conv_layers[i],
+                    params=params
+                )
                 print_obj(
                     "create_growth_transition_generator_network",
                     "base_block_conv_{}_{}".format(trans_idx, i),
@@ -682,7 +754,11 @@ class Generator(object):
 
                 block_conv_layers = permanent_blocks[i]
                 for j in range(0, len(block_conv_layers)):
-                    block_conv = block_conv_layers[j](inputs=block_conv)
+                    block_conv = self.fused_conv2d_pixel_norm(
+                        input_image=block_conv,
+                        conv2d_layer=block_conv_layers[j],
+                        params=params
+                    )
                     print_obj(
                         "create_growth_transition_generator_network",
                         "block_conv_{}_{}_{}".format(trans_idx, i, j),
@@ -706,20 +782,24 @@ class Generator(object):
             growing_to_rgb_conv_layer = self.to_rgb_conv_layers[trans_idx + 1]
 
             # Pass inputs through layer chain.
-            block_conv = growing_block_layers[0](inputs=upsampled_block_conv)
-            print_obj(
-                "create_growth_transition_generator_network",
-                "growing_block_conv_{}_0".format(trans_idx),
-                block_conv
-            )
-            for i in range(1, len(growing_block_layers)):
-                block_conv = growing_block_layers[i](inputs=block_conv)
+            block_conv = upsampled_block_conv
+            for i in range(0, len(growing_block_layers)):
+                block_conv = self.fused_conv2d_pixel_norm(
+                    input_image=block_conv,
+                    conv2d_layer=growing_block_layers[i],
+                    params=params
+                )
                 print_obj(
                     "create_growth_transition_generator_network",
                     "growing_block_conv_{}_{}".format(trans_idx, i),
                     block_conv
                 )
-            growing_to_rgb_conv = growing_to_rgb_conv_layer(inputs=block_conv)
+
+            growing_to_rgb_conv = self.fused_conv2d_pixel_norm(
+                input_image=block_conv,
+                conv2d_layer=growing_to_rgb_conv_layer,
+                params=params
+            )
             print_obj(
                 "create_growth_transition_generator_network",
                 "growing_to_rgb_conv_{}".format(trans_idx),
@@ -730,8 +810,10 @@ class Generator(object):
             shrinking_to_rgb_conv_layer = self.to_rgb_conv_layers[trans_idx]
 
             # Pass inputs through layer chain.
-            shrinking_to_rgb_conv = shrinking_to_rgb_conv_layer(
-                inputs=upsampled_block_conv
+            shrinking_to_rgb_conv = self.fused_conv2d_pixel_norm(
+                input_image=upsampled_block_conv,
+                conv2d_layer=shrinking_to_rgb_conv_layer,
+                params=params
             )
             print_obj(
                 "create_growth_transition_generator_network",
@@ -779,15 +861,13 @@ class Generator(object):
             base_block_conv_layers = self.conv_layer_blocks[0]
 
             # Pass inputs through layer chain.
-            block_conv = base_block_conv_layers[0](inputs=projection)
-            print_obj(
-                "\ncreate_final_generator_network",
-                "base_block_conv",
-                block_conv
-            )
-
-            for i in range(1, len(base_block_conv_layers)):
-                block_conv = base_block_conv_layers[i](inputs=block_conv)
+            block_conv = projection
+            for i in range(0, len(base_block_conv_layers)):
+                block_conv = self.fused_conv2d_pixel_norm(
+                    input_image=block_conv,
+                    conv2d_layer=base_block_conv_layers[i],
+                    params=params
+                )
                 print_obj(
                     "create_final_generator_network",
                     "base_block_conv_{}".format(i),
@@ -810,7 +890,11 @@ class Generator(object):
 
                 block_conv_layers = self.conv_layer_blocks[i]
                 for j in range(0, len(block_conv_layers)):
-                    block_conv = block_conv_layers[j](inputs=block_conv)
+                    block_conv = self.fused_conv2d_pixel_norm(
+                        input_image=block_conv,
+                        conv2d_layer=block_conv_layers[j],
+                        params=params
+                    )
                     print_obj(
                         "create_final_generator_network",
                         "block_conv_{}_{}".format(i, j),
@@ -821,7 +905,11 @@ class Generator(object):
             to_rgb_conv_layer = self.to_rgb_conv_layers[-1]
 
             # Pass inputs through layer chain.
-            to_rgb_conv = to_rgb_conv_layer(inputs=block_conv)
+            to_rgb_conv = self.fused_conv2d_pixel_norm(
+                input_image=block_conv,
+                conv2d_layer=to_rgb_conv_layer,
+                params=params
+            )
             print_obj(
                 "create_final_generator_network", "to_rgb_conv", to_rgb_conv
             )

@@ -147,7 +147,10 @@ def resize_real_images(image, params):
             "\nresize_real_images: NEVER GOING TO GROW, SKIP SWITCH CASE!"
         )
         # If we never are going to grow, no sense using the switch case.
-        resized_image = resize_real_image(0, image, params)  # 4x4
+        # 4x4
+        resized_image = resize_real_image(
+            image=image, params=params, block_idx=0
+        )
     else:
         # Find growth index based on global step and growth frequency.
         growth_index = tf.cast(
@@ -166,9 +169,7 @@ def resize_real_images(image, params):
             branch_fns=[
                 # 4x4
                 lambda: resize_real_image(
-                    image=image,
-                    params=params,
-                    block_idx=min(0, len(params["conv_num_filters"]) - 1)
+                    image=image, params=params, block_idx=0
                 ),
                 # 8x8
                 lambda: resize_real_image(
@@ -347,7 +348,7 @@ def pgan_model(features, labels, mode, params):
         )
 
         # Resize real images based on the current size of the GAN.
-        real_images = resize_real_images(X, params)
+        real_images = resize_real_images(image=X, params=params)
 
         # Get real logits from discriminator using real image.
         print(

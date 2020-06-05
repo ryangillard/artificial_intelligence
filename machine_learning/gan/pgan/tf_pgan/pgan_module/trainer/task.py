@@ -300,6 +300,24 @@ if __name__ == "__main__":
         default=3
     )
     parser.add_argument(
+        "--use_pixel_norm",
+        help="If want to use pixel norm op after each convolution.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--pixel_norm_epsilon",
+        help="Small value to add to denominator for numerical stability.",
+        type=float,
+        default=1e-8
+    )
+    parser.add_argument(
+        "--normalize_latent",
+        help="If want to normalize latent vector before projection.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--generator_projection_dims",
         help="The 3D dimensions to project latent noise vector into.",
         type=str,
@@ -395,16 +413,28 @@ if __name__ == "__main__":
     arguments.pop("job-dir", None)
 
     # Fix eval steps.
-    if arguments["eval_steps"] == "None":
+    if arguments["eval_steps"].lower() == "none":
         arguments["eval_steps"] = None
     else:
         arguments["eval_steps"] = int(arguments["eval_steps"])
 
     # Fix predict_all_resolutions.
-    if arguments["predict_all_resolutions"] == "False":
+    if arguments["predict_all_resolutions"].lower() == "false":
         arguments["predict_all_resolutions"] = False
     else:
         arguments["predict_all_resolutions"] = True
+
+    # Fix normalize_latent.
+    if arguments["normalize_latent"].lower() == "false":
+        arguments["normalize_latent"] = False
+    else:
+        arguments["normalize_latent"] = True
+
+    # Fix use_pixel_norm.
+    if arguments["use_pixel_norm"].lower() == "false":
+        arguments["use_pixel_norm"] = False
+    else:
+        arguments["use_pixel_norm"] = True
 
     # Fix generator_projection_dims.
     arguments["generator_projection_dims"] = [
@@ -475,14 +505,14 @@ if __name__ == "__main__":
     arguments["discriminator_growth_conv_blocks"] = discriminator_growth_conv_blocks
 
     # Fix clip_gradients.
-    if arguments["generator_clip_gradients"] == "None":
+    if arguments["generator_clip_gradients"].lower() == "none":
         arguments["generator_clip_gradients"] = None
     else:
         arguments["generator_clip_gradients"] = float(
             arguments["generator_clip_gradients"]
         )
 
-    if arguments["discriminator_clip_gradients"] == "None":
+    if arguments["discriminator_clip_gradients"].lower() == "none":
         arguments["discriminator_clip_gradients"] = None
     else:
         arguments["discriminator_clip_gradients"] = float(
