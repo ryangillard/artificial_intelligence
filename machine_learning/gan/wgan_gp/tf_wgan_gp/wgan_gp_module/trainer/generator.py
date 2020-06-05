@@ -17,7 +17,7 @@ def generator_network(Z, mode, params, reuse=False):
         Generated outputs tensor of shape
             [cur_batch_size, height * width * depth].
     """
-    # Create regularizer for dense layer kernel weights.
+    # Create regularizer for layer kernel weights.
     regularizer = tf.contrib.layers.l1_l2_regularizer(
         scale_l1=params["generator_l1_regularization_scale"],
         scale_l2=params["generator_l2_regularization_scale"]
@@ -118,11 +118,11 @@ def generator_network(Z, mode, params, reuse=False):
     return generated_outputs
 
 
-def get_generator_loss(generated_logits):
+def get_generator_loss(fake_logits):
     """Gets generator loss.
 
     Args:
-        generated_logits: tensor, shape of
+        fake_logits: tensor, shape of
             [cur_batch_size, height * width * depth].
 
     Returns:
@@ -130,7 +130,7 @@ def get_generator_loss(generated_logits):
     """
     # Calculate base generator loss.
     generator_loss = -tf.reduce_mean(
-        input_tensor=generated_logits,
+        input_tensor=fake_logits,
         name="generator_loss"
     )
     print_obj(

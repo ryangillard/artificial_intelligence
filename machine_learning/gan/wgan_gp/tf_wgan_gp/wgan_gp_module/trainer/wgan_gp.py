@@ -18,6 +18,10 @@ def train_network(loss, global_step, params, scope):
     Returns:
         Loss tensor and training op.
     """
+    print_obj("\ntrain_network", "loss", loss)
+    print_obj("train_network", "global_step", global_step)
+    print_obj("train_network", "scope", scope)
+
     # Create optimizer map.
     optimizers = {
         "Adam": tf.train.AdamOptimizer,
@@ -32,12 +36,17 @@ def train_network(loss, global_step, params, scope):
         "RMSProp": tf.train.RMSPropOptimizer
     }
 
+    # Get trainable variables.
+    variables = tf.trainable_variables(scope=scope)
+    print_obj("train_network", "variables", variables)
+
     # Get gradients.
     gradients = tf.gradients(
         ys=loss,
-        xs=tf.trainable_variables(scope=scope),
+        xs=variables,
         name="{}_gradients".format(scope)
     )
+    print_obj("train_network", "gradients", gradients)
 
     # Clip gradients.
     if params["{}_clip_gradients".format(scope)]:
@@ -46,14 +55,17 @@ def train_network(loss, global_step, params, scope):
             clip_norm=params["{}_clip_gradients".format(scope)],
             name="{}_clip_by_global_norm_gradients".format(scope)
         )
+        print_obj("train_network", "gradients", gradients)
 
     # Zip back together gradients and variables.
-    grads_and_vars = zip(gradients, tf.trainable_variables(scope=scope))
+    grads_and_vars = zip(gradients, variables)
+    print_obj("train_network", "grads_and_vars", grads_and_vars)
 
     # Get optimizer and instantiate it.
     optimizer = optimizers[params["{}_optimizer".format(scope)]](
         learning_rate=params["{}_learning_rate".format(scope)]
     )
+    print_obj("train_network", "optimizer", optimizer)
 
     # Create train op by applying gradients to variables and incrementing
     # global step.
@@ -62,6 +74,7 @@ def train_network(loss, global_step, params, scope):
         global_step=global_step,
         name="{}_apply_gradients".format(scope)
     )
+    print_obj("train_network", "train_op", train_op)
 
     return loss, train_op
 
@@ -138,16 +151,21 @@ def wgan_gp_model(features, labels, mode, params):
         real_logits = critic.critic_network(X, params, reuse=False)
 
         # Get generated logits too.
-        generated_logits = critic.critic_network(
+        fake_logits = critic.critic_network(
             generator_outputs, params, reuse=True
         )
 
         # Get generator total loss.
-        generator_total_loss = generator.get_generator_loss(generated_logits)
+        generator_total_loss = generator.get_generator_loss(fake_logits)
 
         # Get critic total loss.
         critic_total_loss = critic.get_critic_loss(
-            generated_logits, real_logits, params
+            cur_batch_size=cur_batch_size,
+            fake_images=generator_outputs,
+            real_images=X,
+            fake_logits=fake_logits,
+            real_logits=real_logits,
+            params=params
         )
 
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -196,7 +214,7 @@ def wgan_gp_model(features, labels, mode, params):
 
             # Concatenate critic logits and labels.
             critic_logits = tf.concat(
-                values=[real_logits, generated_logits],
+                values=[real_logits, fake_logits],
                 axis=0,
                 name="critic_concat_logits"
             )
@@ -204,7 +222,7 @@ def wgan_gp_model(features, labels, mode, params):
             critic_labels = tf.concat(
                 values=[
                     tf.ones_like(tensor=real_logits),
-                    tf.zeros_like(tensor=generated_logits)
+                    tf.zeros_like(tensor=fake_logits)
                 ],
                 axis=0,
                 name="critic_concat_labels"
