@@ -1072,7 +1072,7 @@ class Discriminator(object):
             # Get squared difference from target of 1.0.
             squared_difference = tf.square(
                 x=mixed_norms - 1.0,
-                name="{}_squared_difference".format(self.name)
+                name="squared_difference"
             )
             print_obj(
                 "get_gradient_penalty_loss",
