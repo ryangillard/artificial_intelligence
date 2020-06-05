@@ -38,7 +38,8 @@ def train_and_evaluate(args):
     # Create exporter to save out the complete model to disk.
     exporter = tf.estimator.LatestExporter(
         name="exporter",
-        serving_input_receiver_fn=lambda: serving.serving_input_fn(args)
+        serving_input_receiver_fn=lambda: serving.serving_input_fn(args),
+        exports_to_keep=args["exports_to_keep"]
     )
 
     # Create eval spec to read in our validation data and export our model.

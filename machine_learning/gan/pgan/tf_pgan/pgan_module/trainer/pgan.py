@@ -19,6 +19,11 @@ def train_network(loss, global_step, alpha_var, params, scope):
     Returns:
         Loss tensor and training op.
     """
+    print_obj("\ntrain_network", "loss", loss)
+    print_obj("train_network", "global_step", global_step)
+    print_obj("train_network", "alpha_var", alpha_var)
+    print_obj("train_network", "scope", scope)
+
     # Create optimizer map.
     optimizers = {
         "Adam": tf.train.AdamOptimizer,
@@ -33,12 +38,23 @@ def train_network(loss, global_step, alpha_var, params, scope):
         "RMSProp": tf.train.RMSPropOptimizer
     }
 
+    # Get optimizer and instantiate it.
+    optimizer = optimizers[params["{}_optimizer".format(scope)]](
+        learning_rate=params["{}_learning_rate".format(scope)]
+    )
+    print_obj("train_network", "optimizer", optimizer)
+
+    # Get trainable variables.
+    variables = tf.trainable_variables(scope=scope)
+    print_obj("\ntrain_network", "variables", variables)
+
     # Get gradients.
     gradients = tf.gradients(
         ys=loss,
-        xs=tf.trainable_variables(scope=scope),
+        xs=variables,
         name="{}_gradients".format(scope)
     )
+    print_obj("\ntrain_network", "gradients", gradients)
 
     # Clip gradients.
     if params["{}_clip_gradients".format(scope)]:
@@ -47,14 +63,11 @@ def train_network(loss, global_step, alpha_var, params, scope):
             clip_norm=params["{}_clip_gradients".format(scope)],
             name="{}_clip_by_global_norm_gradients".format(scope)
         )
+        print_obj("\ntrain_network", "gradients", gradients)
 
     # Zip back together gradients and variables.
-    grads_and_vars = zip(gradients, tf.trainable_variables(scope=scope))
-
-    # Get optimizer and instantiate it.
-    optimizer = optimizers[params["{}_optimizer".format(scope)]](
-        learning_rate=params["{}_learning_rate".format(scope)]
-    )
+    grads_and_vars = zip(gradients, variables)
+    print_obj("train_network", "grads_and_vars", grads_and_vars)
 
     # Create train op by applying gradients to variables and incrementing
     # global step.
@@ -63,6 +76,7 @@ def train_network(loss, global_step, alpha_var, params, scope):
         global_step=global_step,
         name="{}_apply_gradients".format(scope)
     )
+    print_obj("train_network", "train_op", train_op)
 
     # Update alpha variable to linearly scale from 0 to 1 based on steps.
     alpha_var_update_op = tf.assign(
@@ -75,21 +89,24 @@ def train_network(loss, global_step, alpha_var, params, scope):
             y=params["num_steps_until_growth"]
         )
     )
+    print_obj("train_network", "alpha_var_update_op", alpha_var_update_op)
 
     # Ensure alpha variable gets updated.
     with tf.control_dependencies(control_inputs=[alpha_var_update_op]):
-        loss = tf.identity(input=loss, name="train_network_loss_identity")
+        loss = tf.identity(
+            input=loss, name="{}_train_network_loss_identity".format(scope)
+        )
 
     return loss, train_op
 
 
-def resize_real_image(block_idx, image, params):
+def resize_real_image(image, params, block_idx):
     """Resizes real images to match the GAN's current size.
 
     Args:
-        block_idx: int, index of current block.
         image: tensor, original image.
         params: dict, user passed parameters.
+        block_idx: int, index of current block.
 
     Returns:
         Resized image tensor.
@@ -147,15 +164,60 @@ def resize_real_images(image, params):
         resized_image = tf.switch_case(
             branch_index=growth_index,
             branch_fns=[
-                lambda: resize_real_image(0, image, params),  # 4x4
-                lambda: resize_real_image(1, image, params),  # 8x8
-                lambda: resize_real_image(2, image, params),  # 16x16
-                lambda: resize_real_image(3, image, params),  # 32x32
-                lambda: resize_real_image(4, image, params),  # 64x64
-                lambda: resize_real_image(5, image, params),  # 128x128
-                lambda: resize_real_image(6, image, params),  # 256x256
-                lambda: resize_real_image(7, image, params),  # 512x512
-                lambda: resize_real_image(8, image, params),  # 1024x1024
+                # 4x4
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(0, len(params["conv_num_filters"]) - 1)
+                ),
+                # 8x8
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(1, len(params["conv_num_filters"]) - 1)
+                ),
+                # 16x16
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(2, len(params["conv_num_filters"]) - 1)
+                ),
+                # 32x32
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(3, len(params["conv_num_filters"]) - 1)
+                ),
+                # 64x64
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(4, len(params["conv_num_filters"]) - 1)
+                ),
+                # 128x128
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(5, len(params["conv_num_filters"]) - 1)
+                ),
+                # 256x256
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(6, len(params["conv_num_filters"]) - 1)
+                ),
+                # 512x512
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(7, len(params["conv_num_filters"]) - 1)
+                ),
+                # 1024x1024
+                lambda: resize_real_image(
+                    image=image,
+                    params=params,
+                    block_idx=min(8, len(params["conv_num_filters"]) - 1)
+                )
             ],
             name="resize_real_images_switch_case_resized_image"
         )
@@ -191,6 +253,28 @@ def pgan_model(features, labels, mode, params):
     eval_metric_ops = None
     export_outputs = None
 
+    # Instantiate generator.
+    pgan_generator = generator.Generator(
+        kernel_regularizer=tf.contrib.layers.l1_l2_regularizer(
+            scale_l1=params["generator_l1_regularization_scale"],
+            scale_l2=params["generator_l2_regularization_scale"]
+        ),
+        bias_regularizer=None,
+        params=params,
+        name="generator"
+    )
+
+    # Instantiate discriminator.
+    pgan_discriminator = discriminator.Discriminator(
+        kernel_regularizer=tf.contrib.layers.l1_l2_regularizer(
+            scale_l1=params["discriminator_l1_regularization_scale"],
+            scale_l2=params["discriminator_l2_regularization_scale"]
+        ),
+        bias_regularizer=None,
+        params=params,
+        name="discriminator"
+    )
+
     # Create alpha variable to use for weighted sum for smooth fade-in.
     alpha_var = tf.get_variable(
         name="alpha_var",
@@ -205,14 +289,22 @@ def pgan_model(features, labels, mode, params):
         Z = tf.cast(x=features["Z"], dtype=tf.float32)
 
         # Get predictions from generator.
-        generated_images = generator.generator_network(
-            Z=Z, alpha_var=alpha_var, params=params
+        generated_images = pgan_generator.get_predict_generator_outputs(
+            Z=Z, params=params
         )
 
         # Create predictions dictionary.
-        predictions_dict = {
-            "generated_images": generated_images
-        }
+        if params["predict_all_resolutions"]:
+            predictions_dict = {
+                "generated_images_{}x{}".format(
+                    4 * 2 ** i, 4 * 2 ** i
+                ): generated_images[i]
+                for i in range(len(params["conv_num_filters"]))
+            }
+        else:
+            predictions_dict = {
+                "generated_images": generated_images
+            }
 
         # Create export outputs.
         export_outputs = {
@@ -240,39 +332,45 @@ def pgan_model(features, labels, mode, params):
 
         # Get generated image from generator network from gaussian noise.
         print("\nCall generator with Z = {}.".format(Z))
-        generator_outputs = generator.generator_network(
+        generator_outputs = pgan_generator.get_train_eval_generator_outputs(
             Z=Z, alpha_var=alpha_var, params=params
         )
 
         # Get fake logits from discriminator using generator's output image.
-        print("\nCall discriminator with generator_outputs = {}.".format(
-            generator_outputs
-        ))
-
-        fake_logits = discriminator.discriminator_network(
+        print(
+            "\nCall discriminator with generator_outputs = {}.".format(
+                generator_outputs
+            )
+        )
+        fake_logits = pgan_discriminator.get_discriminator_logits(
             X=generator_outputs, alpha_var=alpha_var, params=params
         )
-        
+
         # Resize real images based on the current size of the GAN.
-        real_image = resize_real_images(X, params)
+        real_images = resize_real_images(X, params)
 
         # Get real logits from discriminator using real image.
-        print("\nCall discriminator with real_image = {}.".format(
-            real_image
-        ))
-
-        real_logits = discriminator.discriminator_network(
-            X=real_image, alpha_var=alpha_var, params=params
+        print(
+            "\nCall discriminator with real_image = {}.".format(real_images)
+        )
+        real_logits = pgan_discriminator.get_discriminator_logits(
+            X=real_images, alpha_var=alpha_var, params=params
         )
 
         # Get generator total loss.
-        generator_total_loss = generator.get_generator_loss(
+        generator_total_loss = pgan_generator.get_generator_loss(
             fake_logits=fake_logits, params=params
         )
 
         # Get discriminator total loss.
-        discriminator_total_loss = discriminator.get_discriminator_loss(
-            fake_logits=fake_logits, real_logits=real_logits, params=params
+        discriminator_total_loss = pgan_discriminator.get_discriminator_loss(
+            cur_batch_size=cur_batch_size,
+            fake_images=generator_outputs,
+            real_images=real_images,
+            fake_logits=fake_logits,
+            real_logits=real_logits,
+            alpha_var=alpha_var,
+            params=params
         )
 
         if mode == tf.estimator.ModeKeys.TRAIN:

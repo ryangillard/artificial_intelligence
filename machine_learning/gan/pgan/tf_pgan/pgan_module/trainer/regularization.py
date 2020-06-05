@@ -64,7 +64,7 @@ def get_regularization_loss(params, scope=None):
         "trainable_reg_vars_list",
         trainable_reg_vars_list
     )
-    
+
     for var in trainable_reg_vars_list:
         print_obj(
             "get_regularization_loss_{}".format(scope),

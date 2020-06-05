@@ -59,7 +59,7 @@ def calc_generator_discriminator_conv_layer_properties(
                 )
             blocks.append(block)
 
-        # Add toRBG conv.
+        # Add toRGB conv.
         blocks[-1].append([1, 1, blocks[-1][-1][-3], depth] + [1] * 2)
 
         return blocks
@@ -232,6 +232,20 @@ if __name__ == "__main__":
         default=120
     )
 
+    # Serving parameters.
+    parser.add_argument(
+        "--exports_to_keep",
+        help="Number of exports to keep before overwriting oldest.",
+        type=int,
+        default=5
+    )
+    parser.add_argument(
+        "--predict_all_resolutions",
+        help="If want all resolutions predicted or just largest one.",
+        type=str,
+        default="True"
+    )
+
     # Image parameters.
     parser.add_argument(
         "--height",
@@ -385,6 +399,12 @@ if __name__ == "__main__":
         arguments["eval_steps"] = None
     else:
         arguments["eval_steps"] = int(arguments["eval_steps"])
+
+    # Fix predict_all_resolutions.
+    if arguments["predict_all_resolutions"] == "False":
+        arguments["predict_all_resolutions"] = False
+    else:
+        arguments["predict_all_resolutions"] = True
 
     # Fix generator_projection_dims.
     arguments["generator_projection_dims"] = [
