@@ -3,11 +3,12 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
-def get_regularization_loss(params, scope=None):
+def get_regularization_loss(lambda1=0., lambda2=0., scope=None):
     """Gets regularization losses from variables attached to a regularizer.
 
     Args:
-        params: dict, user passed parameters.
+        lambda1: float, L1 regularization scale parameter.
+        lambda2: float, L2 regularization scale parameter.
         scope: str, the name of the variable scope.
 
     Returns:
@@ -50,8 +51,6 @@ def get_regularization_loss(params, scope=None):
         return t_scalar_sum_tensor
 
     print_obj("\nget_regularization_loss", "scope", scope)
-    lambda1 = params["discriminator_l1_regularization_scale"]
-    lambda2 = params["discriminator_l2_regularization_scale"]
     if lambda1 <= 0. and lambda2 <= 0.:
         # No regularization so return zero.
         return tf.zeros(shape=[], dtype=tf.float32)

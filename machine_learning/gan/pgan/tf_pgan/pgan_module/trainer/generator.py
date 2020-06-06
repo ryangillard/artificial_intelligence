@@ -1159,7 +1159,9 @@ class Generator(object):
 
         # Get generator regularization losses.
         generator_reg_loss = regularization.get_regularization_loss(
-            params=params, scope=self.name
+            lambda1=params["generator_l1_regularization_scale"],
+            lambda2=params["generator_l2_regularization_scale"],
+            scope=self.name
         )
         print_obj(
             "get_generator_loss",

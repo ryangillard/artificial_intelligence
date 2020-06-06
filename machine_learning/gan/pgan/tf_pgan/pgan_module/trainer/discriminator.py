@@ -1660,7 +1660,9 @@ class Discriminator(object):
 
         # Get discriminator regularization losses.
         discriminator_reg_loss = regularization.get_regularization_loss(
-            params=params, scope=self.name
+            lambda1=params["discriminator_l1_regularization_scale"],
+            lambda2=params["discriminator_l2_regularization_scale"],
+            scope=self.name
         )
         print_obj(
             "get_discriminator_loss",
