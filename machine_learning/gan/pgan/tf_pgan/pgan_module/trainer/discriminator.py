@@ -1625,12 +1625,37 @@ class Discriminator(object):
             alpha_var=alpha_var,
             params=params
         )
+        print_obj(
+            "get_discriminator_loss",
+            "discriminator_gradient_penalty",
+            discriminator_gradient_penalty
+        )
+
+        # Get discriminator epsilon drift penalty.
+        epsilon_drift_penalty = tf.multiply(
+            x=params["epsilon_drift"],
+            y=tf.reduce_mean(input_tensor=tf.square(x=real_logits)),
+            name="epsilon_drift_penalty"
+        )
+        print_obj(
+            "get_discriminator_loss",
+            "epsilon_drift_penalty",
+            epsilon_drift_penalty
+        )
 
         # Get discriminator Wasserstein GP loss.
-        discriminator_wasserstein_gp_loss = tf.add(
-            x=discriminator_loss,
-            y=discriminator_gradient_penalty,
+        discriminator_wasserstein_gp_loss = tf.add_n(
+            inputs=[
+                discriminator_loss,
+                discriminator_gradient_penalty,
+                epsilon_drift_penalty
+            ],
             name="{}_wasserstein_gp_loss".format(self.name)
+        )
+        print_obj(
+            "get_discriminator_loss",
+            "discriminator_wasserstein_gp_loss",
+            discriminator_wasserstein_gp_loss
         )
 
         # Get discriminator regularization losses.
@@ -1644,7 +1669,7 @@ class Discriminator(object):
         )
 
         # Combine losses for total losses.
-        discriminator_total_loss = tf.math.add(
+        discriminator_total_loss = tf.add(
             x=discriminator_wasserstein_gp_loss,
             y=discriminator_reg_loss,
             name="{}_total_loss".format(self.name)

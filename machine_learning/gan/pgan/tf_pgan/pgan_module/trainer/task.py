@@ -416,6 +416,12 @@ if __name__ == "__main__":
         default=10.0
     )
     parser.add_argument(
+        "--epsilon_drift",
+        help="Coefficient of epsilon drift penalty for discriminator.",
+        type=float,
+        default=0.001
+    )
+    parser.add_argument(
         "--discriminator_train_steps",
         help="Number of steps to train discriminator for per cycle.",
         type=int,
