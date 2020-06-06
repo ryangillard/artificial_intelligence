@@ -425,16 +425,42 @@ class Discriminator(object):
             # Get conv block layer properties.
             conv_block = params["discriminator_base_conv_blocks"][0]
 
-            # Create list of base conv layer tensors.
+            # The base conv block is always the 0th one.
+            base_conv_layer_block = self.conv_layer_blocks[0]
+
+            # Minibatch stddev comes before first base conv layer,
+            # creating 1 extra feature map.
+            if params["use_minibatch_stddev"]:
+                # Therefore, the number of input channels will be 1 higher
+                # for first base conv block.
+                num_in_channels = conv_block[0][3] + 1
+            else:
+                num_in_channels = conv_block[0][3]
+
+            # Get first base conv layer from list.
+            first_base_conv_layer = base_conv_layer_block[0]
+
+            # Build first layer with bigger tensor.
             base_conv_tensors = [
-                # The base conv block is always the 0th one.
-                self.conv_layer_blocks[0][i](
+                first_base_conv_layer(
                     inputs=tf.zeros(
-                        shape=[1] + conv_block[i][0:3], dtype=tf.float32
+                        shape=[1] + conv_block[0][0:2] + [num_in_channels],
+                        dtype=tf.float32
                     )
                 )
-                for i in range(len(conv_block))
             ]
+
+            # Now build the rest of the base conv block layers, store in list.
+            base_conv_tensors.extend(
+                [
+                    base_conv_layer_block[i](
+                        inputs=tf.zeros(
+                            shape=[1] + conv_block[i][0:3], dtype=tf.float32
+                        )
+                    )
+                    for i in range(1, len(conv_block))
+                ]
+            )
             print_obj(
                 "\nbuild_discriminator_base_conv_layer_block",
                 "base_conv_tensors",
@@ -571,6 +597,377 @@ class Discriminator(object):
     ##########################################################################
     ##########################################################################
 
+    def minibatch_stddev_common(
+            self,
+            variance,
+            tile_multiples,
+            params,
+            caller):
+        """Adds minibatch stddev feature map to image using grouping.
+
+        This is the code that is common between the grouped and ungroup
+        minibatch stddev functions.
+
+        Args:
+            variance: tensor, variance of minibatch or minibatch groups.
+            tile_multiples: list, length 4, used to tile input to final shape
+                input_dims[i] * mutliples[i].
+            params: dict, user passed parameters.
+            caller: str, name of the calling function.
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [cur_batch_size, image_size, image_size, 1].
+        """
+        with tf.variable_scope(
+                "{}/{}_minibatch_stddev".format(self.name, caller)):
+            # Calculate standard deviation over the group plus small epsilon.
+            # shape = (
+            #     {"grouped": cur_batch_size / group_size, "ungrouped": 1},
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            stddev = tf.sqrt(
+                x=variance + 1e-8, name="{}_stddev".format(caller)
+            )
+            print_obj(
+                "minibatch_stddev_common", "{}_stddev".format(caller), stddev
+            )
+
+            # Take average over feature maps and pixels.
+            if params["minibatch_stddev_averaging"]:
+                # grouped shape = (cur_batch_size / group_size, 1, 1, 1)
+                # ungrouped shape = (1, 1, 1, 1)
+                stddev = tf.reduce_mean(
+                    input_tensor=stddev,
+                    axis=[1, 2, 3],
+                    keepdims=True,
+                    name="{}_stddev_average".format(caller)
+                )
+                print_obj(
+                    "minibatch_stddev_common",
+                    "{}_stddev_average".format(caller),
+                    stddev
+                )
+
+            # Replicate over group and pixels.
+            # shape = (
+            #     cur_batch_size,
+            #     image_size,
+            #     image_size,
+            #     1
+            # )
+            stddev_feature_map = tf.tile(
+                input=stddev,
+                multiples=tile_multiples,
+                name="{}_stddev_feature_map".format(caller)
+            )
+            print_obj(
+                "minibatch_stddev_common",
+                "{}_stddev_feature_map".format(caller),
+                stddev_feature_map
+            )
+
+        return stddev_feature_map
+
+    def grouped_minibatch_stddev(
+            self,
+            X,
+            cur_batch_size,
+            static_image_shape,
+            params,
+            group_size):
+        """Adds minibatch stddev feature map to image using grouping.
+
+        Args:
+            X: tf.float32 tensor, image of shape
+                [cur_batch_size, image_size, image_size, num_channels].
+            cur_batch_size: tf.int64 tensor, the dynamic batch size (in case
+                of partial batch).
+            static_image_shape: list, the static shape of each image.
+            params: dict, user passed parameters.
+            group_size: int, size of image groups.
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [cur_batch_size, image_size, image_size, 1].
+        """
+        with tf.variable_scope(
+                "{}/grouped_minibatch_stddev".format(self.name)):
+            # The group size should be less than or equal to the batch size.
+            # shape = ()
+            group_size = tf.minimum(
+                x=group_size, y=cur_batch_size, name="group_size"
+            )
+            print_obj("grouped_minibatch_stddev", "group_size", group_size)
+
+            # Split minibatch into M groups of size group_size, rank 5 tensor.
+            # shape = (
+            #     group_size,
+            #     cur_batch_size / group_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            grouped_image = tf.reshape(
+                tensor=X,
+                shape=[group_size, -1] + static_image_shape,
+                name="grouped_image"
+            )
+            print_obj(
+                "grouped_minibatch_stddev",
+                "grouped_image",
+                grouped_image
+            )
+
+            # Find the mean of each group.
+            # shape = (
+            #     1,
+            #     cur_batch_size / group_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            grouped_mean = tf.reduce_mean(
+                input_tensor=grouped_image,
+                axis=0,
+                keepdims=True,
+                name="grouped_mean"
+            )
+            print_obj(
+                "grouped_minibatch_stddev", "grouped_mean", grouped_mean
+            )
+
+            # Center each group using the mean.
+            # shape = (
+            #     group_size,
+            #     cur_batch_size / group_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            centered_grouped_image = tf.subtract(
+                x=grouped_image, y=grouped_mean, name="centered_grouped_image"
+            )
+            print_obj(
+                "grouped_minibatch_stddev",
+                "centered_grouped_image",
+                centered_grouped_image
+            )
+
+            # Calculate variance over group.
+            # shape = (
+            #     cur_batch_size / group_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            grouped_variance = tf.reduce_mean(
+                input_tensor=tf.square(x=centered_grouped_image),
+                axis=0,
+                name="grouped_variance"
+            )
+            print_obj(
+                "grouped_minibatch_stddev",
+                "grouped_variance",
+                grouped_variance
+            )
+
+            # Get stddev image using ops common to both grouped & ungrouped.
+            stddev_feature_map = self.minibatch_stddev_common(
+                variance=grouped_variance,
+                tile_multiples=[group_size] + static_image_shape[0:2] + [1],
+                params=params,
+                caller="grouped"
+            )
+            print_obj(
+                "grouped_minibatch_stddev",
+                "stddev_feature_map",
+                stddev_feature_map
+            )
+
+        return stddev_feature_map
+
+    def ungrouped_minibatch_stddev(
+            self,
+            X,
+            cur_batch_size,
+            static_image_shape,
+            params):
+        """Adds minibatch stddev feature map added to image channels.
+
+        Args:
+            X: tensor, image of shape
+                [cur_batch_size, image_size, image_size, num_channels].
+            cur_batch_size: tf.int64 tensor, the dynamic batch size (in case
+                of partial batch).
+            static_image_shape: list, the static shape of each image.
+            params: dict, user passed parameters.
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [cur_batch_size, image_size, image_size, 1].
+        """
+        with tf.variable_scope(
+                "{}/ungrouped_minibatch_stddev".format(self.name)):
+            # Find the mean of each group.
+            # shape = (
+            #     1,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            mean = tf.reduce_mean(
+                input_tensor=X, axis=0, keepdims=True, name="mean"
+            )
+            print_obj("ungrouped_minibatch_stddev", "mean", mean)
+
+            # Center each group using the mean.
+            # shape = (
+            #     cur_batch_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            centered_image = tf.subtract(
+                x=X, y=mean, name="centered_image"
+            )
+            print_obj(
+                "ungrouped_minibatch_stddev",
+                "centered_image",
+                centered_image
+            )
+
+            # Calculate variance over group.
+            # shape = (
+            #     1,
+            #     image_size,
+            #     image_size,
+            #     num_channels
+            # )
+            variance = tf.reduce_mean(
+                input_tensor=tf.square(x=centered_image),
+                axis=0,
+                keepdims=True,
+                name="variance"
+            )
+            print_obj(
+                "ungrouped_minibatch_stddev",
+                "variance",
+                variance
+            )
+
+            # Get stddev image using ops common to both grouped & ungrouped.
+            stddev_feature_map = self.minibatch_stddev_common(
+                variance=variance,
+                tile_multiples=[cur_batch_size] + static_image_shape[0:2] + [1],
+                params=params,
+                caller="ungrouped"
+            )
+            print_obj(
+                "ungrouped_minibatch_stddev",
+                "stddev_feature_map",
+                stddev_feature_map
+            )
+
+        return stddev_feature_map
+
+    def minibatch_stddev(self, X, params, group_size=4):
+        """Adds minibatch stddev feature map added to image.
+
+        Args:
+            X: tensor, image of shape
+                [cur_batch_size, image_size, image_size, num_channels].
+            params: dict, user passed parameters.
+            group_size: int, size of image groups.
+
+        Returns:
+            Image with minibatch standard deviation feature map added to
+                channels of shape
+                [cur_batch_size, image_size, image_size, num_channels + 1].
+        """
+        with tf.variable_scope("{}/minibatch_stddev".format(self.name)):
+            # Get dynamic shape of image.
+            # shape = (4,)
+            dynamic_image_shape = tf.shape(
+                input=X, name="dynamic_image_shape"
+            )
+            print_obj(
+                "\nminibatch_stddev",
+                "dynamic_image_shape",
+                dynamic_image_shape
+            )
+
+            # Extract current batch size (in case this is a partial batch).
+            cur_batch_size = dynamic_image_shape[0]
+
+            # Get static shape of image.
+            # shape = (3,)
+            static_image_shape = params["generator_projection_dims"]
+            print_obj(
+                "minibatch_stddev", "static_image_shape", static_image_shape
+            )
+
+            # cur_batch_size must be divisible by or smaller than group_size.
+            divisbility_condition = tf.equal(
+                x=tf.mod(x=cur_batch_size, y=group_size),
+                y=0,
+                name="divisbility_condition"
+            )
+
+            less_than_condition = tf.less(
+                x=cur_batch_size, y=group_size, name="less_than_condition"
+            )
+
+            any_condition = tf.reduce_any(
+                input_tensor=[divisbility_condition, less_than_condition],
+                name="any_condition"
+            )
+
+            # Get minibatch stddev feature map image from grouped or
+            # ungrouped branch.
+            stddev_feature_map = tf.cond(
+                pred=any_condition,
+                true_fn=lambda: self.grouped_minibatch_stddev(
+                    X=X,
+                    cur_batch_size=cur_batch_size,
+                    static_image_shape=static_image_shape,
+                    params=params,
+                    group_size=group_size
+                ),
+                false_fn=lambda: self.ungrouped_minibatch_stddev(
+                    X=X,
+                    cur_batch_size=cur_batch_size,
+                    static_image_shape=static_image_shape,
+                    params=params
+                ),
+                name="stddev_feature_map_cond"
+            )
+
+            # Append to image as new feature map.
+            # shape = (
+            #     cur_batch_size,
+            #     image_size,
+            #     image_size,
+            #     num_channels + 1
+            # )
+            appended_image = tf.concat(
+                values=[X, stddev_feature_map],
+                axis=-1,
+                name="appended_image"
+            )
+            print_obj(
+                "minibatch_stddev_common",
+                "appended_image",
+                appended_image
+            )
+
+        return appended_image
+
     def use_discriminator_logits_layer(self, block_conv, params):
         """Uses flatten and logits layers to get logits tensor.
 
@@ -635,7 +1032,15 @@ class Discriminator(object):
                 from_rgb_conv
             )
 
-            block_conv = from_rgb_conv
+            if params["use_minibatch_stddev"]:
+                block_conv = self.minibatch_stddev(
+                    X=from_rgb_conv,
+                    params=params,
+                    group_size=params["minibatch_stddev_group_size"]
+                )
+            else:
+                block_conv = from_rgb_conv
+
             for i in range(len(block_layers)):
                 block_conv = block_layers[i](inputs=block_conv)
                 print_obj(
@@ -738,11 +1143,39 @@ class Discriminator(object):
 
             # Pass inputs through layer chain.
             block_conv = weighted_sum
-            for i in range(len(permanent_block_layers)):
+
+            # Find number of permanent growth conv layers.
+            num_perm_growth_conv_layers = len(permanent_block_layers)
+            num_perm_growth_conv_layers -= len(params["conv_num_filters"][0])
+
+            # Loop through only the permanent growth conv layers.
+            for i in range(num_perm_growth_conv_layers):
                 block_conv = permanent_block_layers[i](inputs=block_conv)
                 print_obj(
                     "create_growth_transition_discriminator_network",
-                    "block_conv",
+                    "block_conv_{}".format(i),
+                    block_conv
+                )
+
+            if params["use_minibatch_stddev"]:
+                block_conv = self.minibatch_stddev(
+                    X=block_conv,
+                    params=params,
+                    group_size=params["minibatch_stddev_group_size"]
+                )
+                print_obj(
+                    "create_growth_transition_discriminator_network",
+                    "minibatch_stddev_block_conv",
+                    block_conv
+                )
+
+            # Loop through only the permanent base conv layers now.
+            for i in range(
+                    num_perm_growth_conv_layers, len(permanent_block_layers)):
+                block_conv = permanent_block_layers[i](inputs=block_conv)
+                print_obj(
+                    "create_growth_transition_discriminator_network",
+                    "block_conv_{}".format(i),
                     block_conv
                 )
 
@@ -789,11 +1222,37 @@ class Discriminator(object):
                 block_conv
             )
 
-            for i in range(len(block_layers)):
+            # Find number of permanent growth conv layers.
+            num_growth_conv_layers = len(block_layers)
+            num_growth_conv_layers -= len(params["conv_num_filters"][0])
+
+            # Loop through only the permanent growth conv layers.
+            for i in range(num_growth_conv_layers):
                 block_conv = block_layers[i](inputs=block_conv)
                 print_obj(
                     "create_final_discriminator_network",
-                    "block_conv",
+                    "block_conv_{}".format(i),
+                    block_conv
+                )
+
+            if params["use_minibatch_stddev"]:
+                block_conv = self.minibatch_stddev(
+                    X=block_conv,
+                    params=params,
+                    group_size=params["minibatch_stddev_group_size"]
+                )
+                print_obj(
+                    "create_final_discriminator_network",
+                    "minibatch_stddev_block_conv",
+                    block_conv
+                )
+
+            # Loop through only the permanent base conv layers now.
+            for i in range(num_growth_conv_layers, len(block_layers)):
+                block_conv = block_layers[i](inputs=block_conv)
+                print_obj(
+                    "create_final_discriminator_network",
+                    "block_conv_{}".format(i),
                     block_conv
                 )
 

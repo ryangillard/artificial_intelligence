@@ -362,6 +362,24 @@ if __name__ == "__main__":
 
     # Discriminator parameters.
     parser.add_argument(
+        "--use_minibatch_stddev",
+        help="If want to use minibatch stddev op before first base conv layer.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--minibatch_stddev_group_size",
+        help="The size of groups to split minibatch examples into.",
+        type=int,
+        default=4
+    )
+    parser.add_argument(
+        "--minibatch_stddev_averaging",
+        help="If want to average across feature maps and pixels for minibatch stddev.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--discriminator_l1_regularization_scale",
         help="Scale factor for L1 regularization for discriminator.",
         type=float,
@@ -424,24 +442,6 @@ if __name__ == "__main__":
     else:
         arguments["predict_all_resolutions"] = True
 
-    # Fix normalize_latent.
-    if arguments["normalize_latent"].lower() == "false":
-        arguments["normalize_latent"] = False
-    else:
-        arguments["normalize_latent"] = True
-
-    # Fix use_pixel_norm.
-    if arguments["use_pixel_norm"].lower() == "false":
-        arguments["use_pixel_norm"] = False
-    else:
-        arguments["use_pixel_norm"] = True
-
-    # Fix generator_projection_dims.
-    arguments["generator_projection_dims"] = [
-        int(x)
-        for x in arguments["generator_projection_dims"].split(",")
-    ]
-
     # Fix conv layer property parameters.
     arguments["conv_num_filters"] = [
         [int(y) for y in x.split(",")]
@@ -503,6 +503,30 @@ if __name__ == "__main__":
     arguments["discriminator_from_rgb_layers"] = discriminator_from_rgb_layers
     arguments["discriminator_base_conv_blocks"] = discriminator_base_conv_blocks
     arguments["discriminator_growth_conv_blocks"] = discriminator_growth_conv_blocks
+
+    # Fix normalize_latent.
+    if arguments["normalize_latent"].lower() == "false":
+        arguments["normalize_latent"] = False
+    else:
+        arguments["normalize_latent"] = True
+
+    # Fix use_pixel_norm.
+    if arguments["use_pixel_norm"].lower() == "false":
+        arguments["use_pixel_norm"] = False
+    else:
+        arguments["use_pixel_norm"] = True
+
+    # Fix generator_projection_dims.
+    arguments["generator_projection_dims"] = [
+        int(x)
+        for x in arguments["generator_projection_dims"].split(",")
+    ]
+
+    # Fix use_minibatch_stddev.
+    if arguments["use_minibatch_stddev"].lower() == "false":
+        arguments["use_minibatch_stddev"] = False
+    else:
+        arguments["use_minibatch_stddev"] = True
 
     # Fix clip_gradients.
     if arguments["generator_clip_gradients"].lower() == "none":
