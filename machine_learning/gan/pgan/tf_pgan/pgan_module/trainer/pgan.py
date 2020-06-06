@@ -14,7 +14,7 @@ def train_network(loss, global_step, alpha_var, params, scope):
             training loop.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
         params: dict, user passed parameters.
-        scope: str, the variables that to train.
+        scope: str, the network's name to find its variables to train.
 
     Returns:
         Loss tensor and training op.
