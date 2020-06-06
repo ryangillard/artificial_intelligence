@@ -191,32 +191,8 @@ def pgan_model(features, labels, mode, params):
     print_obj("pgan_model", "alpha_var", alpha_var)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        # Extract given latent vectors from features dictionary.
-        Z = tf.cast(x=features["Z"], dtype=tf.float32)
-
-        # Get predictions from generator.
-        generated_images = pgan_generator.get_predict_generator_outputs(
-            Z=Z, params=params
-        )
-
-        # Create predictions dictionary.
-        if params["predict_all_resolutions"]:
-            predictions_dict = {
-                "generated_images_{}x{}".format(
-                    4 * 2 ** i, 4 * 2 ** i
-                ): generated_images[i]
-                for i in range(len(params["conv_num_filters"]))
-            }
-        else:
-            predictions_dict = {
-                "generated_images": generated_images
-            }
-
-        # Create export outputs.
-        export_outputs = {
-            "predict_export_outputs": tf.estimator.export.PredictOutput(
-                outputs=predictions_dict)
-        }
+        # Get predictions and export outputs.
+        predictions_dict, export_outputs = predict.get_predictions(params)
     else:
         # Extract image from features dictionary.
         X = features["image"]
