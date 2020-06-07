@@ -1376,7 +1376,7 @@ class Discriminator(object):
         print_obj("\nget_discriminator_logits", "X", X)
 
         # Get discriminator's logits tensor.
-        train_steps = params["train_steps"]
+        train_steps = params["train_steps"] + params["prev_train_steps"]
         num_steps_until_growth = params["num_steps_until_growth"]
         num_stages = train_steps // num_steps_until_growth
         if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):

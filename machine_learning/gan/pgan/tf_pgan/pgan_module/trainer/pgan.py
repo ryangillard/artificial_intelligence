@@ -46,7 +46,9 @@ def resize_real_images(image, params):
     """
     print_obj("\nresize_real_images", "image", image)
     # Resize real image for each block.
-    num_stages = params["train_steps"] // params["num_steps_until_growth"]
+    train_steps = params["train_steps"] + params["prev_train_steps"]
+    num_steps_until_growth = params["num_steps_until_growth"]
+    num_stages = train_steps // num_steps_until_growth
     if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
         print(
             "\nresize_real_images: NEVER GOING TO GROW, SKIP SWITCH CASE!"

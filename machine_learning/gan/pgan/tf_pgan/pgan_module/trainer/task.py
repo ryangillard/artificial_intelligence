@@ -205,6 +205,12 @@ if __name__ == "__main__":
         type=int,
         default=100
     )
+    parser.add_argument(
+        "--prev_train_steps",
+        help="Number of steps already been trained in previous runs.",
+        type=int,
+        default=0
+    )
 
     # Eval parameters.
     parser.add_argument(
