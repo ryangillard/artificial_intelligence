@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from . import image_utils
 from .print_object import print_obj
 
 
@@ -42,8 +43,8 @@ def decode_example(protos, params):
     )
     print_obj("decode_example", "image", image)
 
-    # Convert from [0, 255] -> [-1.0, 1.0] floats.
-    image = tf.cast(x=image, dtype=tf.float32) * (2. / 255) - 1.0
+    # Preprocess image.
+    image = image_utils.preprocess_image(image=image, params=params)
     print_obj("decode_example", "image", image)
 
     # Convert label from a scalar uint8 tensor to an int32 scalar.

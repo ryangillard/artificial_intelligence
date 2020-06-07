@@ -85,7 +85,8 @@ def train_network(loss, global_step, alpha_var, params, scope):
                 dtype=tf.float32
             ),
             y=params["num_steps_until_growth"]
-        )
+        ),
+        name="{}_alpha_var_update_op".format(scope)
     )
     print_obj("train_network", "alpha_var_update_op", alpha_var_update_op)
 
@@ -93,6 +94,67 @@ def train_network(loss, global_step, alpha_var, params, scope):
     with tf.control_dependencies(control_inputs=[alpha_var_update_op]):
         loss = tf.identity(
             input=loss, name="{}_train_network_loss_identity".format(scope)
+        )
+
+    return loss, train_op
+
+
+def get_loss_and_train_op(
+        generator_total_loss, discriminator_total_loss, alpha_var, params):
+    """Gets loss and train op for train mode.
+
+    Args:
+        generator_total_loss: tensor, scalar total loss of generator.
+        discriminator_total_loss: tensor, scalar total loss of discriminator.
+        alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        params: dict, user passed parameters.
+
+    Returns:
+        Loss scalar tensor and train_op to be used by the EstimatorSpec.
+    """
+    # Get global step.
+    global_step = tf.train.get_or_create_global_step()
+
+    # Determine if it is time to train generator or discriminator.
+    cycle_step = tf.mod(
+        x=global_step,
+        y=tf.cast(
+            x=tf.add(
+                x=params["generator_train_steps"],
+                y=params["discriminator_train_steps"]
+            ),
+            dtype=tf.int64
+        ),
+        name="get_loss_and_train_op_cycle_step"
+    )
+
+    # Create choose generator condition.
+    condition = tf.less(
+        x=cycle_step, y=params["generator_train_steps"]
+    )
+
+    # Needed for batch normalization, but has no effect otherwise.
+    update_ops = tf.get_collection(key=tf.GraphKeys.UPDATE_OPS)
+
+    with tf.control_dependencies(control_inputs=update_ops):
+        # Conditionally choose to train generator or discriminator.
+        loss, train_op = tf.cond(
+            pred=condition,
+            true_fn=lambda: train_network(
+                loss=generator_total_loss,
+                global_step=global_step,
+                alpha_var=alpha_var,
+                params=params,
+                scope="generator"
+            ),
+            false_fn=lambda: train_network(
+                loss=discriminator_total_loss,
+                global_step=global_step,
+                alpha_var=alpha_var,
+                params=params,
+                scope="discriminator"
+            ),
+            name="train_network_cond"
         )
 
     return loss, train_op

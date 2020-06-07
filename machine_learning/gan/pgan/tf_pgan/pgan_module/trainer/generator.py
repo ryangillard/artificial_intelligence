@@ -5,7 +5,8 @@ from .print_object import print_obj
 
 
 class Generator(object):
-    """
+    """Generator that takes latent vector input and outputs image.
+
     Fields:
         name: str, name of `Generator`.
         kernel_regularizer: `l1_l2_regularizer` object, regularizar for kernel
@@ -18,7 +19,7 @@ class Generator(object):
         build_generator_tensors: list, tensors used to build layer internals.
     """
     def __init__(self, kernel_regularizer, bias_regularizer, params, name):
-        """Creates generator network and returns generated output.
+        """Instantiates and builds generator network.
 
         Args:
             kernel_regularizer: `l1_l2_regularizer` object, regularizar for
@@ -1024,7 +1025,7 @@ class Generator(object):
     ##########################################################################
 
     def get_train_eval_generator_outputs(self, Z, alpha_var, params):
-        """Uses generator network and returns generated output for train/eval.
+        """Uses generator network and returns image for train/eval.
 
         Args:
             Z: tensor, latent vectors of shape [cur_batch_size, latent_size].
@@ -1088,37 +1089,35 @@ class Generator(object):
 
         return generated_outputs
 
-    def get_predict_generator_outputs(self, Z, params):
-        """Uses generator network and returns generated output for predict.
+    def get_predict_generator_outputs(self, Z, params, block_idx):
+        """Uses generator network and returns image for predict.
 
         Args:
             Z: tensor, latent vectors of shape [cur_batch_size, latent_size].
             params: dict, user passed parameters.
+            block_idx: int, current conv layer block's index.
 
         Returns:
             Generated image output tensor of shape
-                [cur_batch_size, image_size, image_size, depth].
+                [cur_batch_size, image_size, image_size, depth] or list of
+                them for each resolution.
         """
         print_obj("\nget_predict_generator_outputs", "Z", Z)
 
-        if params["predict_all_resolutions"]:
-            generated_outputs = [
-                # 4x4
-                self.create_base_generator_network(Z=Z, params=params)
-            ]
-
-            generated_outputs.extend(
-                [
-                    # 8x8 through 1024x1024
-                    self.create_growth_transition_generator_network(
-                        Z=Z,
-                        original_image_size=params["generator_projection_dims"][0:2],
-                        alpha_var=tf.ones(shape=[], dtype=tf.float32),
-                        params=params,
-                        trans_idx=i
-                    )
-                    for i in range(len(params["conv_num_filters"]) - 1)
-                ]
+        # Get generator's generated image.
+        if block_idx == 0:
+            # 4x4
+            generated_outputs = self.create_base_generator_network(
+                Z=Z, params=params
+            )
+        elif block_idx < len(params["conv_num_filters"]) - 1:
+            # 8x8 through 512x512
+            generated_outputs = self.create_growth_transition_generator_network(
+                Z=Z,
+                original_image_size=params["generator_projection_dims"][0:2],
+                alpha_var=tf.ones(shape=[], dtype=tf.float32),
+                params=params,
+                trans_idx=block_idx - 1
             )
         else:
             # 1024x1024

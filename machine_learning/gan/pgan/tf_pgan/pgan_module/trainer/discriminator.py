@@ -5,7 +5,8 @@ from .print_object import print_obj
 
 
 class Discriminator(object):
-    """
+    """Discriminator that takes image input and outputs logits.
+
     Fields:
         name: str, name of `Discriminator`.
         kernel_regularizer: `l1_l2_regularizer` object, regularizar for kernel
@@ -23,7 +24,7 @@ class Discriminator(object):
             internals.
     """
     def __init__(self, kernel_regularizer, bias_regularizer, params, name):
-        """Creates generator network and returns generated output.
+        """Instantiates and builds discriminator network.
 
         Args:
             kernel_regularizer: `l1_l2_regularizer` object, regularizar for
@@ -1362,7 +1363,7 @@ class Discriminator(object):
     ##########################################################################
 
     def get_discriminator_logits(self, X, alpha_var, params):
-        """Uses generator network and returns generated output for train/eval.
+        """Uses discriminator network and returns logits for train/eval.
 
         Args:
             X: tensor, image tensors of shape
