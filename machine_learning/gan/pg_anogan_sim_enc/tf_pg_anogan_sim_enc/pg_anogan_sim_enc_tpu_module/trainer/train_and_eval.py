@@ -19,16 +19,17 @@ def get_logits_and_losses(
     Returns:
         Real and fake logits and generator, discriminator, and encoder losses.
     """
+    func_name = "get_logits_and_losses"
     # Extract image from features dictionary.
     X = features["image"]
-    print_obj("\nget_logits_and_losses", "X", X)
+    print_obj("\n" + func_name, "X", X)
 
     if params["use_tpu"]:
         # Get dynamic batch size in case of partial batch.
         cur_batch_size = tf.shape(
             input=X,
             out_type=tf.int32,
-            name="get_logits_and_losses_cur_batch_size"
+            name="{}_cur_batch_size".format(func_name)
         )[0]
 
         # Create random noise latent vector for each batch example.
@@ -47,7 +48,7 @@ def get_logits_and_losses(
             stddev=1.0,
             dtype=tf.float32
         )
-    print_obj("get_logits_and_losses", "Z", Z)
+    print_obj(func_name, "Z", Z)
 
     # Get generated image from generator network from gaussian noise.
     print("\nCall generator with Z = {}.".format(Z))

@@ -16,6 +16,7 @@ def decode_example(protos, params):
     Returns:
         Image and label tensors.
     """
+    func_name = "decode_example"
     # Create feature schema map for protos.
     features = {
         "image_raw": tf.FixedLenFeature(shape=[], dtype=tf.string),
@@ -26,7 +27,7 @@ def decode_example(protos, params):
     parsed_features = tf.parse_single_example(
         serialized=protos, features=features
     )
-    print_obj("\ndecode_example", "features", features)
+    print_obj("\n" + func_name, "features", features)
 
     # Convert from a scalar string tensor (whose single string has
     # length height * width * depth) to a uint8 tensor with shape
@@ -34,22 +35,22 @@ def decode_example(protos, params):
     image = tf.decode_raw(
         input_bytes=parsed_features["image_raw"], out_type=tf.uint8
     )
-    print_obj("decode_example", "image", image)
+    print_obj(func_name, "image", image)
 
     # Reshape flattened image back into normal dimensions.
     image = tf.reshape(
         tensor=image,
         shape=[params["height"], params["width"], params["depth"]]
     )
-    print_obj("decode_example", "image", image)
+    print_obj(func_name, "image", image)
 
     # Preprocess image.
     image = image_utils.preprocess_image(image=image, params=params)
-    print_obj("decode_example", "image", image)
+    print_obj(func_name, "image", image)
 
     # Convert label from a scalar uint8 tensor to an int32 scalar.
     label = tf.cast(x=parsed_features["label"], dtype=tf.int32)
-    print_obj("decode_example", "label", label)
+    print_obj(func_name, "label", label)
 
     return {"image": image}, label
 
@@ -118,7 +119,6 @@ def read_dataset(filename, mode, batch_size, params):
             Batched dataset object of dictionary of feature tensors and label
                 tensor.
         """
-
         # Extract per core batch size from created dict for TPU.
         batch_size = params["batch_size"]
 

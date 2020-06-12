@@ -18,12 +18,14 @@ def train_and_evaluate(args):
         `Estimator` object.
     """
     print_obj("train_and_evaluate", "args", args)
+    # Ensure filewriter cache is clear for TensorBoard events file.
+    tf.summary.FileWriterCache.clear()
+
     # Set logging to be level of INFO.
     tf.logging.set_verbosity(tf.logging.INFO)
 
     # Create TPU config.
     if args["use_tpu"]:
-        STEPS_PER_EVAL = args["num_steps_until_growth"]
         tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver()
         tf.config.experimental_connect_to_cluster(tpu_cluster_resolver)
         # This is the TPU initialization code that has to be at the beginning.
@@ -33,14 +35,14 @@ def train_and_evaluate(args):
         config = tf.contrib.tpu.RunConfig(
             cluster=tpu_cluster_resolver,
             model_dir=args["output_dir"],
-            save_checkpoints_steps=STEPS_PER_EVAL,
+            save_checkpoints_steps=100,
             tpu_config=tf.contrib.tpu.TPUConfig(
-                iterations_per_loop=STEPS_PER_EVAL,
+                iterations_per_loop=args["num_steps_until_growth"],
                 per_host_input_for_training=True
             )
         )
     else:
-        config = tf.contrib.tpu.RunConfig()
+        config = tf.contrib.tpu.RunConfig(save_checkpoints_steps=100)
 
     if args["use_tpu"]:
         # Growth phases.

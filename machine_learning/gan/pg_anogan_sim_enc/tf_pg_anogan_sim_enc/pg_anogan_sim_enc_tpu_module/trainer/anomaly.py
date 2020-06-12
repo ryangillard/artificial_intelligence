@@ -94,7 +94,7 @@ def get_origin_distance_loss(encoder_logits, params):
         x=tf.reduce_sum(
             input_tensor=tf.square(x=encoder_logits),
             axis=-1
-        ),
+        ) + 1e-8,
         name="z_hat_l2_norm"
     )
     print_obj("\nget_origin_distance_loss", "z_hat_l2_norm", z_hat_l2_norm)

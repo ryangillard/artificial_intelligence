@@ -292,11 +292,7 @@ class Encoder(image_to_vector.ImageToVector):
             lambda2=params["encoder_l2_regularization_scale"],
             scope=self.name
         )
-        print_obj(
-            "get_encoder_loss",
-            "encoder_reg_loss",
-            encoder_reg_loss
-        )
+        print_obj(func_name, "encoder_reg_loss", encoder_reg_loss)
 
         # Combine losses for total losses.
         encoder_total_loss = tf.add(
@@ -304,10 +300,24 @@ class Encoder(image_to_vector.ImageToVector):
             y=encoder_reg_loss,
             name="{}_total_loss".format(self.name)
         )
-        print_obj(
-            "get_encoder_loss",
-            "encoder_total_loss",
-            encoder_total_loss
-        )
+        print_obj(func_name, "encoder_total_loss", encoder_total_loss)
+
+        if not params["use_tpu"]:
+            # Add summaries for TensorBoard.
+            tf.summary.scalar(
+                name="encoder_loss",
+                tensor=encoder_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="encoder_reg_loss",
+                tensor=encoder_reg_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="encoder_total_loss",
+                tensor=encoder_reg_loss,
+                family="total_losses"
+            )
 
         return encoder_total_loss

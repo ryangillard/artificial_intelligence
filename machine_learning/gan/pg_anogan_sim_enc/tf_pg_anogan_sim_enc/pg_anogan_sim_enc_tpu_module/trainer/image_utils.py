@@ -15,9 +15,10 @@ def preprocess_image(image, params):
         Preprocessed image tensor with shape
             [cur_batch_size, height, width, depth].
     """
+    func_name = "preprocess_image"
     # Convert from [0, 255] -> [-1.0, 1.0] floats.
     image = tf.cast(x=image, dtype=tf.float32) * (2. / 255) - 1.0
-    print_obj("preprocess_image", "image", image)
+    print_obj(func_name, "image", image)
 
     return image
 
@@ -33,8 +34,9 @@ def resize_real_image(image, params, block_idx):
     Returns:
         Resized image tensor.
     """
-    print_obj("\nresize_real_image", "block_idx", block_idx)
-    print_obj("resize_real_image", "image", image)
+    func_name = "resize_real_image"
+    print_obj("\n" + func_name, "block_idx", block_idx)
+    print_obj(func_name, "image", image)
 
     # Resize image to match GAN size at current block index.
     resized_image = tf.image.resize(
@@ -44,9 +46,9 @@ def resize_real_image(image, params, block_idx):
             params["generator_projection_dims"][1] * (2 ** block_idx)
         ],
         method="nearest",
-        name="resize_real_images_resized_image_{}".format(block_idx)
+        name="{}_resized_image_{}".format(func_name, block_idx)
     )
-    print_obj("resize_real_images", "resized_image", resized_image)
+    print_obj(func_name, "resized_image", resized_image)
 
     return resized_image
 
@@ -61,14 +63,15 @@ def resize_real_images(image, params):
     Returns:
         Resized image tensor.
     """
-    print_obj("\nresize_real_images", "image", image)
+    func_name = "resize_real_images"
+    print_obj("\n" + func_name, "image", image)
     # Resize real image for each block.
     train_steps = params["train_steps"] + params["prev_train_steps"]
     num_steps_until_growth = params["num_steps_until_growth"]
     num_stages = train_steps // num_steps_until_growth
     if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
         print(
-            "\nresize_real_images: NEVER GOING TO GROW, SKIP SWITCH CASE!"
+            "\n: NEVER GOING TO GROW, SKIP SWITCH CASE!".format(func_name)
         )
         # If we never are going to grow, no sense using the switch case.
         # 4x4
@@ -89,10 +92,10 @@ def resize_real_images(image, params):
                 x=tf.floordiv(
                     x=tf.train.get_or_create_global_step(),
                     y=params["num_steps_until_growth"],
-                    name="resize_real_images_global_step_floordiv"
+                    name="{}_global_step_floordiv".format(func_name)
                 ),
                 dtype=tf.int32,
-                name="resize_real_images_growth_index"
+                name="{}_growth_index".format(func_name)
             )
 
             # Switch to case based on number of steps for resized image.
@@ -152,8 +155,8 @@ def resize_real_images(image, params):
                         block_idx=min(8, len(params["conv_num_filters"]) - 1)
                     )
                 ],
-                name="resize_real_images_switch_case_resized_image"
+                name="{}_switch_case_resized_image".format(func_name)
             )
-    print_obj("resize_real_images", "resized_image", resized_image)
+    print_obj(func_name, "resized_image", resized_image)
 
     return resized_image

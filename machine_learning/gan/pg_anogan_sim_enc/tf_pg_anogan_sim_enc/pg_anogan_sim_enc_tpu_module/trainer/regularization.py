@@ -23,6 +23,7 @@ def get_regularization_loss(lambda1=0., lambda2=0., scope=None):
         Returns:
             Scalar tensor.
         """
+        func_name = "sum_nd_tensor_list_to_scalar_tensor"
         # Sum list of tensors into a list of scalars.
         t_reduce_sum_list = [
             tf.reduce_sum(
@@ -31,26 +32,19 @@ def get_regularization_loss(lambda1=0., lambda2=0., scope=None):
             )
             for t in t_list
         ]
-        print_obj(
-            "\nsum_nd_tensor_list_to_scalar_tensor",
-            "t_reduce_sum_list",
-            t_reduce_sum_list
-        )
+        print_obj("\n" + func_name, "t_reduce_sum_list", t_reduce_sum_list)
 
         # Add all scalars together into one scalar.
         t_scalar_sum_tensor = tf.add_n(
             inputs=t_reduce_sum_list,
             name="{}_t_scalar_sum_tensor".format(scope)
         )
-        print_obj(
-            "sum_nd_tensor_list_to_scalar_tensor",
-            "t_scalar_sum_tensor",
-            t_scalar_sum_tensor
-        )
+        print_obj(func_name, "t_scalar_sum_tensor", t_scalar_sum_tensor)
 
         return t_scalar_sum_tensor
 
-    print_obj("\nget_regularization_loss", "scope", scope)
+    func_name = "get_regularization_loss"
+    print_obj("\n" + func_name, "scope", scope)
     if lambda1 <= 0. and lambda2 <= 0.:
         # No regularization so return zero.
         return tf.zeros(shape=[], dtype=tf.float32)
@@ -59,16 +53,12 @@ def get_regularization_loss(lambda1=0., lambda2=0., scope=None):
     trainable_reg_vars_list = tf.get_collection(
         tf.GraphKeys.REGULARIZATION_LOSSES, scope=scope)
     print_obj(
-        "get_regularization_loss",
-        "trainable_reg_vars_list",
-        trainable_reg_vars_list
+        func_name, "trainable_reg_vars_list", trainable_reg_vars_list
     )
 
     for var in trainable_reg_vars_list:
         print_obj(
-            "get_regularization_loss_{}".format(scope),
-            "{}".format(var.name),
-            var.graph
+            "{}_{}".format(func_name, scope), "{}".format(var.name), var.graph
         )
 
     l1_loss = 0.
@@ -104,7 +94,7 @@ def get_regularization_loss(lambda1=0., lambda2=0., scope=None):
             for var in trainable_reg_vars_list
         ]
         print_obj(
-            "get_regularization_loss",
+            func_name,
             "trainable_reg_vars_squared_list",
             trainable_reg_vars_squared_list
         )

@@ -71,4 +71,22 @@ class Generator(vector_to_image.VectorToImage):
         )
         print_obj(func_name, "generator_total_loss", generator_total_loss)
 
+        if not params["use_tpu"]:
+            # Add summaries for TensorBoard.
+            tf.summary.scalar(
+                name="generator_loss",
+                tensor=generator_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="generator_reg_loss",
+                tensor=generator_reg_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="generator_total_loss",
+                tensor=generator_total_loss,
+                family="total_losses"
+            )
+
         return generator_total_loss
