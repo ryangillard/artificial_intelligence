@@ -1449,6 +1449,8 @@ class Discriminator(object):
         Returns:
             Discriminator's gradient penalty loss of shape [].
         """
+        func_name = "get_gradient_penalty_loss"
+
         with tf.name_scope(name="{}/gradient_penalty".format(self.name)):
             # Get a random uniform number rank 4 tensor.
             random_uniform_num = tf.random.uniform(
@@ -1458,48 +1460,30 @@ class Discriminator(object):
                 name="random_uniform_num"
             )
             print_obj(
-                "\nget_gradient_penalty_loss",
-                "random_uniform_num",
-                random_uniform_num
+                "\n" + func_name, "random_uniform_num", random_uniform_num
             )
 
             # Find the element-wise difference between images.
-            image_difference = real_images - fake_images
-            print_obj(
-                "get_gradient_penalty_loss",
-                "image_difference",
-                image_difference
-            )
+            image_difference = fake_images - real_images
+            print_obj(func_name, "image_difference", image_difference)
 
             # Get random samples from this mixed image distribution.
             mixed_images = random_uniform_num * image_difference
-            mixed_images += fake_images
-            print_obj(
-                "get_gradient_penalty_loss",
-                "mixed_images",
-                mixed_images
-            )
+            mixed_images += real_images
+            print_obj(func_name, "mixed_images", mixed_images)
 
             # Send to the discriminator to get logits.
             mixed_logits = self.get_discriminator_logits(
                 X=mixed_images, alpha_var=alpha_var, params=params
             )
-            print_obj(
-                "get_gradient_penalty_loss",
-                "mixed_logits",
-                mixed_logits
-            )
+            print_obj(func_name, "mixed_logits", mixed_logits)
 
             # Get the mixed loss.
             mixed_loss = tf.reduce_sum(
-                input_tensor=mixed_images,
+                input_tensor=mixed_logits,
                 name="mixed_loss"
             )
-            print_obj(
-                "get_gradient_penalty_loss",
-                "mixed_loss",
-                mixed_loss
-            )
+            print_obj(func_name, "mixed_loss", mixed_loss)
 
             # Get gradient from returned list of length 1.
             mixed_gradients = tf.gradients(
@@ -1507,11 +1491,7 @@ class Discriminator(object):
                 xs=[mixed_images],
                 name="gradients"
             )[0]
-            print_obj(
-                "get_gradient_penalty_loss",
-                "mixed_gradients",
-                mixed_gradients
-            )
+            print_obj(func_name, "mixed_gradients", mixed_gradients)
 
             # Get gradient's L2 norm.
             mixed_norms = tf.sqrt(
@@ -1521,34 +1501,22 @@ class Discriminator(object):
                         name="squared_grads"
                     ),
                     axis=[1, 2, 3]
-                )
+                ) + 1e-8
             )
-            print_obj(
-                "get_gradient_penalty_loss",
-                "mixed_norms",
-                mixed_norms
-            )
+            print_obj(func_name, "mixed_norms", mixed_norms)
 
             # Get squared difference from target of 1.0.
             squared_difference = tf.square(
                 x=mixed_norms - 1.0,
                 name="squared_difference"
             )
-            print_obj(
-                "get_gradient_penalty_loss",
-                "squared_difference",
-                squared_difference
-            )
+            print_obj(func_name, "squared_difference", squared_difference)
 
             # Get gradient penalty scalar.
             gradient_penalty = tf.reduce_mean(
                 input_tensor=squared_difference, name="gradient_penalty"
             )
-            print_obj(
-                "get_gradient_penalty_loss",
-                "gradient_penalty",
-                gradient_penalty
-            )
+            print_obj(func_name, "gradient_penalty", gradient_penalty)
 
             # Multiply with lambda to get gradient penalty loss.
             gradient_penalty_loss = tf.multiply(
@@ -1557,7 +1525,7 @@ class Discriminator(object):
                 name="gradient_penalty_loss"
             )
 
-            return gradient_penalty_loss
+        return gradient_penalty_loss
 
     def get_discriminator_loss(
             self,

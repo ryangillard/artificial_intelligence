@@ -651,7 +651,7 @@ class Discriminator(image_to_vector.ImageToVector):
         Returns:
             Discriminator's gradient penalty loss of shape [].
         """
-        func_name = "get_gradient_penalty_loss".format(self.kind)
+        func_name = "get_gradient_penalty_loss"
 
         with tf.name_scope(name="{}/gradient_penalty".format(self.name)):
             # Get a random uniform number rank 4 tensor.
@@ -666,12 +666,12 @@ class Discriminator(image_to_vector.ImageToVector):
             )
 
             # Find the element-wise difference between images.
-            image_difference = real_images - fake_images
+            image_difference = fake_images - real_images
             print_obj(func_name, "image_difference", image_difference)
 
             # Get random samples from this mixed image distribution.
             mixed_images = random_uniform_num * image_difference
-            mixed_images += fake_images
+            mixed_images += real_images
             print_obj(func_name, "mixed_images", mixed_images)
 
             # Send to the discriminator to get logits.
@@ -682,7 +682,7 @@ class Discriminator(image_to_vector.ImageToVector):
 
             # Get the mixed loss.
             mixed_loss = tf.reduce_sum(
-                input_tensor=mixed_images,
+                input_tensor=mixed_logits,
                 name="mixed_loss"
             )
             print_obj(func_name, "mixed_loss", mixed_loss)
@@ -703,7 +703,7 @@ class Discriminator(image_to_vector.ImageToVector):
                         name="squared_grads"
                     ),
                     axis=[1, 2, 3]
-                )
+                ) + 1e-8
             )
             print_obj(func_name, "mixed_norms", mixed_norms)
 
@@ -727,7 +727,7 @@ class Discriminator(image_to_vector.ImageToVector):
                 name="gradient_penalty_loss"
             )
 
-            return gradient_penalty_loss
+        return gradient_penalty_loss
 
     def get_discriminator_loss(
             self,
@@ -757,7 +757,7 @@ class Discriminator(image_to_vector.ImageToVector):
         Returns:
             Discriminator's total loss tensor of shape [].
         """
-        func_name = "get_discriminator_loss".format(self.kind)
+        func_name = "get_discriminator_loss"
 
         # Calculate base discriminator loss.
         discriminator_real_loss = tf.reduce_mean(
@@ -780,8 +780,8 @@ class Discriminator(image_to_vector.ImageToVector):
             discriminator_generated_loss
         )
 
-        discriminator_loss = tf.add(
-            x=discriminator_real_loss, y=-discriminator_generated_loss,
+        discriminator_loss = tf.subtract(
+            x=discriminator_generated_loss, y=discriminator_real_loss,
             name="{}_loss".format(self.name)
         )
         print_obj(
@@ -846,5 +846,48 @@ class Discriminator(image_to_vector.ImageToVector):
         print_obj(
             func_name, "discriminator_total_loss", discriminator_total_loss
         )
+
+        if not params["use_tpu"]:
+            # Add summaries for TensorBoard.
+            tf.summary.scalar(
+                name="discriminator_real_loss",
+                tensor=discriminator_real_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_generated_loss",
+                tensor=discriminator_generated_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_loss",
+                tensor=discriminator_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_gradient_penalty",
+                tensor=discriminator_gradient_penalty,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="epsilon_drift_penalty",
+                tensor=epsilon_drift_penalty,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_wasserstein_gp_loss",
+                tensor=discriminator_wasserstein_gp_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_reg_loss",
+                tensor=discriminator_reg_loss,
+                family="losses"
+            )
+            tf.summary.scalar(
+                name="discriminator_total_loss",
+                tensor=discriminator_total_loss,
+                family="total_losses"
+            )
 
         return discriminator_total_loss
