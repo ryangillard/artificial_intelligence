@@ -432,6 +432,18 @@ if __name__ == "__main__":
         default="8,8,256"
     )
     parser.add_argument(
+        "--generator_leaky_relu_alpha",
+        help="The amount of leakyness of generator's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
+        "--generator_to_rgb_activation",
+        help="The activation function of generator's toRGB layers.",
+        type=str,
+        default="None"
+    )
+    parser.add_argument(
         "--generator_l1_regularization_scale",
         help="Scale factor for L1 regularization for generator.",
         type=float,
@@ -454,6 +466,24 @@ if __name__ == "__main__":
         help="How quickly we train our model by scaling the gradient for generator.",
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        "--generator_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--generator_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--generator_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
     )
     parser.add_argument(
         "--generator_clip_gradients",
@@ -488,6 +518,12 @@ if __name__ == "__main__":
         default="True"
     )
     parser.add_argument(
+        "--discriminator_leaky_relu_alpha",
+        help="The amount of leakyness of discriminator's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
         "--discriminator_l1_regularization_scale",
         help="Scale factor for L1 regularization for discriminator.",
         type=float,
@@ -510,6 +546,24 @@ if __name__ == "__main__":
         help="How quickly we train our model by scaling the gradient for discriminator.",
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        "--discriminator_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--discriminator_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--discriminator_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
     )
     parser.add_argument(
         "--discriminator_clip_gradients",
@@ -538,6 +592,12 @@ if __name__ == "__main__":
 
     # Encoder parameters.
     parser.add_argument(
+        "--encoder_leaky_relu_alpha",
+        help="The amount of leakyness of encoder's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
         "--encoder_l1_regularization_scale",
         help="Scale factor for L1 regularization for encoder.",
         type=float,
@@ -560,6 +620,24 @@ if __name__ == "__main__":
         help="How quickly we train our model by scaling the gradient for encoder.",
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        "--encoder_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--encoder_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--encoder_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
     )
     parser.add_argument(
         "--encoder_clip_gradients",

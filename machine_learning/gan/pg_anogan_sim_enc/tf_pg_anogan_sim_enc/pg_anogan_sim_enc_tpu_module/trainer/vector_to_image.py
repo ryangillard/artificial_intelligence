@@ -77,12 +77,13 @@ class VectorToImage(object):
             # )
             projection_layer = tf.layers.Dense(
                 units=projection_height * projection_width * projection_depth,
-                activation=tf.nn.leaky_relu,
+                activation=None,
                 kernel_initializer="he_normal",
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
                 name="{}_projection_layer".format(self.name)
             )
+
             print_obj("\n" + func_name, "projection_layer", projection_layer)
 
         return projection_layer
@@ -109,7 +110,7 @@ class VectorToImage(object):
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -151,7 +152,7 @@ class VectorToImage(object):
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -181,6 +182,10 @@ class VectorToImage(object):
             List of toRGB 1x1 conv layers.
         """
         func_name = "instantiate_{}_to_rgb_layers".format(self.kind)
+        
+        activation_dict = {
+            "sigmoid": tf.nn.sigmoid, "relu": tf.nn.relu, "tanh": tf.nn.tanh
+        }
 
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
             # Get toRGB layer properties.
@@ -198,8 +203,9 @@ class VectorToImage(object):
                     kernel_size=to_rgb[i][0:2],
                     strides=to_rgb[i][4:6],
                     padding="same",
-                    # Notice there is no activation for toRGB conv layers.
-                    activation=None,
+                    activation=activation_dict.get(
+                        "{}_to_rgb_activation".format(self.kind).lower(), None
+                    ),
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -539,7 +545,35 @@ class VectorToImage(object):
             projection_tensor_reshaped
         )
 
-        return projection_tensor_reshaped
+        # shape = (
+        #     cur_batch_size,
+        #     projection_height,
+        #     projection_width,
+        #     projection_depth
+        # )
+        projection_tensor_leaky = tf.nn.leaky_relu(
+            features=projection_tensor_reshaped,
+            alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+            name="{}_projection_tensor_reshaped_leaky_relu".format(self.kind)
+        )
+        print_obj(
+            func_name, "projection_tensor_leaky", projection_tensor_leaky
+        )
+
+        # shape = (
+        #     cur_batch_size,
+        #     projection_height,
+        #     projection_width,
+        #     projection_depth
+        # )
+        pixel_norm_output = self.use_pixel_norm(
+            X=projection_tensor_leaky,
+            params=params,
+            epsilon=params["pixel_norm_epsilon"]
+        )
+        print_obj(func_name, "pixel_norm_output", pixel_norm_output)
+
+        return pixel_norm_output
 
     def fused_conv2d_pixel_norm(self, input_image, conv2d_layer, params):
         """Fused `Conv2D` layer and pixel norm operation.
@@ -557,8 +591,15 @@ class VectorToImage(object):
         conv_output = conv2d_layer(inputs=input_image)
         print_obj("\n" + func_name, "conv_output", conv_output)
 
+        conv_output_leaky = tf.nn.leaky_relu(
+            features=conv_output,
+            alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+            name="{}_fused_conv2d_pixel_norm_leaky_relu".format(self.kind)
+        )
+        print_obj(func_name, "conv_output_leaky", conv_output_leaky)
+
         pixel_norm_output = self.use_pixel_norm(
-            X=conv_output,
+            X=conv_output_leaky,
             params=params,
             epsilon=params["pixel_norm_epsilon"]
         )
@@ -642,11 +683,7 @@ class VectorToImage(object):
                 print_obj(func_name, "block_conv_{}".format(i), block_conv)
 
             # Convert convolution to RGB image.
-            to_rgb_conv = self.fused_conv2d_pixel_norm(
-                input_image=block_conv,
-                conv2d_layer=to_rgb_conv_layer,
-                params=params
-            )
+            to_rgb_conv = to_rgb_conv_layer(inputs=block_conv)
             print_obj(func_name, "to_rgb_conv", to_rgb_conv)
 
         return to_rgb_conv
@@ -757,11 +794,7 @@ class VectorToImage(object):
                     block_conv
                 )
 
-            growing_to_rgb_conv = self.fused_conv2d_pixel_norm(
-                input_image=block_conv,
-                conv2d_layer=growing_to_rgb_conv_layer,
-                params=params
-            )
+            growing_to_rgb_conv = growing_to_rgb_conv_layer(inputs=block_conv)
             print_obj(
                 func_name,
                 "growing_to_rgb_conv_{}".format(trans_idx),
@@ -772,10 +805,8 @@ class VectorToImage(object):
             shrinking_to_rgb_conv_layer = self.to_rgb_conv_layers[trans_idx]
 
             # Pass inputs through layer chain.
-            shrinking_to_rgb_conv = self.fused_conv2d_pixel_norm(
-                input_image=upsampled_block_conv,
-                conv2d_layer=shrinking_to_rgb_conv_layer,
-                params=params
+            shrinking_to_rgb_conv = shrinking_to_rgb_conv_layer(
+                inputs=upsampled_block_conv
             )
             print_obj(
                 func_name,
@@ -865,11 +896,7 @@ class VectorToImage(object):
             to_rgb_conv_layer = self.to_rgb_conv_layers[-1]
 
             # Pass inputs through layer chain.
-            to_rgb_conv = self.fused_conv2d_pixel_norm(
-                input_image=block_conv,
-                conv2d_layer=to_rgb_conv_layer,
-                params=params
-            )
+            to_rgb_conv = to_rgb_conv_layer(inputs=block_conv)
             print_obj(func_name, "to_rgb_conv", to_rgb_conv)
 
         return to_rgb_conv

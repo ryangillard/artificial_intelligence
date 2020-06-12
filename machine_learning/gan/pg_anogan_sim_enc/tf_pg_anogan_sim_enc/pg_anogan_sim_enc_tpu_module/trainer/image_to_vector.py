@@ -83,7 +83,7 @@ class ImageToVector(object):
                     kernel_size=from_rgb[i][0:2],
                     strides=from_rgb[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -126,7 +126,7 @@ class ImageToVector(object):
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -149,7 +149,7 @@ class ImageToVector(object):
                     kernel_size=conv_block[-1][0:2],
                     strides=conv_block[-1][4:6],
                     padding="valid",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -192,7 +192,7 @@ class ImageToVector(object):
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
-                    activation=tf.nn.leaky_relu,
+                    activation=None,
                     kernel_initializer="he_normal",
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
@@ -548,9 +548,16 @@ class ImageToVector(object):
 
             for i in range(len(block_layers)):
                 block_conv = block_layers[i](inputs=block_conv)
-                print_obj(
-                    func_name, "block_conv", block_conv
+                print_obj(func_name, "block_conv", block_conv)
+
+                block_conv = tf.nn.leaky_relu(
+                    features=block_conv,
+                    alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                    name="{}_base_layers_conv2d_{}_leaky_relu".format(
+                        self.kind, i
+                    )
                 )
+                print_obj(func_name, "block_conv_leaky", block_conv)
 
             # Get logits now.
             logits = self.use_img_to_vec_logits_layer(
@@ -589,6 +596,16 @@ class ImageToVector(object):
             print_obj(
                 "\n" + func_name, "growing_block_conv", growing_block_conv
             )
+
+            growing_block_conv = tf.nn.leaky_relu(
+                features=growing_block_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_growth_growing_from_rgb_{}_leaky_relu".format(
+                    self.kind, trans_idx
+                )
+            )
+            print_obj(func_name, "growing_block_conv_leaky", growing_block_conv)
+
             for i in range(len(growing_block_layers)):
                 growing_block_conv = growing_block_layers[i](
                     inputs=growing_block_conv
@@ -596,6 +613,15 @@ class ImageToVector(object):
                 print_obj(
                     func_name, "growing_block_conv", growing_block_conv
                 )
+
+                growing_block_conv = tf.nn.leaky_relu(
+                    features=growing_block_conv,
+                    alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                    name="{}_growth_conv_2d_{}_{}_leaky_relu".format(
+                        self.kind, trans_idx, i
+                    )
+                )
+                print_obj(func_name, "growing_block_conv_leaky", growing_block_conv)
 
             # Shrinking side chain.
             transition_downsample_layer = self.transition_downsample_layers[trans_idx]
@@ -606,11 +632,25 @@ class ImageToVector(object):
             print_obj(
                 func_name, "transition_downsample", transition_downsample
             )
+
             shrinking_from_rgb_conv = shrinking_from_rgb_conv_layer(
                 inputs=transition_downsample
             )
             print_obj(
                 func_name, "shrinking_from_rgb_conv", shrinking_from_rgb_conv
+            )
+
+            shrinking_from_rgb_conv = tf.nn.leaky_relu(
+                features=shrinking_from_rgb_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_growth_shrinking_from_rgb_{}_leaky_relu".format(
+                    self.kind, trans_idx
+                )
+            )
+            print_obj(
+                func_name,
+                "shrinking_from_rgb_conv_leaky",
+                shrinking_from_rgb_conv
             )
 
             # Weighted sum.
@@ -662,6 +702,15 @@ class ImageToVector(object):
             for i in range(num_perm_growth_conv_layers):
                 block_conv = permanent_block_layers[i](inputs=block_conv)
                 print_obj(func_name, "block_conv_{}".format(i), block_conv)
+
+                block_conv = tf.nn.leaky_relu(
+                    features=block_conv,
+                    alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                    name="{}_perm_conv_2d_{}_{}_leaky_relu".format(
+                        self.kind, trans_idx, i
+                    )
+                )
+                print_obj(func_name, "block_conv_leaky", block_conv)
 
         return block_conv
 

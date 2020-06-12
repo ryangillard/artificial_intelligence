@@ -518,6 +518,13 @@ class Discriminator(image_to_vector.ImageToVector):
             from_rgb_conv = from_rgb_conv_layer(inputs=X)
             print_obj(func_name, "from_rgb_conv", from_rgb_conv)
 
+            from_rgb_conv = tf.nn.leaky_relu(
+                features=from_rgb_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_from_rgb_conv_2d_leaky_relu".format(self.kind)
+            )
+            print_obj(func_name, "from_rgb_conv_leaky", from_rgb_conv)
+
             if params["use_minibatch_stddev"]:
                 block_conv = self.minibatch_stddev(
                     X=from_rgb_conv,
@@ -597,8 +604,15 @@ class Discriminator(image_to_vector.ImageToVector):
             from_rgb_conv_layer = self.from_rgb_conv_layers[-1]
 
             # Pass inputs through layer chain.
-            block_conv = from_rgb_conv_layer(inputs=X)
-            print_obj(func_name, "block_conv", block_conv)
+            from_rgb_conv = from_rgb_conv_layer(inputs=X)
+            print_obj(func_name, "from_rgb_conv", from_rgb_conv)
+
+            block_conv = tf.nn.leaky_relu(
+                features=from_rgb_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_final_from_rgb_conv_2d_leaky_relu".format(self.kind)
+            )
+            print_obj(func_name, "from_rgb_conv_leaky", block_conv)
 
             # Get output of final permanent growth block's last `Conv2D` layer.
             block_conv = self.create_growth_transition_img_to_vec_perm_block_network(

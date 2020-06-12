@@ -3,14 +3,16 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
-def instantiate_optimizer_slots(optimizer, variables, scope):
+def instantiate_optimizer_slots(optimizer, variables, optimizer_name, scope):
     """Instantiates optimizer slots for all parameters ahead of time.
     Args:
         optimizer: instance of `Optimizer`.
         variables: list, list of scoped trainable variables.
+        optimizer_name: str, name of optimizer.
         scope: str, the network's name to find its variables to train.
     Returns:
-        Apply gradients op to instantiate all optimizer slots.
+        Apply gradients op to instantiate all optimizer slots and add to
+            collection op for optimizer slot metric variables.
     """
     func_name = "instantiate_optimizer_slots"
     # Create zero gradients for every scoped trainable variable.
@@ -46,7 +48,40 @@ def instantiate_optimizer_slots(optimizer, variables, scope):
         instantiate_optimizer_op
     )
 
-    return instantiate_optimizer_op
+    # Add optimizer slot metric variables to global collection so that they
+    # will be written to checkpoints.
+    add_to_collection_ops = [
+        tf.add_to_collection(nametf.GraphKeys.GLOBAL_VARIABLES, value=v)
+        for v in tf.get_collection(
+            key=tf.GraphKeys.METRIC_VARIABLES, scope=optimizer_name
+        )
+    ]
+    print_obj(
+        "{}_{}".format(func_name, scope),
+        "add_to_collection_ops",
+        add_to_collection_ops
+    )
+
+    return instantiate_optimizer_op, add_to_collection_ops
+
+
+def dont_instantiate_optimizer_slots(scope):
+    """Wrapper for not instantiating optimizer slots for tf.cond.
+    Args:
+        scope: str, the network's name to find its variables to train.
+    Returns:
+        Apply gradients no op to instantiate all optimizer slots and add to
+            collection no op for optimizer slot metric variables.
+    """
+    instantiate_optimizer_no_op = tf.no_op(
+        name="{}_instantiate_optimizer_no_op".format(scope)
+    )
+
+#     add_to_collection_no_op = tf.no_op(
+#         name="{}_add_to_collection_no_op".format(scope)
+#     )
+
+    return instantiate_optimizer_no_op, []
 
 
 def train_network(
@@ -84,9 +119,23 @@ def train_network(
     }
 
     # Get optimizer and instantiate it.
-    optimizer = optimizers[params["{}_optimizer".format(scope)]](
-        learning_rate=params["{}_learning_rate".format(scope)]
-    )
+    if params["{}_optimizer".format(scope)] == "Adam":
+        optimizer = optimizers[params["{}_optimizer".format(scope)]](
+            learning_rate=params["{}_learning_rate".format(scope)],
+            beta1=params["{}_adam_beta1".format(scope)],
+            beta2=params["{}_adam_beta2".format(scope)],
+            epsilon=params["{}_adam_epsilon".format(scope)],
+            name="{}_{}_optimizer".format(
+                scope, params["{}_optimizer".format(scope)]
+            )
+        )
+    else:
+        optimizer = optimizers[params["{}_optimizer".format(scope)]](
+            learning_rate=params["{}_learning_rate".format(scope)],
+            name="{}_{}_optimizer".format(
+                scope, params["{}_optimizer".format(scope)]
+            )
+        )
     print_obj("{}_{}".format(func_name, scope), "optimizer", optimizer)
 
     # If using TPU, wrap optimizer to use an allreduce to aggregate gradients
@@ -146,24 +195,28 @@ def train_network(
 
     if params["{}_optimizer".format(scope)] != "GradientDescent":
         # Instantiate ALL optimizer slots, not just for ones without None grad.
-        instantiate_optimizer_op = tf.cond(
+        instantiate_optimizer_op, add_to_collection_ops = tf.cond(
             pred=tf.equal(
                 x=global_step, y=0, name="instantiate_optimizer_op_pred"
             ),
             true_fn=lambda: instantiate_optimizer_slots(
-                optimizer, variables, scope
+                optimizer=optimizer,
+                variables=variables,
+                optimizer_name="{}_{}_optimizer".format(
+                    scope, params["{}_optimizer".format(scope)]
+                ),
+                scope=scope
             ),
-            false_fn=lambda: tf.no_op(
-                name="{}_{}_no_op".format(func_name, scope)
-            )
-        )
+            false_fn=lambda: dont_instantiate_optimizer_slots(scope))
 
         with tf.control_dependencies(
                 control_inputs=[instantiate_optimizer_op]):
-            loss = tf.identity(
-                input=loss,
-                name="{}_{}_loss_identity".format(func_name, scope)
-            )
+            with tf.control_dependencies(
+                    control_inputs=add_to_collection_ops):
+                loss = tf.identity(
+                    input=loss,
+                    name="{}_{}_loss_identity".format(func_name, scope)
+                )
 
     # Create train op by applying gradients to variables and possibly
     # incrementing global step.

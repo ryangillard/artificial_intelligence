@@ -123,6 +123,13 @@ class Encoder(image_to_vector.ImageToVector):
             from_rgb_conv = from_rgb_conv_layer(inputs=X)
             print_obj(func_name, "from_rgb_conv", from_rgb_conv)
 
+            from_rgb_conv = tf.nn.leaky_relu(
+                features=from_rgb_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_from_rgb_conv_2d_leaky_relu".format(self.kind)
+            )
+            print_obj(func_name, "from_rgb_conv_leaky", from_rgb_conv)
+
             # Get logits after continuing through base conv block.
             logits = self.create_base_img_to_vec_block_and_logits(
                 block_conv=from_rgb_conv, params=params
@@ -185,6 +192,13 @@ class Encoder(image_to_vector.ImageToVector):
             # Pass inputs through layer chain.
             block_conv = from_rgb_conv_layer(inputs=X)
             print_obj(func_name, "block_conv", block_conv)
+
+            block_conv = tf.nn.leaky_relu(
+                features=from_rgb_conv,
+                alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                name="{}_from_rgb_conv_2d_leaky_relu".format(self.kind)
+            )
+            print_obj(func_name, "block_conv_leaky", block_conv)
 
             # Get output of final permanent growth block's last `Conv2D` layer.
             block_conv = self.create_growth_transition_img_to_vec_perm_block_network(
