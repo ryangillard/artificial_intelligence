@@ -3,12 +3,12 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
-def instantiate_optimizer_slots(optimizer, variables, optimizer_name, scope):
+def instantiate_optimizer_slots(optimizer, variables, params, scope):
     """Instantiates optimizer slots for all parameters ahead of time.
     Args:
         optimizer: instance of `Optimizer`.
         variables: list, list of scoped trainable variables.
-        optimizer_name: str, name of optimizer.
+        params: dict, user passed parameters.
         scope: str, the network's name to find its variables to train.
     Returns:
         Apply gradients op to instantiate all optimizer slots and add to
@@ -48,14 +48,20 @@ def instantiate_optimizer_slots(optimizer, variables, optimizer_name, scope):
         instantiate_optimizer_op
     )
 
-    # Add optimizer slot metric variables to global collection so that they
-    # will be written to checkpoints.
-    add_to_collection_ops = [
-        tf.add_to_collection(nametf.GraphKeys.GLOBAL_VARIABLES, value=v)
-        for v in tf.get_collection(
-            key=tf.GraphKeys.METRIC_VARIABLES, scope=optimizer_name
+    if params["save_optimizer_metrics_to_checkpoint"]:
+        optimizer_name = "{}_{}_optimizer".format(
+            scope, params["{}_optimizer".format(scope)]
         )
-    ]
+        # Add optimizer slot metric variables to global collection so that they
+        # will be written to checkpoints.
+        add_to_collection_ops = [
+            tf.add_to_collection(name=tf.GraphKeys.GLOBAL_VARIABLES, value=v)
+            for v in tf.get_collection(
+                key=tf.GraphKeys.METRIC_VARIABLES, scope=optimizer_name
+            )
+        ]
+    else:
+        add_to_collection_ops = []
     print_obj(
         "{}_{}".format(func_name, scope),
         "add_to_collection_ops",
@@ -76,10 +82,6 @@ def dont_instantiate_optimizer_slots(scope):
     instantiate_optimizer_no_op = tf.no_op(
         name="{}_instantiate_optimizer_no_op".format(scope)
     )
-
-#     add_to_collection_no_op = tf.no_op(
-#         name="{}_add_to_collection_no_op".format(scope)
-#     )
 
     return instantiate_optimizer_no_op, []
 
@@ -202,9 +204,7 @@ def train_network(
             true_fn=lambda: instantiate_optimizer_slots(
                 optimizer=optimizer,
                 variables=variables,
-                optimizer_name="{}_{}_optimizer".format(
-                    scope, params["{}_optimizer".format(scope)]
-                ),
+                params=params,
                 scope=scope
             ),
             false_fn=lambda: dont_instantiate_optimizer_slots(scope))

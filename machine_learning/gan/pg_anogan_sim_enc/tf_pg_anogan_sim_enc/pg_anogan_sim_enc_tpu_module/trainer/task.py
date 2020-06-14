@@ -283,6 +283,12 @@ if __name__ == "__main__":
         type=str,
         default="True"
     )
+    parser.add_argument(
+        "--save_optimizer_metrics_to_checkpoint",
+        help="Whether to save optimizer metrics to checkpoint or not.",
+        type=str,
+        default="True"
+    )
 
     # Eval parameters.
     parser.add_argument(
@@ -342,6 +348,12 @@ if __name__ == "__main__":
         default="True"
     )
     parser.add_argument(
+        "--predict_g_z",
+        help="If want to also predict G(z), where z is a serving input latent vector.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--anomaly_threshold",
         help="Anomaly threshold to test anomaly scores against.",
         type=float,
@@ -380,6 +392,12 @@ if __name__ == "__main__":
         help="Number of steps until layer added to generator & discriminator.",
         type=int,
         default=100
+    )
+    parser.add_argument(
+        "--use_equalized_learning_rate",
+        help="If want to scale layer weights to equalize learning rate each forward pass.",
+        type=str,
+        default="True"
     )
     parser.add_argument(
         "--conv_num_filters",
@@ -657,6 +675,11 @@ if __name__ == "__main__":
     # Fix use_tpu.
     arguments["use_tpu"] = convert_string_to_bool(arguments["use_tpu"])
 
+    # Fix save_optimizer_metrics_to_checkpoint.
+    arguments["save_optimizer_metrics_to_checkpoint"] = convert_string_to_bool(
+        arguments["save_optimizer_metrics_to_checkpoint"]
+    )
+
     # Fix eval steps.
     arguments["eval_steps"] = convert_string_to_none_or_int(
         arguments["eval_steps"])
@@ -678,6 +701,16 @@ if __name__ == "__main__":
     # Fix predict_all_resolutions.
     arguments["predict_all_resolutions"] = convert_string_to_bool(
         arguments["predict_all_resolutions"]
+    )
+
+    # Fix predict_g_z.
+    arguments["predict_g_z"] = convert_string_to_bool(
+        arguments["predict_g_z"]
+    )
+
+    # Fix use_equalized_learning_rate.
+    arguments["use_equalized_learning_rate"] = convert_string_to_bool(
+        arguments["use_equalized_learning_rate"]
     )
 
     # Fix conv layer property parameters.

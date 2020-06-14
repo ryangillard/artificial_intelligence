@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from . import equalized_learning_rate_layers
 from . import image_to_vector
 from . import regularization
 from .print_object import print_obj
@@ -52,11 +53,17 @@ class Discriminator(image_to_vector.ImageToVector):
             print_obj(func_name, "flatten_layer", flatten_layer)
 
             # Final linear layer for logits.
-            logits_layer = tf.layers.Dense(
+            logits_layer = equalized_learning_rate_layers.Dense(
                 units=1,
                 activation=None,
+                kernel_initializer=(
+                    tf.random_normal_initializer(mean=0., stddev=1.0)
+                    if params["use_equalized_learning_rate"]
+                    else "he_normal"
+                ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
+                equalized_learning_rate=params["use_equalized_learning_rate"],
                 name="{}_layers_dense_logits".format(self.name)
             )
             print_obj(func_name, "logits_layer", logits_layer)
@@ -497,16 +504,16 @@ class Discriminator(image_to_vector.ImageToVector):
     ##########################################################################
 
     def create_base_img_to_vec_network(self, X, params):
-        """Creates base img_to_vec network.
+        """Creates base discriminator network.
 
         Args:
-            X: tensor, input image to img_to_vec.
+            X: tensor, input image to discriminator.
             params: dict, user passed parameters.
 
         Returns:
-            Final logits tensor of img_to_vec.
+            Final logits tensor of discriminator.
         """
-        func_name = "create_base_{}_network".format(self.kind)
+        func_name = "create_base_discriminator_network"
 
         print_obj("\n" + func_name, "X", X)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
@@ -543,7 +550,7 @@ class Discriminator(image_to_vector.ImageToVector):
 
     def create_growth_transition_img_to_vec_network(
             self, X, alpha_var, params, trans_idx):
-        """Creates growth transition img_to_vec network.
+        """Creates growth transition discriminator network.
 
         Args:
             X: tensor, input image to img_to_vec.
@@ -552,21 +559,22 @@ class Discriminator(image_to_vector.ImageToVector):
             trans_idx: int, index of current growth transition.
 
         Returns:
-            Final logits tensor of img_to_vec.
+            Final logits tensor of discriminator.
         """
-        func_name = "create_growth_transition_{}_network".format(self.kind)
+        func_name = "create_growth_transition_discriminator_network"
 
         print_obj("\nEntered {}".format(func_name), "trans_idx", trans_idx)
         print_obj(func_name, "X", X)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
             # Get weighted sum between shrinking and growing block paths.
             weighted_sum = self.create_growth_transition_img_to_vec_weighted_sum(
-                X=X, alpha_var=alpha_var, trans_idx=trans_idx)
+                X=X, alpha_var=alpha_var, params=params, trans_idx=trans_idx)
             print_obj(func_name, "weighted_sum", weighted_sum)
 
             # Get output of final permanent growth block's last `Conv2D` layer.
-            block_conv = self.create_growth_transition_img_to_vec_perm_block_network(
-                block_conv=weighted_sum, params=params, trans_idx=trans_idx)
+            block_conv = self.create_img_to_vec_perm_growth_block_network(
+                block_conv=weighted_sum, params=params, trans_idx=trans_idx
+            )
             print_obj(func_name, "block_conv", block_conv)
 
             # Conditionally add minibatch stddev as an additional feature map.
@@ -586,22 +594,23 @@ class Discriminator(image_to_vector.ImageToVector):
 
         return logits
 
-    def create_final_img_to_vec_network(self, X, params):
-        """Creates final img_to_vec network.
+    def create_growth_stable_img_to_vec_network(self, X, params, trans_idx):
+        """Creates stable growth discriminator network.
 
         Args:
-            X: tensor, input image to img_to_vec.
+            X: tensor, input image to discriminator.
             params: dict, user passed parameters.
+            trans_idx: int, index of current growth transition.
 
         Returns:
-            Final logits tensor of img_to_vec.
+            Final logits tensor of discriminator.
         """
-        func_name = "create_final_{}_network".format(self.kind)
+        func_name = "create_growth_stable_discriminator_network"
 
         print_obj("\n" + func_name, "X", X)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
-            # Only need the last fromRGB conv layer.
-            from_rgb_conv_layer = self.from_rgb_conv_layers[-1]
+            # Get transition index fromRGB conv layer.
+            from_rgb_conv_layer = self.from_rgb_conv_layers[trans_idx + 1]
 
             # Pass inputs through layer chain.
             from_rgb_conv = from_rgb_conv_layer(inputs=X)
@@ -615,10 +624,8 @@ class Discriminator(image_to_vector.ImageToVector):
             print_obj(func_name, "from_rgb_conv_leaky", block_conv)
 
             # Get output of final permanent growth block's last `Conv2D` layer.
-            block_conv = self.create_growth_transition_img_to_vec_perm_block_network(
-                block_conv=block_conv,
-                params=params,
-                trans_idx=len(params["conv_num_filters"]) - 1
+            block_conv = self.create_img_to_vec_perm_growth_block_network(
+                block_conv=block_conv, params=params, trans_idx=trans_idx + 1
             )
             print_obj(func_name, "block_conv", block_conv)
 

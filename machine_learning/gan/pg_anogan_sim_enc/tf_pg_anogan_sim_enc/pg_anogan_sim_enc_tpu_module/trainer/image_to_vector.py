@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from . import equalized_learning_rate_layers
 from .print_object import print_obj
 
 
@@ -41,7 +42,6 @@ class ImageToVector(object):
         # Instantiate image to vector layers.
         (self.from_rgb_conv_layers,
          self.conv_layer_blocks,
-         self.transition_downsample_layers,
          self.flatten_layer,
          self.logits_layer) = self.instantiate_img_to_vec_layers(
             params
@@ -78,15 +78,20 @@ class ImageToVector(object):
 
             # Create list to hold toRGB 1x1 convs.
             from_rgb_conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=from_rgb[i][3],
                     kernel_size=from_rgb[i][0:2],
                     strides=from_rgb[i][4:6],
                     padding="same",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_from_rgb_layers_conv2d_{}_{}x{}_{}_{}".format(
                         self.name,
                         i,
@@ -121,15 +126,20 @@ class ImageToVector(object):
 
             # Create list of base conv layers.
             base_conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=conv_block[i][3],
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_base_layers_conv2d_{}_{}x{}_{}_{}".format(
                         self.name,
                         i,
@@ -144,15 +154,20 @@ class ImageToVector(object):
 
             # Have valid padding for layer just before flatten and logits.
             base_conv_layers.append(
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=conv_block[-1][3],
                     kernel_size=conv_block[-1][0:2],
                     strides=conv_block[-1][4:6],
                     padding="valid",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_base_layers_conv2d_{}_{}x{}_{}_{}".format(
                         self.name,
                         len(conv_block) - 1,
@@ -187,15 +202,20 @@ class ImageToVector(object):
 
             # Create new inner convolutional layers.
             conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=conv_block[i][3],
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_growth_layers_conv2d_{}_{}_{}x{}_{}_{}".format(
                         self.name,
                         block_idx,
@@ -210,55 +230,7 @@ class ImageToVector(object):
             ]
             print_obj("\n" + func_name, "conv_layers", conv_layers)
 
-            # Down sample from 2s X 2s to s X s image.
-            downsampled_image_layer = tf.layers.AveragePooling2D(
-                pool_size=(2, 2),
-                strides=(2, 2),
-                name="{}_growth_downsampled_image_{}".format(
-                    self.name,
-                    block_idx
-                )
-            )
-            print_obj(
-                func_name, "downsampled_image_layer", downsampled_image_layer
-            )
-
-        return conv_layers + [downsampled_image_layer]
-
-    def instantiate_img_to_vec_growth_transition_downsample_layers(
-            self, params):
-        """Instantiates img_to_vec growth transition downsample layers.
-
-        Args:
-            params: dict, user passed parameters.
-
-        Returns:
-            List of growth transition downsample layers.
-        """
-        func_name = "instantiate_{}_growth_transition_downsample_layers".format(
-            self.kind
-        )
-
-        with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
-            # Down sample from 2s X 2s to s X s image.
-            downsample_layers = [
-                tf.layers.AveragePooling2D(
-                    pool_size=(2, 2),
-                    strides=(2, 2),
-                    name="{}_growth_transition_downsample_layer_{}".format(
-                        self.name,
-                        layer_idx
-                    )
-                )
-                for layer_idx in range(
-                    1 + len(params["{}_growth_conv_blocks".format(self.kind)])
-                )
-            ]
-            print_obj(
-                "\n" + func_name, "downsample_layers", downsample_layers
-            )
-
-        return downsample_layers
+        return conv_layers
 
     def instantiate_img_to_vec_layers(self, params):
         """Instantiates layers of img_to_vec network.
@@ -270,8 +242,6 @@ class ImageToVector(object):
             from_rgb_conv_layers: list, fromRGB 1x1 `Conv2D` layers.
             conv_layer_blocks: list, lists of `Conv2D` block layers for each
                 block.
-            transition_downsample_layers: list, `AveragePooling2D` layers for
-                downsampling shrinking transition paths.
             flatten_layer: `Flatten` layer prior to logits layer.
             logits_layer: `Dense` layer for logits.
         """
@@ -308,18 +278,6 @@ class ImageToVector(object):
             func_name, "conv_layer_blocks", conv_layer_blocks
         )
 
-        # Instantiate transition downsample `AveragePooling2D` layers.
-        transition_downsample_layers = (
-            self.instantiate_img_to_vec_growth_transition_downsample_layers(
-                params=params
-            )
-        )
-        print_obj(
-            func_name,
-            "transition_downsample_layers",
-            transition_downsample_layers
-        )
-
         # Instantiate `Flatten` and `Dense` logits layers.
         (flatten_layer,
          logits_layer) = self.instantiate_img_to_vec_logits_layer(
@@ -330,7 +288,6 @@ class ImageToVector(object):
 
         return (from_rgb_conv_layers,
                 conv_layer_blocks,
-                transition_downsample_layers,
                 flatten_layer,
                 logits_layer)
 
@@ -508,11 +465,12 @@ class ImageToVector(object):
         print_obj("\n" + func_name, "block_conv", block_conv)
         # Set shape to remove ambiguity for dense layer.
         block_conv.set_shape(
-            [
+            shape=[
                 block_conv.get_shape()[0],
                 params["generator_projection_dims"][0] / 4,
                 params["generator_projection_dims"][1] / 4,
-                block_conv.get_shape()[-1]]
+                block_conv.get_shape()[-1]
+            ]
         )
         print_obj(func_name, "block_conv", block_conv)
 
@@ -569,12 +527,13 @@ class ImageToVector(object):
         return logits
 
     def create_growth_transition_img_to_vec_weighted_sum(
-            self, X, alpha_var, trans_idx):
+            self, X, alpha_var, params, trans_idx):
         """Creates growth transition img_to_vec weighted_sum
 
         Args:
-            X: tensor, input image to encoder.
+            X: tensor, input image to img_to_vec.
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
+            params: dict, user passed parameters.
             trans_idx: int, index of current growth transition.
 
         Returns:
@@ -623,18 +582,38 @@ class ImageToVector(object):
                 )
                 print_obj(func_name, "growing_block_conv_leaky", growing_block_conv)
 
+            # Down sample from 2s X 2s to s X s image.
+            growing_block_conv_downsampled = tf.layers.AveragePooling2D(
+                pool_size=(2, 2),
+                strides=(2, 2),
+                name="{}_growing_downsampled_image_{}".format(
+                    self.name,
+                    trans_idx
+                )
+            )(inputs=growing_block_conv)
+            print_obj(
+                func_name,
+                "growing_block_conv_downsampled",
+                growing_block_conv_downsampled
+            )
+
             # Shrinking side chain.
-            transition_downsample_layer = self.transition_downsample_layers[trans_idx]
             shrinking_from_rgb_conv_layer = self.from_rgb_conv_layers[trans_idx]
 
             # Pass inputs through layer chain.
-            transition_downsample = transition_downsample_layer(inputs=X)
-            print_obj(
-                func_name, "transition_downsample", transition_downsample
-            )
+            # Down sample from 2s X 2s to s X s image.
+            X_downsampled = tf.layers.AveragePooling2D(
+                pool_size=(2, 2),
+                strides=(2, 2),
+                name="{}_shrinking_downsampled_image_{}".format(
+                    self.name,
+                    trans_idx
+                )
+            )(inputs=X)
+            print_obj(func_name, "X_downsampled", X_downsampled)
 
             shrinking_from_rgb_conv = shrinking_from_rgb_conv_layer(
-                inputs=transition_downsample
+                inputs=X_downsampled
             )
             print_obj(
                 func_name, "shrinking_from_rgb_conv", shrinking_from_rgb_conv
@@ -655,7 +634,7 @@ class ImageToVector(object):
 
             # Weighted sum.
             weighted_sum = tf.add(
-                x=growing_block_conv * alpha_var,
+                x=growing_block_conv_downsampled * alpha_var,
                 y=shrinking_from_rgb_conv * (1.0 - alpha_var),
                 name="{}_growth_transition_weighted_sum_{}".format(
                     self.name, trans_idx
@@ -665,9 +644,9 @@ class ImageToVector(object):
 
         return weighted_sum
 
-    def create_growth_transition_img_to_vec_perm_block_network(
+    def create_img_to_vec_perm_growth_block_network(
             self, block_conv, params, trans_idx):
-        """Creates growth transition permanent block network.
+        """Creates img_to_vec permanent block network.
 
         Args:
             block_conv: tensor, output of previous block's layer.
@@ -675,42 +654,49 @@ class ImageToVector(object):
             trans_idx: int, index of current growth transition.
 
         Returns:
-            Tensor from final permanant growth block `Conv2D` layer.
+            Tensor from final permanant block `Conv2D` layer.
         """
-        func_name = "create_growth_transition_{}_perm_block_network".format(
-            self.kind
-        )
+        func_name = "create_{}_perm_growth_block_network".format(self.kind)
 
         print_obj("\nEntered {}".format(func_name), "trans_idx", trans_idx)
         print_obj(func_name, "block_conv", block_conv)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
-            # Permanent blocks.
-            permanent_blocks = self.conv_layer_blocks[0:trans_idx + 1]
+            # Get permanent growth blocks, so skip the base block.
+            permanent_blocks = self.conv_layer_blocks[1:trans_idx + 1]
 
-            # Reverse order of blocks and flatten.
-            permanent_block_layers = [
-                item for sublist in permanent_blocks[::-1] for item in sublist
-            ]
+            # Reverse order of blocks.
+            permanent_blocks = permanent_blocks[::-1]
 
             # Pass inputs through layer chain.
 
-            # Find number of permanent growth conv layers.
-            num_perm_growth_conv_layers = len(permanent_block_layers)
-            num_perm_growth_conv_layers -= len(params["conv_num_filters"][0])
+            # Loop through the permanent growth blocks.
+            for i in range(len(permanent_blocks)):
+                # Get layers from ith permanent block.
+                permanent_block_layers = permanent_blocks[i]
 
-            # Loop through only the permanent growth conv layers.
-            for i in range(num_perm_growth_conv_layers):
-                block_conv = permanent_block_layers[i](inputs=block_conv)
-                print_obj(func_name, "block_conv_{}".format(i), block_conv)
+                # Loop through layers of ith permanent block.
+                for j in range(len(permanent_block_layers)):
+                    block_conv = permanent_block_layers[j](inputs=block_conv)
+                    print_obj(func_name, "block_conv_{}".format(i), block_conv)
 
-                block_conv = tf.nn.leaky_relu(
-                    features=block_conv,
-                    alpha=params["{}_leaky_relu_alpha".format(self.kind)],
-                    name="{}_perm_conv_2d_{}_{}_leaky_relu".format(
-                        self.kind, trans_idx, i
+                    block_conv = tf.nn.leaky_relu(
+                        features=block_conv,
+                        alpha=params["{}_leaky_relu_alpha".format(self.kind)],
+                        name="{}_perm_conv_2d_{}_{}_{}_leaky_relu".format(
+                            self.kind, trans_idx, i, j
+                        )
                     )
-                )
-                print_obj(func_name, "block_conv_leaky", block_conv)
+                    print_obj(func_name, "block_conv_leaky", block_conv)
+
+                # Down sample from 2s X 2s to s X s image.
+                block_conv = tf.layers.AveragePooling2D(
+                    pool_size=(2, 2),
+                    strides=(2, 2),
+                    name="{}_perm_conv_downsample_{}_{}".format(
+                        self.name, trans_idx, i
+                    )
+                )(inputs=block_conv)
+                print_obj(func_name, "block_conv_downsampled", block_conv)
 
         return block_conv
 
@@ -727,7 +713,7 @@ class ImageToVector(object):
                 [cur_batch_size, image_size, image_size, depth].
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
-            growth_index: int, current growth stage.
+            growth_index: tensor, current growth stage.
 
         Returns:
             Logits tensor of shape [cur_batch_size, 1].
@@ -748,10 +734,22 @@ class ImageToVector(object):
                     params=params,
                     trans_idx=min(0, len(params["conv_num_filters"]) - 2)
                 ),
+                # 8x8
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
+                    params=params,
+                    trans_idx=min(0, len(params["conv_num_filters"]) - 2)
+                ),
                 # 16x16
                 lambda: self.create_growth_transition_img_to_vec_network(
                     X=X,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(1, len(params["conv_num_filters"]) - 2)
+                ),
+                # 16x16
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
                     params=params,
                     trans_idx=min(1, len(params["conv_num_filters"]) - 2)
                 ),
@@ -762,10 +760,22 @@ class ImageToVector(object):
                     params=params,
                     trans_idx=min(2, len(params["conv_num_filters"]) - 2)
                 ),
+                # 32x32
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
+                    params=params,
+                    trans_idx=min(2, len(params["conv_num_filters"]) - 2)
+                ),
                 # 64x64
                 lambda: self.create_growth_transition_img_to_vec_network(
                     X=X,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(3, len(params["conv_num_filters"]) - 2)
+                ),
+                # 64x64
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
                     params=params,
                     trans_idx=min(3, len(params["conv_num_filters"]) - 2)
                 ),
@@ -776,6 +786,12 @@ class ImageToVector(object):
                     params=params,
                     trans_idx=min(4, len(params["conv_num_filters"]) - 2)
                 ),
+                # 128x128
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
+                    params=params,
+                    trans_idx=min(4, len(params["conv_num_filters"]) - 2)
+                ),
                 # 256x256
                 lambda: self.create_growth_transition_img_to_vec_network(
                     X=X,
@@ -783,10 +799,22 @@ class ImageToVector(object):
                     params=params,
                     trans_idx=min(5, len(params["conv_num_filters"]) - 2)
                 ),
+                # 256x256
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
+                    params=params,
+                    trans_idx=min(5, len(params["conv_num_filters"]) - 2)
+                ),
                 # 512x512
                 lambda: self.create_growth_transition_img_to_vec_network(
                     X=X,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(6, len(params["conv_num_filters"]) - 2)
+                ),
+                # 512x512
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
                     params=params,
                     trans_idx=min(6, len(params["conv_num_filters"]) - 2)
                 ),
@@ -798,8 +826,10 @@ class ImageToVector(object):
                     trans_idx=min(7, len(params["conv_num_filters"]) - 2)
                 ),
                 # 1024x1024
-                lambda: self.create_final_img_to_vec_network(
-                    X=X, params=params
+                lambda: self.create_growth_stable_img_to_vec_network(
+                    X=X,
+                    params=params,
+                    trans_idx=min(7, len(params["conv_num_filters"]) - 2)
                 )
             ],
             name="{}_switch_case_logits".format(self.name)
@@ -825,19 +855,26 @@ class ImageToVector(object):
 
         # Switch to case based on number of steps to get logits.
         if params["growth_idx"] == 0:
+            # No growth yet, just base block.
             logits = self.create_base_img_to_vec_network(X=X, params=params)
-        elif params["growth_idx"] < 9:
-            logits = self.create_growth_transition_img_to_vec_network(
-                X=X,
-                alpha_var=alpha_var,
-                params=params,
-                trans_idx=min(
-                    params["growth_idx"] - 1,
-                    len(params["conv_num_filters"]) - 2
-                )
-            )
         else:
-            logits = self.create_final_img_to_vec_network(X=X, params=params)
+            # Determine which growth transition we're in.
+            trans_idx = (params["growth_idx"] - 1) // 2
+
+            # If there is more room to grow.
+            if params["growth_idx"] % 2 == 1:
+                # Grow network using weighted sum with smaller network.
+                logits = self.create_growth_transition_img_to_vec_network(
+                    X=X,
+                    alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=trans_idx
+                )
+            else:
+                # Stablize bigger network without weighted sum.
+                logits = self.create_growth_stable_img_to_vec_network(
+                    X=X, params=params, trans_idx=trans_idx
+                )
         print_obj("\n" + func_name, "logits", logits)
 
         return logits
@@ -882,13 +919,15 @@ class ImageToVector(object):
                 )
             else:
                 # Find growth index based on global step and growth frequency.
-                growth_index = tf.cast(
-                    x=tf.floordiv(
-                        x=tf.train.get_or_create_global_step(),
-                        y=params["num_steps_until_growth"],
-                        name="{}_global_step_floordiv".format(self.name)
-                    ),
-                    dtype=tf.int32,
+                growth_index = tf.minimum(
+                    x=tf.cast(
+                        x=tf.floordiv(
+                            x=tf.train.get_or_create_global_step() - 1,
+                            y=params["num_steps_until_growth"],
+                            name="{}_global_step_floordiv".format(self.name)
+                        ),
+                        dtype=tf.int32),
+                    y=(len(params["conv_num_filters"]) - 1) * 2,
                     name="{}_growth_index".format(self.name)
                 )
 

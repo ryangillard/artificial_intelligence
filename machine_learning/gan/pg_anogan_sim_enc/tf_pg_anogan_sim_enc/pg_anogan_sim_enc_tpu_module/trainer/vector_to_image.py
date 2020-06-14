@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from . import equalized_learning_rate_layers
 from .print_object import print_obj
 
 
@@ -75,12 +76,17 @@ class VectorToImage(object):
             #     cur_batch_size,
             #     projection_height * projection_width * projection_depth
             # )
-            projection_layer = tf.layers.Dense(
+            projection_layer = equalized_learning_rate_layers.Dense(
                 units=projection_height * projection_width * projection_depth,
                 activation=None,
-                kernel_initializer="he_normal",
+                kernel_initializer=(
+                    tf.random_normal_initializer(mean=0., stddev=1.0)
+                    if params["use_equalized_learning_rate"]
+                    else "he_normal"
+                ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
+                equalized_learning_rate=params["use_equalized_learning_rate"],
                 name="{}_projection_layer".format(self.name)
             )
 
@@ -105,15 +111,20 @@ class VectorToImage(object):
 
             # Create list of base conv layers.
             base_conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=conv_block[i][3],
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_base_layers_conv2d_{}_{}x{}_{}_{}".format(
                         self.name,
                         i,
@@ -147,15 +158,20 @@ class VectorToImage(object):
 
             # Create new inner convolutional layers.
             conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=conv_block[i][3],
                     kernel_size=conv_block[i][0:2],
                     strides=conv_block[i][4:6],
                     padding="same",
                     activation=None,
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_growth_layers_conv2d_{}_{}_{}x{}_{}_{}".format(
                         self.name,
                         block_idx,
@@ -198,7 +214,7 @@ class VectorToImage(object):
 
             # Create list to hold toRGB 1x1 convs.
             to_rgb_conv_layers = [
-                tf.layers.Conv2D(
+                equalized_learning_rate_layers.Conv2D(
                     filters=to_rgb[i][3],
                     kernel_size=to_rgb[i][0:2],
                     strides=to_rgb[i][4:6],
@@ -206,9 +222,14 @@ class VectorToImage(object):
                     activation=activation_dict.get(
                         "{}_to_rgb_activation".format(self.kind).lower(), None
                     ),
-                    kernel_initializer="he_normal",
+                    kernel_initializer=(
+                        tf.random_normal_initializer(mean=0., stddev=1.0)
+                        if params["use_equalized_learning_rate"]
+                        else "he_normal"
+                    ),
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
+                    equalized_learning_rate=params["use_equalized_learning_rate"],
                     name="{}_to_rgb_layers_conv2d_{}_{}x{}_{}_{}".format(
                         self.name,
                         i,
@@ -674,7 +695,7 @@ class VectorToImage(object):
 
             # Pass inputs through layer chain.
             block_conv = projection
-            for i in range(0, len(block_layers)):
+            for i in range(len(block_layers)):
                 block_conv = self.fused_conv2d_pixel_norm(
                     input_image=block_conv,
                     conv2d_layer=block_layers[i],
@@ -723,7 +744,7 @@ class VectorToImage(object):
 
             # Pass inputs through layer chain.
             block_conv = projection
-            for i in range(0, len(base_block_conv_layers)):
+            for i in range(len(base_block_conv_layers)):
                 block_conv = self.fused_conv2d_pixel_norm(
                     input_image=block_conv,
                     conv2d_layer=base_block_conv_layers[i],
@@ -752,7 +773,7 @@ class VectorToImage(object):
                 )
 
                 block_conv_layers = permanent_blocks[i]
-                for j in range(0, len(block_conv_layers)):
+                for j in range(len(block_conv_layers)):
                     block_conv = self.fused_conv2d_pixel_norm(
                         input_image=block_conv,
                         conv2d_layer=block_conv_layers[j],
@@ -782,7 +803,7 @@ class VectorToImage(object):
 
             # Pass inputs through layer chain.
             block_conv = upsampled_block_conv
-            for i in range(0, len(growing_block_layers)):
+            for i in range(len(growing_block_layers)):
                 block_conv = self.fused_conv2d_pixel_norm(
                     input_image=block_conv,
                     conv2d_layer=growing_block_layers[i],
@@ -828,7 +849,8 @@ class VectorToImage(object):
 
         return weighted_sum
 
-    def create_final_vec_to_img_network(self, Z, orig_img_size, params):
+    def create_growth_stable_vec_to_img_network(
+            self, Z, orig_img_size, params, trans_idx):
         """Creates final vec_to_img network.
 
         Args:
@@ -836,11 +858,12 @@ class VectorToImage(object):
             orig_img_size: list, the height and width dimensions of the
                 original image before any growth.
             params: dict, user passed parameters.
+            trans_idx: int, index of current growth transition.
 
         Returns:
             Final network block conv tensor.
         """
-        func_name = "create_final_{}_network".format(self.kind)
+        func_name = "create_growth_stable_{}_network".format(self.kind)
 
         print_obj("\n" + func_name, "Z", Z)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
@@ -850,12 +873,15 @@ class VectorToImage(object):
             )
             print_obj(func_name, "projection", projection)
 
+            # Permanent blocks.
+            permanent_blocks = self.conv_layer_blocks[0:trans_idx + 2]
+
             # Base block doesn't need any upsampling so handle differently.
-            base_block_conv_layers = self.conv_layer_blocks[0]
+            base_block_conv_layers = permanent_blocks[0]
 
             # Pass inputs through layer chain.
             block_conv = projection
-            for i in range(0, len(base_block_conv_layers)):
+            for i in range(len(base_block_conv_layers)):
                 block_conv = self.fused_conv2d_pixel_norm(
                     input_image=block_conv,
                     conv2d_layer=base_block_conv_layers[i],
@@ -866,7 +892,7 @@ class VectorToImage(object):
                 )
 
             # Growth blocks require first prev conv layer's image upsampled.
-            for i in range(1, len(self.conv_layer_blocks)):
+            for i in range(1, len(permanent_blocks)):
                 # Upsample previous block's image.
                 block_conv = self.upsample_vec_to_img_image(
                     image=block_conv,
@@ -879,8 +905,11 @@ class VectorToImage(object):
                     block_conv
                 )
 
-                block_conv_layers = self.conv_layer_blocks[i]
-                for j in range(0, len(block_conv_layers)):
+                # Get layers from ith permanent block.
+                block_conv_layers = permanent_blocks[i]
+
+                # Loop through `Conv2D` layers now of permanent block.
+                for j in range(len(block_conv_layers)):
                     block_conv = self.fused_conv2d_pixel_norm(
                         input_image=block_conv,
                         conv2d_layer=block_conv_layers[j],
@@ -892,8 +921,8 @@ class VectorToImage(object):
                         block_conv
                     )
 
-            # Only need the last toRGB conv layer.
-            to_rgb_conv_layer = self.to_rgb_conv_layers[-1]
+            # Get transition index toRGB conv layer.
+            to_rgb_conv_layer = self.to_rgb_conv_layers[trans_idx + 1]
 
             # Pass inputs through layer chain.
             to_rgb_conv = to_rgb_conv_layer(inputs=block_conv)
@@ -915,7 +944,7 @@ class VectorToImage(object):
                 original image before any growth.
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
-            growth_index: int, current growth stage.
+            growth_index: tensor, current growth stage.
 
         Returns:
             Generated image output tensor.
@@ -937,11 +966,25 @@ class VectorToImage(object):
                     params=params,
                     trans_idx=min(0, len(params["conv_num_filters"]) - 2)
                 ),
+                # 8x8
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    params=params,
+                    trans_idx=min(0, len(params["conv_num_filters"]) - 2)
+                ),
                 # 16x16
                 lambda: self.create_growth_transition_vec_to_img_network(
                     Z=Z,
                     orig_img_size=orig_img_size,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(1, len(params["conv_num_filters"]) - 2)
+                ),
+                # 16x16
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
                     params=params,
                     trans_idx=min(1, len(params["conv_num_filters"]) - 2)
                 ),
@@ -953,11 +996,25 @@ class VectorToImage(object):
                     params=params,
                     trans_idx=min(2, len(params["conv_num_filters"]) - 2)
                 ),
+                # 32x32
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    params=params,
+                    trans_idx=min(2, len(params["conv_num_filters"]) - 2)
+                ),
                 # 64x64
                 lambda: self.create_growth_transition_vec_to_img_network(
                     Z=Z,
                     orig_img_size=orig_img_size,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(3, len(params["conv_num_filters"]) - 2)
+                ),
+                # 64x64
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
                     params=params,
                     trans_idx=min(3, len(params["conv_num_filters"]) - 2)
                 ),
@@ -969,6 +1026,13 @@ class VectorToImage(object):
                     params=params,
                     trans_idx=min(4, len(params["conv_num_filters"]) - 2)
                 ),
+                # 128x128
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    params=params,
+                    trans_idx=min(4, len(params["conv_num_filters"]) - 2)
+                ),
                 # 256x256
                 lambda: self.create_growth_transition_vec_to_img_network(
                     Z=Z,
@@ -977,11 +1041,25 @@ class VectorToImage(object):
                     params=params,
                     trans_idx=min(5, len(params["conv_num_filters"]) - 2)
                 ),
+                # 256x256
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    params=params,
+                    trans_idx=min(5, len(params["conv_num_filters"]) - 2)
+                ),
                 # 512x512
                 lambda: self.create_growth_transition_vec_to_img_network(
                     Z=Z,
                     orig_img_size=orig_img_size,
                     alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=min(6, len(params["conv_num_filters"]) - 2)
+                ),
+                # 512x512
+                lambda: self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
                     params=params,
                     trans_idx=min(6, len(params["conv_num_filters"]) - 2)
                 ),
@@ -994,10 +1072,11 @@ class VectorToImage(object):
                     trans_idx=min(7, len(params["conv_num_filters"]) - 2)
                 ),
                 # 1024x1024
-                lambda: self.create_final_vec_to_img_network(
+                lambda: self.create_growth_stable_vec_to_img_network(
                     Z=Z,
                     orig_img_size=orig_img_size,
-                    params=params
+                    params=params,
+                    trans_idx=min(7, len(params["conv_num_filters"]) - 2)
                 )
             ],
             name="{}_switch_case_generated_outputs".format(self.name)
@@ -1024,26 +1103,75 @@ class VectorToImage(object):
 
         # Switch to case based on number of steps for gen outputs.
         if params["growth_idx"] == 0:
+            # No growth yet, just base block.
+            print(
+                "CALLING {} WITH growth_idx = {}".format(
+                    "create_base_vec_to_img_network".upper(),
+                    params["growth_idx"]
+                )
+            )
             generated_outputs = self.create_base_vec_to_img_network(
                 Z=Z, params=params
             )
-        elif params["growth_idx"] < 9:
-            generated_outputs = self.create_growth_transition_vec_to_img_network(
-                Z=Z,
-                orig_img_size=orig_img_size,
-                alpha_var=alpha_var,
-                params=params,
-                trans_idx=min(
-                    params["growth_idx"] - 1,
-                    len(params["conv_num_filters"]) - 2
+            print(
+                "RETURNED FROM {} WITH growth_idx = {} & generated_outputs = {}".format(
+                    "create_base_vec_to_img_network".upper(),
+                    params["growth_idx"],
+                    generated_outputs
                 )
             )
         else:
-            generated_outputs = self.create_final_vec_to_img_network(
-                Z=Z,
-                orig_img_size=orig_img_size,
-                params=params
-            )
+            # Determine which growth transition we're in.
+            trans_idx = (params["growth_idx"] - 1) // 2
+
+            # If there is more room to grow.
+            if params["growth_idx"] % 2 == 1:
+                # Grow network using weighted sum with smaller network.
+                print(
+                    "CALLING {} WITH growth_idx = {} & trans_idx = {}".format(
+                        "create_growth_transition_vec_to_img_network".upper(),
+                        params["growth_idx"],
+                        trans_idx
+                    )
+                )
+                generated_outputs = self.create_growth_transition_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    alpha_var=alpha_var,
+                    params=params,
+                    trans_idx=trans_idx
+                )
+                print(
+                    "RETURNED FROM {} WITH growth_idx = {}, trans_idx = {}, & generated_outputs = {}".format(
+                        "create_growth_transition_vec_to_img_network".upper(),
+                        params["growth_idx"],
+                        trans_idx,
+                        generated_outputs
+                    )
+                )
+            else:
+                # Stablize bigger network without weighted sum.
+                print(
+                    "CALLING {} WITH growth_idx = {} & trans_idx = {}".format(
+                        "create_growth_stable_vec_to_img_network".upper(),
+                        params["growth_idx"],
+                        trans_idx
+                    )
+                )
+                generated_outputs = self.create_growth_stable_vec_to_img_network(
+                    Z=Z,
+                    orig_img_size=orig_img_size,
+                    params=params,
+                    trans_idx=trans_idx
+                )
+                print(
+                    "RETURNED FROM {} WITH growth_idx = {}, trans_idx = {}, & generated_outputs = {}".format(
+                        "create_growth_stable_vec_to_img_network".upper(),
+                        params["growth_idx"],
+                        trans_idx,
+                        generated_outputs
+                    )
+                )
         print_obj(func_name, "generated_outputs", generated_outputs)
 
         return generated_outputs
@@ -1092,13 +1220,15 @@ class VectorToImage(object):
                 )
             else:
                 # Find growth index based on global step and growth frequency.
-                growth_index = tf.cast(
-                    x=tf.floordiv(
-                        x=tf.train.get_or_create_global_step(),
-                        y=params["num_steps_until_growth"],
-                        name="{}_global_step_floordiv".format(self.name)
-                    ),
-                    dtype=tf.int32,
+                growth_index = tf.minimum(
+                    x=tf.cast(
+                        x=tf.floordiv(
+                            x=tf.train.get_or_create_global_step() - 1,
+                            y=params["num_steps_until_growth"],
+                            name="{}_global_step_floordiv".format(self.name)
+                        ),
+                        dtype=tf.int32),
+                    y=(len(params["conv_num_filters"]) - 1) * 2,
                     name="{}_growth_index".format(self.name)
                 )
 
@@ -1147,21 +1277,13 @@ class VectorToImage(object):
             generated_outputs = self.create_base_vec_to_img_network(
                 Z=Z, params=params
             )
-        elif block_idx < len(params["conv_num_filters"]) - 1:
-            # 8x8 through 512x512
-            generated_outputs = self.create_growth_transition_vec_to_img_network(
+        else:
+            # 8x8 through 1024x1024
+            generated_outputs = self.create_growth_stable_vec_to_img_network(
                 Z=Z,
                 orig_img_size=params["{}_projection_dims".format(self.kind)][0:2],
-                alpha_var=tf.ones(shape=[], dtype=tf.float32),
                 params=params,
                 trans_idx=block_idx - 1
-            )
-        else:
-            # 1024x1024
-            generated_outputs = self.create_final_vec_to_img_network(
-                Z=Z,
-                orig_img_size=params["{}_projection_dims".format(self.kind)][0:2],
-                params=params
             )
         print_obj(func_name, "generated_outputs", generated_outputs)
 

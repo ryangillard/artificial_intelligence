@@ -81,20 +81,32 @@ def resize_real_images(image, params):
     else:
         if params["use_tpu"]:
             block_idx = min(
-                params["growth_idx"], len(params["conv_num_filters"]) - 1
+                (params["growth_idx"] - 1) // 2 + 1,
+                len(params["conv_num_filters"]) - 1
             )
             resized_image = resize_real_image(
                 image=image, params=params, block_idx=block_idx
             )
         else:
             # Find growth index based on global step and growth frequency.
-            growth_index = tf.cast(
+            growth_index = tf.add(
                 x=tf.floordiv(
-                    x=tf.train.get_or_create_global_step(),
-                    y=params["num_steps_until_growth"],
-                    name="{}_global_step_floordiv".format(func_name)
+                    x=tf.minimum(
+                        x=tf.cast(
+                            x=tf.floordiv(
+                                x=tf.train.get_or_create_global_step() - 1,
+                                y=params["num_steps_until_growth"],
+                                name="{}_global_step_floordiv".format(
+                                    func_name
+                                )
+                            ),
+                            dtype=tf.int32
+                        ),
+                        y=(len(params["conv_num_filters"]) - 1) * 2
+                    ) - 1,
+                    y=2
                 ),
-                dtype=tf.int32,
+                y=1,
                 name="{}_growth_index".format(func_name)
             )
 

@@ -67,12 +67,14 @@ def set_static_shape(features, labels, batch_size):
         Features tensor dictionary and labels tensor.
     """
     features["image"].set_shape(
-        features["image"].get_shape().merge_with(
-            tf.TensorShape([batch_size, None, None, None])
+        shape=features["image"].get_shape().merge_with(
+            other=tf.TensorShape(dims=[batch_size, None, None, None])
         )
     )
     labels.set_shape(
-        labels.get_shape().merge_with(tf.TensorShape([batch_size]))
+        shape=labels.get_shape().merge_with(
+            other=tf.TensorShape(dims=[batch_size])
+        )
     )
 
     return features, labels

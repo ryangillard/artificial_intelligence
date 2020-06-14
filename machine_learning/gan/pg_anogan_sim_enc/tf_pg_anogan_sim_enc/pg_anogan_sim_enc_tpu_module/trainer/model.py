@@ -45,13 +45,21 @@ def train_and_evaluate(args):
         config = tf.contrib.tpu.RunConfig(save_checkpoints_steps=100)
 
     if args["use_tpu"]:
-        # Growth phases.
-        num_stages = args["train_steps"] // args["num_steps_until_growth"]
-        num_growths = min(num_stages, 9)
-        args["growth_idx"] = -1
-        for i in range(num_growths):
-            args["growth_idx"] += 1
+        # Detrmine number of stages.
+        min_potential_stages = min(
+            ((args["train_steps"] - 1) // args["num_steps_until_growth"]) +1,
+            17
+        )
 
+        min_possible_stages = min(
+            min_potential_stages, len(args["conv_num_filters"]) * 2 - 1
+        )
+
+        num_stages = min_possible_stages - 1
+
+        # Growth phases.
+        args["growth_idx"] = 0
+        for i in range(num_stages):
             # Create our custom estimator using our model function.
             estimator = tf.estimator.tpu.TPUEstimator(
                 model_fn=pg_anogan_sim_enc.pg_anogan_sim_enc_model,
@@ -89,13 +97,13 @@ def train_and_evaluate(args):
                     args
                 )
             )
-
-        # Steady phase for any remaining steps.
-        growth_steps = num_growths * args["num_steps_until_growth"]
-        remaining_steps = args["train_steps"] - growth_steps
-        if remaining_steps > 0:
+            
             args["growth_idx"] += 1
 
+        # Steady phase for any remaining steps.
+        growth_steps = num_stages * args["num_steps_until_growth"]
+        remaining_steps = args["train_steps"] - growth_steps
+        if remaining_steps > 0:
             # Create our custom estimator using our model function.
             estimator = tf.estimator.tpu.TPUEstimator(
                 model_fn=pg_anogan_sim_enc.pg_anogan_sim_enc_model,
