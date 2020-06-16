@@ -66,10 +66,7 @@ def resize_real_images(image, params):
     func_name = "resize_real_images"
     print_obj("\n" + func_name, "image", image)
     # Resize real image for each block.
-    train_steps = params["train_steps"] + params["prev_train_steps"]
-    num_steps_until_growth = params["num_steps_until_growth"]
-    num_stages = train_steps // num_steps_until_growth
-    if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
+    if len(params["conv_num_filters"]) == 1:
         print(
             "\n: NEVER GOING TO GROW, SKIP SWITCH CASE!".format(func_name)
         )
@@ -79,7 +76,7 @@ def resize_real_images(image, params):
             image=image, params=params, block_idx=0
         )
     else:
-        if params["use_tpu"]:
+        if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
             block_idx = min(
                 (params["growth_idx"] - 1) // 2 + 1,
                 len(params["conv_num_filters"]) - 1

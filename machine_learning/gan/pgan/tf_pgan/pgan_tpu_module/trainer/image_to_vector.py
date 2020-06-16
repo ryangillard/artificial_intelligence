@@ -898,10 +898,7 @@ class ImageToVector(object):
         print_obj("\n" + func_name, "X", X)
 
         # Get img_to_vec's logits tensor.
-        train_steps = params["train_steps"] + params["prev_train_steps"]
-        num_steps_until_growth = params["num_steps_until_growth"]
-        num_stages = train_steps // num_steps_until_growth
-        if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
+        if len(params["conv_num_filters"]) == 1:
             print(
                 "\n {}: NOT GOING TO GROW, SKIP SWITCH CASE!".format(
                     func_name
@@ -911,7 +908,7 @@ class ImageToVector(object):
             # 4x4
             logits = self.create_base_img_to_vec_network(X=X, params=params)
         else:
-            if params["use_tpu"]:
+            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
                 logits = self.known_switch_case_img_to_vec_logits(
                     X=X, alpha_var=alpha_var, params=params
                 )

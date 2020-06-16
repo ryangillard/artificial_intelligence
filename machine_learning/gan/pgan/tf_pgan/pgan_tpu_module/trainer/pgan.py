@@ -87,10 +87,20 @@ def pgan_model(features, labels, mode, params):
             generator=pgan_generator,
             discriminator=pgan_discriminator,
             alpha_var=alpha_var,
+            mode=mode,
             params=params
         )
 
         if mode == tf.estimator.ModeKeys.TRAIN:
+            # Create variable and gradient histogram summaries.
+            train.create_variable_and_gradient_histogram_summaries(
+                loss_dict = {
+                    "generator": generator_total_loss,
+                    "discriminator": discriminator_total_loss
+                },
+                params=params
+            )
+
             # Get loss and train op for EstimatorSpec.
             loss, train_op = train.get_loss_and_train_op(
                 generator_total_loss=generator_total_loss,

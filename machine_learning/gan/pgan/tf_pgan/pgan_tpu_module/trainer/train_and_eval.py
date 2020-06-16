@@ -1,11 +1,12 @@
 import tensorflow as tf
 
 from . import image_utils
+from . import train
 from .print_object import print_obj
 
 
 def get_logits_and_losses(
-        features, generator, discriminator, alpha_var, params):
+        features, generator, discriminator, alpha_var, mode, params):
     """Gets logits and losses for both train and eval modes.
 
     Args:
@@ -13,6 +14,7 @@ def get_logits_and_losses(
         generator: instance of generator.`Generator`.
         discriminator: instance of discriminator.`Discriminator`.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        mode: tf.estimator.ModeKeys with values of either TRAIN or EVAL.
         params: dict, user passed parameters.
 
     Returns:
@@ -23,7 +25,16 @@ def get_logits_and_losses(
     X = features["image"]
     print_obj("\n" + func_name, "X", X)
 
-    if params["use_tpu"]:
+    if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
+        cur_batch_size = X.shape[0]
+        # Create random noise latent vector for each batch example.
+        Z = tf.random.normal(
+            shape=[cur_batch_size, params["latent_size"]],
+            mean=0.0,
+            stddev=1.0,
+            dtype=tf.float32
+        )
+    else:
         # Get dynamic batch size in case of partial batch.
         cur_batch_size = tf.shape(
             input=X,
@@ -38,22 +49,38 @@ def get_logits_and_losses(
             stddev=1.0,
             dtype=tf.float32
         )
-    else:
-        cur_batch_size = X.shape[0]
-        # Create random noise latent vector for each batch example.
-        Z = tf.random.normal(
-            shape=[cur_batch_size, params["latent_size"]],
-            mean=0.0,
-            stddev=1.0,
-            dtype=tf.float32
-        )
     print_obj(func_name, "Z", Z)
+
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        # Update alpha variable for fade-in.
+        alpha_var = train.update_alpha(
+            global_step=tf.train.get_or_create_global_step(),
+            alpha_var=alpha_var,
+            params=params
+        )
+    print_obj(func_name, "alpha_var", alpha_var)
+
+    if not params["use_tpu"]:
+        # Add summaries for TensorBoard.
+        tf.summary.scalar(
+            name="alpha_var",
+            tensor=alpha_var,
+            family="alpha_var"
+        )
 
     # Get generated image from generator network from gaussian noise.
     print("\nCall generator with Z = {}.".format(Z))
     generator_outputs = generator.get_train_eval_vec_to_img_outputs(
         Z=Z, alpha_var=alpha_var, params=params
     )
+
+    if not params["use_tpu"]:
+        # Add summaries for TensorBoard.
+        tf.summary.image(
+            name="generator_outputs",
+            tensor=generator_outputs,
+            max_outputs=5,
+        )
 
     # Get fake logits from discriminator using generator's output image.
     print(

@@ -727,8 +727,8 @@ class VectorToImage(object):
         func_name = "create_growth_transition_{}_network".format(self.kind)
 
         print_obj("\nEntered {}".format(func_name), "trans_idx", trans_idx)
-
         print_obj(func_name, "Z", Z)
+        print_obj(func_name, "alpha_var", alpha_var)
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
             # Project latent noise vectors into image.
             projection = self.use_vec_to_img_projection_layer(
@@ -1197,10 +1197,7 @@ class VectorToImage(object):
         print_obj("\n" + func_name, "Z", Z)
 
         # Get vec_to_img's output image tensor.
-        train_steps = params["train_steps"] + params["prev_train_steps"]
-        num_steps_until_growth = params["num_steps_until_growth"]
-        num_stages = train_steps // num_steps_until_growth
-        if (num_stages <= 0 or len(params["conv_num_filters"]) == 1):
+        if len(params["conv_num_filters"]) == 1:
             print(
                 "\n{}: NOT GOING TO GROW, SKIP SWITCH CASE!".format(func_name)
             )
@@ -1210,7 +1207,7 @@ class VectorToImage(object):
                 Z=Z, params=params
             )
         else:
-            if params["use_tpu"]:
+            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
                 # Switch to case based on number of steps for gen outputs.
                 generated_outputs = self.known_switch_case_vec_to_img_outputs(
                     Z=Z,

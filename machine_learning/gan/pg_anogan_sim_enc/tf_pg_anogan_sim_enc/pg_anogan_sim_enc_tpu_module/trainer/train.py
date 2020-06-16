@@ -3,6 +3,69 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
+def get_variables_and_gradients(loss, scope):
+    """Gets variables and their gradients wrt. loss.
+    Args:
+        loss: tensor, shape of [].
+        scope: str, the network's name to find its variables to train.
+    Returns:
+        Lists of variables and their gradients.
+    """
+    func_name = "get_variables_and_gradients"
+    # Get trainable variables.
+    variables = tf.trainable_variables(scope=scope)
+    print_obj("\n{}_{}".format(func_name, scope), "variables", variables)
+
+    # Get gradients.
+    gradients = tf.gradients(
+        ys=loss,
+        xs=variables,
+        name="{}_gradients".format(scope)
+    )
+    print_obj("\n{}_{}".format(func_name, scope), "gradients", gradients)
+
+    # Add variable names back in for identification.
+    gradients = [
+        tf.identity(
+            input=g,
+            name="{}_{}_gradients".format(func_name, v.name[:-2])
+        )
+        if tf.is_tensor(x=g) else g
+        for g, v in zip(gradients, variables)
+    ]
+    print_obj("\n{}_{}".format(func_name, scope), "gradients", gradients)
+
+    return variables, gradients
+
+
+def create_variable_and_gradient_histogram_summaries(loss_dict, params):
+    """Creates variable and gradient histogram summaries.
+    Args:
+        loss_dict: dict, keys are scopes and values are scalar loss tensors
+            for each network kind.
+        params: dict, user passed parameters.
+    """
+    if not params["use_tpu"]:
+        for scope, loss in loss_dict.items():
+            # Get variables and their gradients wrt. loss.
+            variables, gradients = get_variables_and_gradients(loss, scope)
+
+
+            # Add summaries for TensorBoard.
+            for g, v in zip(gradients, variables):
+                tf.summary.histogram(
+                    name="{}".format(v.name[:-2]),
+                    values=v,
+                    family="{}_variables".format(scope)
+                )
+                if tf.is_tensor(x=g):
+                    tf.summary.histogram(
+                        name="{}".format(v.name[:-2]),
+                        values=g,
+                        family="{}_gradients".format(scope)
+                    )
+
+
 def instantiate_optimizer_slots(optimizer, variables, params, scope):
     """Instantiates optimizer slots for all parameters ahead of time.
     Args:
@@ -146,28 +209,8 @@ def train_network(
         optimizer = tf.contrib.tpu.CrossShardOptimizer(opt=optimizer)
         print_obj("{}_{}".format(func_name, scope), "optimizer", optimizer)
 
-    # Get trainable variables.
-    variables = tf.trainable_variables(scope=scope)
-    print_obj("\n{}_{}".format(func_name, scope), "variables", variables)
-
-    # Get gradients.
-    gradients = tf.gradients(
-        ys=loss,
-        xs=variables,
-        name="{}_gradients".format(scope)
-    )
-    print_obj("\n{}_{}".format(func_name, scope), "gradients", gradients)
-
-    # Add variable names back in for identification.
-    gradients = [
-        tf.identity(
-            input=g,
-            name="{}_{}_gradients".format(func_name, v.name[:-2])
-        )
-        if tf.is_tensor(x=g) else g
-        for g, v in zip(gradients, variables)
-    ]
-    print_obj("\n{}_{}".format(func_name, scope), "gradients", gradients)
+    # Get variables and their gradients wrt. loss.
+    variables, gradients = get_variables_and_gradients(loss, scope)
 
     # Clip gradients.
     if params["{}_clip_gradients".format(scope)]:
@@ -207,7 +250,9 @@ def train_network(
                 params=params,
                 scope=scope
             ),
-            false_fn=lambda: dont_instantiate_optimizer_slots(scope))
+            false_fn=lambda: dont_instantiate_optimizer_slots(scope),
+            name="instantiate_optimizer_op_cond"
+        )
 
         with tf.control_dependencies(
                 control_inputs=[instantiate_optimizer_op]):
@@ -329,31 +374,40 @@ def update_alpha(global_step, alpha_var, params):
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
         params: dict, user passed parameters.
     Returns:
-        Alpha variable update operation.
+        Updated alpha variable.
     """
+    func_name = "update_alpha"
     # If never grow, then no need to update alpha since it is not used.
-    if len(params["conv_num_filters"]) > 1:
-        # Update alpha var to linearly scale from 0 to 1 based on steps.
-        alpha_var_update_op = tf.assign(
-            ref=alpha_var,
-            value=tf.divide(
-                x=tf.cast(
-                    x=tf.mod(
-                        x=global_step, y=params["num_steps_until_growth"]
+    if len(params["conv_num_filters"]) > 1 and params["growth_idx"] > 0:
+        if params["growth_idx"] % 2 == 1:
+            # Update alpha var to linearly scale from 0 to 1 based on steps.
+            alpha_var = tf.assign(
+                ref=alpha_var,
+                value=tf.divide(
+                    x=tf.cast(
+                        # Add 1 since it trains on global step 0, so off by 1.
+                        x=tf.add(
+                            x=tf.mod(
+                                x=global_step,
+                                y=params["num_steps_until_growth"]
+                            ),
+                            y=1
+                        ),
+                        dtype=tf.float32
                     ),
-                    dtype=tf.float32
+                    y=params["num_steps_until_growth"]
                 ),
-                y=params["num_steps_until_growth"]
-            ),
-            name="alpha_var_update_op_assign"
-        )
-    else:
-        alpha_var_update_op = tf.no_op(name="alpha_var_update_op_no_op")
-    print_obj(
-        "update_alpha", "alpha_var_update_op", alpha_var_update_op
-    )
+                name="{}_assign_linear".format(func_name)
+            )
+        else:
+            alpha_var = tf.assign(
+                ref=alpha_var,
+                value=tf.ones(shape=[], dtype=tf.float32),
+                name="{}_assign_ones".format(func_name)
+            )
+    print_obj(func_name, "alpha_var", alpha_var)
 
-    return alpha_var_update_op
+    return alpha_var
 
 
 def get_loss_and_train_op(
@@ -397,6 +451,7 @@ def get_loss_and_train_op(
     # Needed for batch normalization, but has no effect otherwise.
     update_ops = tf.get_collection(key=tf.GraphKeys.UPDATE_OPS)
 
+    # Ensure update ops get updated.
     with tf.control_dependencies(control_inputs=update_ops):
         # Conditionally choose to train generator or discriminator.
         loss, train_op = tf.cond(
@@ -419,15 +474,5 @@ def get_loss_and_train_op(
             ),
             name="{}_cond".format(func_name)
         )
-
-        # Get update op for the alpha variable.
-        alpha_var_update_op = update_alpha(global_step, alpha_var, params)
-
-        # Ensure alpha variable gets updated.
-        with tf.control_dependencies(control_inputs=[alpha_var_update_op]):
-            loss = tf.identity(
-                input=loss,
-                name="{}_loss_identity".format(func_name)
-            )
 
     return loss, train_op

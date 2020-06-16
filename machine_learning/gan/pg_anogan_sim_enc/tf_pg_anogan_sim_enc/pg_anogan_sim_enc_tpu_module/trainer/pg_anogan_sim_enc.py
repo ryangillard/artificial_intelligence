@@ -70,14 +70,15 @@ def pg_anogan_sim_enc_model(features, labels, mode, params):
     )
 
     # Create alpha variable to use for weighted sum for smooth fade-in.
-    alpha_var = tf.get_variable(
-        name="alpha_var",
-        dtype=tf.float32,
-        # When the initializer is a function, tensorflow can place it
-        # "outside of the control flow context" to make sure it always runs.
-        initializer=lambda: tf.zeros(shape=[], dtype=tf.float32),
-        trainable=False
-    )
+    with tf.variable_scope(name_or_scope="alpha", reuse=tf.AUTO_REUSE):
+        alpha_var = tf.get_variable(
+            name="alpha_var",
+            dtype=tf.float32,
+            # When the initializer is a function, tensorflow can place it
+            # "outside of the control flow context" to make sure it always runs.
+            initializer=lambda: tf.zeros(shape=[], dtype=tf.float32),
+            trainable=False
+        )
     print_obj("pg_anogan_sim_enc_model", "alpha_var", alpha_var)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -101,10 +102,21 @@ def pg_anogan_sim_enc_model(features, labels, mode, params):
             discriminator=pgan_discriminator,
             encoder=pgan_encoder,
             alpha_var=alpha_var,
+            mode=mode,
             params=params
         )
 
         if mode == tf.estimator.ModeKeys.TRAIN:
+            # Create variable and gradient histogram summaries.
+            train.create_variable_and_gradient_histogram_summaries(
+                loss_dict = {
+                    "generator": generator_total_loss,
+                    "encoder": encoder_total_loss,
+                    "discriminator": discriminator_total_loss
+                },
+                params=params
+            )
+
             # Get loss and train op for EstimatorSpec.
             loss, train_op = train.get_loss_and_train_op(
                 generator_total_loss=generator_total_loss,

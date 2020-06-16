@@ -331,7 +331,7 @@ class Encoder(image_to_vector.ImageToVector):
             )
             tf.summary.scalar(
                 name="encoder_total_loss",
-                tensor=encoder_reg_loss,
+                tensor=encoder_total_loss,
                 family="total_losses"
             )
 

@@ -236,7 +236,7 @@ class Discriminator(image_to_vector.ImageToVector):
         with tf.variable_scope(
                 "{}/grouped_minibatch_stddev".format(self.name)):
             # The group size should be less than or equal to the batch size.
-            if params["use_tpu"]:
+            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
                 group_size = min(group_size, cur_batch_size)
             else:
                 # shape = ()
@@ -415,7 +415,7 @@ class Discriminator(image_to_vector.ImageToVector):
                 "\n" + func_name, "static_image_shape", static_image_shape
             )
 
-            if params["use_tpu"]:
+            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
                 if (params["batch_size"] % group_size == 0 or
                    params["batch_size"] < group_size):
                     stddev_feature_map = self.grouped_minibatch_stddev(

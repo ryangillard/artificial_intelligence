@@ -278,14 +278,14 @@ if __name__ == "__main__":
         default=100
     )
     parser.add_argument(
-        "--prev_train_steps",
-        help="Number of steps already been trained in previous runs.",
-        type=int,
-        default=0
-    )
-    parser.add_argument(
         "--use_tpu",
         help="Whether want to use TPU or not.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--use_estimator_train_and_evaluate",
+        help="Whether want to use tf.estimator.train_and_evaluate or not.",
         type=str,
         default="True"
     )
@@ -294,6 +294,24 @@ if __name__ == "__main__":
         help="Whether to save optimizer metrics to checkpoint or not.",
         type=str,
         default="True"
+    )
+    parser.add_argument(
+        "--save_summary_steps",
+        help="How many steps to train before saving a summary.",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--save_checkpoints_steps",
+        help="How many steps to train before saving a checkpoint.",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--keep_checkpoint_max",
+        help="Max number of checkpoints to keep.",
+        type=int,
+        default=100
     )
 
     # Eval parameters.
@@ -611,6 +629,11 @@ if __name__ == "__main__":
     # Fix use_tpu.
     arguments["use_tpu"] = convert_string_to_bool(arguments["use_tpu"])
 
+    # Fix use_estimator_train_and_evaluate.
+    arguments["use_estimator_train_and_evaluate"] = convert_string_to_bool(
+        arguments["use_estimator_train_and_evaluate"]
+    )
+
     # Fix save_optimizer_metrics_to_checkpoint.
     arguments["save_optimizer_metrics_to_checkpoint"] = convert_string_to_bool(
         arguments["save_optimizer_metrics_to_checkpoint"]
@@ -729,6 +752,16 @@ if __name__ == "__main__":
 
     arguments["discriminator_clip_gradients"] = convert_string_to_none_or_float(
         arguments["discriminator_clip_gradients"])
+
+    # Fix train_steps. Ensure chosen image size gets at least one transition
+    # stage and one stable stage.
+    num_stages = 2 * len(arguments["conv_num_filters"]) - 1
+    min_train_steps_for_full_growth = (
+        num_stages * arguments["num_steps_until_growth"]
+    )
+    arguments["train_steps"] = max(
+        arguments["train_steps"], min_train_steps_for_full_growth
+    )
 
     # Append trial_id to path if we are doing hptuning.
     # This code can be removed if you are not using hyperparameter tuning.
