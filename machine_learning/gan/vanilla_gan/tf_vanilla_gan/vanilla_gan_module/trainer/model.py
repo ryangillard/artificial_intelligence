@@ -14,6 +14,11 @@ def train_and_evaluate(args):
     Returns:
         `Estimator` object.
     """
+    func_name = "train_and_evaluate"
+    print_obj("\n" + func_name, "args", args)
+    # Ensure filewriter cache is clear for TensorBoard events file.
+    tf.summary.FileWriterCache.clear()
+
     # Set logging to be level of INFO.
     tf.logging.set_verbosity(tf.logging.INFO)
 
