@@ -3,6 +3,7 @@ import tensorflow as tf
 from . import input
 from . import serving
 from . import dcgan
+from .print_object import print_obj
 
 
 def train_and_evaluate(args):
@@ -14,13 +15,27 @@ def train_and_evaluate(args):
     Returns:
         `Estimator` object.
     """
+    func_name = "train_and_evaluate"
+    print_obj("\n" + func_name, "args", args)
+    # Ensure filewriter cache is clear for TensorBoard events file.
+    tf.summary.FileWriterCache.clear()
+
     # Set logging to be level of INFO.
     tf.logging.set_verbosity(tf.logging.INFO)
+
+    # Create a RunConfig for Estimator.
+    config = tf.estimator.RunConfig(
+        model_dir=args["output_dir"],
+        save_summary_steps=args["save_summary_steps"],
+        save_checkpoints_steps=args["save_checkpoints_steps"],
+        keep_checkpoint_max=args["keep_checkpoint_max"]
+    )
 
     # Create our custom estimator using our model function.
     estimator = tf.estimator.Estimator(
         model_fn=dcgan.dcgan_model,
         model_dir=args["output_dir"],
+        config=config,
         params=args
     )
 
@@ -58,3 +73,5 @@ def train_and_evaluate(args):
     # Create train and evaluate loop to train and evaluate our estimator.
     tf.estimator.train_and_evaluate(
         estimator=estimator, train_spec=train_spec, eval_spec=eval_spec)
+
+    return estimator
