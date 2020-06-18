@@ -17,10 +17,19 @@ def train_and_evaluate(args):
     # Set logging to be level of INFO.
     tf.logging.set_verbosity(tf.logging.INFO)
 
+    # Create a RunConfig for Estimator.
+    config = tf.estimator.RunConfig(
+        model_dir=args["output_dir"],
+        save_summary_steps=args["save_summary_steps"],
+        save_checkpoints_steps=args["save_checkpoints_steps"],
+        keep_checkpoint_max=args["keep_checkpoint_max"]
+    )
+
     # Create our custom estimator using our model function.
     estimator = tf.estimator.Estimator(
         model_fn=vanilla_gan.vanilla_gan_model,
         model_dir=args["output_dir"],
+        config=config,
         params=args
     )
 

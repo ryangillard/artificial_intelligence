@@ -3,6 +3,26 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
+def preprocess_image(image, params):
+    """Preprocess image tensor.
+
+    Args:
+        image: tensor, input image with shape
+            [cur_batch_size, height, width, depth].
+        params: dict, user passed parameters.
+
+    Returns:
+        Preprocessed image tensor with shape
+            [cur_batch_size, height, width, depth].
+    """
+    func_name = "preprocess_image"
+    # Convert from [0, 255] -> [-1.0, 1.0] floats.
+    image = tf.cast(x=image, dtype=tf.float32) * (2. / 255) - 1.0
+    print_obj(func_name, "image", image)
+
+    return image
+
+
 def decode_example(protos, params):
     """Decodes TFRecord file into tensors.
 
@@ -15,6 +35,7 @@ def decode_example(protos, params):
     Returns:
         Image and label tensors.
     """
+    func_name = "decode_example"
     # Create feature schema map for protos.
     features = {
         "image_raw": tf.FixedLenFeature(shape=[], dtype=tf.string),
@@ -25,7 +46,7 @@ def decode_example(protos, params):
     parsed_features = tf.parse_single_example(
         serialized=protos, features=features
     )
-    print_obj("\ndecode_example", "features", features)
+    print_obj("\n" + func_name, "features", features)
 
     # Convert from a scalar string tensor (whose single string has
     # length height * width * depth) to a uint8 tensor with shape
@@ -33,22 +54,22 @@ def decode_example(protos, params):
     image = tf.decode_raw(
         input_bytes=parsed_features["image_raw"], out_type=tf.uint8
     )
-    print_obj("decode_example", "image", image)
+    print_obj(func_name, "image", image)
 
     # Reshape flattened image back into normal dimensions.
     image = tf.reshape(
         tensor=image,
         shape=[params["height"], params["width"], params["depth"]]
     )
-    print_obj("decode_example", "image", image)
+    print_obj(func_name, "image", image)
 
-    # Convert from [0, 255] -> [-1.0, 1.0] floats.
-    image = tf.cast(x=image, dtype=tf.float32) * (2. / 255) - 1.0
-    print_obj("decode_example", "image", image)
+    # Preprocess image.
+    image = preprocess_image(image=image, params=params)
+    print_obj(func_name, "image", image)
 
     # Convert label from a scalar uint8 tensor to an int32 scalar.
     label = tf.cast(x=parsed_features["label"], dtype=tf.int32)
-    print_obj("decode_example", "label", label)
+    print_obj(func_name, "label", label)
 
     return {"image": image}, label
 
@@ -81,7 +102,7 @@ def read_dataset(filename, mode, batch_size, params):
 
         # Create dataset from file list.
         dataset = tf.data.TFRecordDataset(
-            filenames=file_list, num_parallel_reads=40
+            filenames=file_list, num_parallel_reads=tf.contrib.data.AUTOTUNE
         )
 
         # Shuffle and repeat if training with fused op.
@@ -101,12 +122,12 @@ def read_dataset(filename, mode, batch_size, params):
                     params=params
                 ),
                 batch_size=batch_size,
-                num_parallel_calls=4
+                num_parallel_calls=tf.contrib.data.AUTOTUNE
             )
         )
 
         # Prefetch data to improve latency.
-        dataset = dataset.prefetch(buffer_size=2)
+        dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
 
         # Create a iterator, then get batch of features from example queue.
         batched_dataset = dataset.make_one_shot_iterator().get_next()
