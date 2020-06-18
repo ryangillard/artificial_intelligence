@@ -31,7 +31,7 @@ class Generator(object):
         self.bias_regularizer = bias_regularizer
 
     def get_fake_images(self, Z, mode, params):
-        """Creates generator network and returns generated iamges.
+        """Creates generator network and returns generated images.
 
         Args:
             Z: tensor, latent vectors of shape [cur_batch_size, latent_size].
