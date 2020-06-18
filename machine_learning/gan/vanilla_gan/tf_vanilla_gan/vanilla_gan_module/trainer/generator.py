@@ -93,8 +93,7 @@ class Generator(object):
         """Gets generator loss.
 
         Args:
-            fake_logits: tensor, shape of
-                [cur_batch_size, height * width * depth].
+            fake_logits: tensor, shape of [cur_batch_size, 1].
 
         Returns:
             Tensor of generator's total loss of shape [].

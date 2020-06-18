@@ -37,7 +37,6 @@ class Discriminator(object):
             X: tensor, image tensors of shape
                 [cur_batch_size, height * width * depth].
             params: dict, user passed parameters.
-            reuse: bool, whether to reuse variables or not.
 
         Returns:
             Logits tensor of shape [cur_batch_size, 1].
@@ -87,10 +86,8 @@ class Discriminator(object):
         """Gets discriminator loss.
 
         Args:
-            fake_logits: tensor, shape of
-                [cur_batch_size, height * width * depth].
-            real_logits: tensor, shape of
-                [cur_batch_size, height * width * depth].
+            fake_logits: tensor, shape of [cur_batch_size, 1].
+            real_logits: tensor, shape of [cur_batch_size, 1].
             params: dict, user passed parameters.
 
         Returns:
