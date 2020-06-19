@@ -1,9 +1,74 @@
 import argparse
 import json
 import os
-import shutil
 
 from . import model
+
+
+def convert_string_to_bool(string):
+    """Converts string to bool.
+
+    Args:
+        string: str, string to convert.
+
+    Returns:
+        Boolean conversion of string.
+    """
+    return False if string.lower() == "false" else True
+
+
+def convert_string_to_none_or_float(string):
+    """Converts string to None or float.
+
+    Args:
+        string: str, string to convert.
+
+    Returns:
+        None or float conversion of string.
+    """
+    return None if string.lower() == "none" else float(string)
+
+
+def convert_string_to_none_or_int(string):
+    """Converts string to None or int.
+
+    Args:
+        string: str, string to convert.
+
+    Returns:
+        None or int conversion of string.
+    """
+    return None if string.lower() == "none" else int(string)
+
+
+def convert_string_to_list_of_ints(string, sep):
+    """Converts string to list of ints.
+
+    Args:
+        string: str, string to convert.
+        sep: str, separator string.
+
+    Returns:
+        List of ints conversion of string.
+    """
+    if not string:
+        return []
+    return [int(x) for x in string.split(sep)]
+
+
+def convert_string_to_list_of_floats(string, sep):
+    """Converts string to list of floats.
+
+    Args:
+        string: str, string to convert.
+        sep: str, separator string.
+
+    Returns:
+        List of floats conversion of string.
+    """
+    if not string:
+        return []
+    return [float(x) for x in string.split(sep)]
 
 
 if __name__ == "__main__":
@@ -40,6 +105,24 @@ if __name__ == "__main__":
     parser.add_argument(
         "--train_steps",
         help="Number of steps to train for.",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--save_summary_steps",
+        help="How many steps to train before saving a summary.",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--save_checkpoints_steps",
+        help="How many steps to train before saving a checkpoint.",
+        type=int,
+        default=100
+    )
+    parser.add_argument(
+        "--keep_checkpoint_max",
+        help="Max number of checkpoints to keep.",
         type=int,
         default=100
     )
@@ -140,6 +223,24 @@ if __name__ == "__main__":
         default=2
     )
     parser.add_argument(
+        "--generator_leaky_relu_alpha",
+        help="The amount of leakyness of generator's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
+        "--generator_use_batch_normalization",
+        help="Whether to use batch normalization layers in generator.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--generator_final_activation",
+        help="The final activation function of generator.",
+        type=str,
+        default="None"
+    )
+    parser.add_argument(
         "--generator_l1_regularization_scale",
         help="Scale factor for L1 regularization for generator.",
         type=float,
@@ -162,6 +263,24 @@ if __name__ == "__main__":
         help="How quickly we train our model by scaling the gradient for generator.",
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        "--generator_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--generator_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--generator_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
     )
     parser.add_argument(
         "--generator_clip_gradients",
@@ -196,10 +315,16 @@ if __name__ == "__main__":
         default="1,2"
     )
     parser.add_argument(
-        "--critic_dropout_rates",
-        help="Dropout rates for critic dropout layers.",
+        "--critic_leaky_relu_alpha",
+        help="The amount of leakyness of critic's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
+        "--critic_use_layer_normalization",
+        help="Whether to use layer normalization layers in generator.",
         type=str,
-        default="0.3,0.3"
+        default="True"
     )
     parser.add_argument(
         "--critic_l1_regularization_scale",
@@ -224,6 +349,24 @@ if __name__ == "__main__":
         help="How quickly we train our model by scaling the gradient for critic.",
         type=float,
         default=0.1
+    )
+    parser.add_argument(
+        "--critic_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--critic_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--critic_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
     )
     parser.add_argument(
         "--critic_clip_gradients",
@@ -253,70 +396,59 @@ if __name__ == "__main__":
     arguments.pop("job-dir", None)
 
     # Fix eval steps.
-    if arguments["eval_steps"] == "None":
-        arguments["eval_steps"] = None
-    else:
-        arguments["eval_steps"] = int(arguments["eval_steps"])
+    arguments["eval_steps"] = convert_string_to_none_or_int(
+        string=arguments["eval_steps"])
 
     # Fix generator_projection_dims.
-    arguments["generator_projection_dims"] = [
-        int(x)
-        for x in arguments["generator_projection_dims"].split(",")
-    ]
+    arguments["generator_projection_dims"] = convert_string_to_list_of_ints(
+        string=arguments["generator_projection_dims"], sep=","
+    )
 
     # Fix num_filters.
-    arguments["generator_num_filters"] = [
-        int(x)
-        for x in arguments["generator_num_filters"].split(",")
-    ]
+    arguments["generator_num_filters"] = convert_string_to_list_of_ints(
+        string=arguments["generator_num_filters"], sep=","
+    )
 
-    arguments["critic_num_filters"] = [
-        int(x)
-        for x in arguments["critic_num_filters"].split(",")
-    ]
+    arguments["critic_num_filters"] = convert_string_to_list_of_ints(
+        string=arguments["critic_num_filters"], sep=","
+    )
 
     # Fix kernel_sizes.
-    arguments["generator_kernel_sizes"] = [
-        int(x)
-        for x in arguments["generator_kernel_sizes"].split(",")
-    ]
+    arguments["generator_kernel_sizes"] = convert_string_to_list_of_ints(
+        string=arguments["generator_kernel_sizes"], sep=","
+    )
 
-    arguments["critic_kernel_sizes"] = [
-        int(x)
-        for x in arguments["critic_kernel_sizes"].split(",")
-    ]
+    arguments["critic_kernel_sizes"] = convert_string_to_list_of_ints(
+        string=arguments["critic_kernel_sizes"], sep=","
+    )
 
     # Fix strides.
-    arguments["generator_strides"] = [
-        int(x)
-        for x in arguments["generator_strides"].split(",")
-    ]
+    arguments["generator_strides"] = convert_string_to_list_of_ints(
+        string=arguments["generator_strides"], sep=","
+    )
 
-    arguments["critic_strides"] = [
-        int(x)
-        for x in arguments["critic_strides"].split(",")
-    ]
+    arguments["critic_strides"] = convert_string_to_list_of_ints(
+        string=arguments["critic_strides"], sep=","
+    )
 
-    # Fix critic_dropout_rates.
-    arguments["critic_dropout_rates"] = [
-        float(x)
-        for x in arguments["critic_dropout_rates"].split(",")
-    ]
+    # Fix generator_use_batch_normalization.
+    arguments["generator_use_batch_normalization"] = convert_string_to_bool(
+        arguments["generator_use_batch_normalization"]
+    )
+
+    # Fix critic_use_layer_normalization.
+    arguments["critic_use_layer_normalization"] = convert_string_to_bool(
+        arguments["critic_use_layer_normalization"]
+    )
 
     # Fix clip_gradients.
-    if arguments["generator_clip_gradients"] == "None":
-        arguments["generator_clip_gradients"] = None
-    else:
-        arguments["generator_clip_gradients"] = float(
-            arguments["generator_clip_gradients"]
-        )
+    arguments["generator_clip_gradients"] = convert_string_to_none_or_float(
+        string=arguments["generator_clip_gradients"]
+    )
 
-    if arguments["critic_clip_gradients"] == "None":
-        arguments["critic_clip_gradients"] = None
-    else:
-        arguments["critic_clip_gradients"] = float(
-            arguments["critic_clip_gradients"]
-        )
+    arguments["critic_clip_gradients"] = convert_string_to_none_or_float(
+        string=arguments["critic_clip_gradients"]
+    )
 
     # Append trial_id to path if we are doing hptuning.
     # This code can be removed if you are not using hyperparameter tuning.
@@ -327,9 +459,6 @@ if __name__ == "__main__":
                 "TF_CONFIG", "{}"
             )
         ).get("task", {}).get("trial", ""))
-
-    # Start fresh output directory.
-    shutil.rmtree(path=arguments["output_dir"], ignore_errors=True)
 
     # Run the training job.
     model.train_and_evaluate(arguments)

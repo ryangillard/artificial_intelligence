@@ -3,269 +3,302 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
-def critic_network(X, params, reuse=False):
-    """Creates critic network and returns logits.
-
-    Args:
-        X: tensor, image tensors of shape
-            [cur_batch_size, height, width, depth].
-        params: dict, user passed parameters.
-        reuse: bool, whether to reuse variables or not.
-
-    Returns:
-        Logits tensor of shape [cur_batch_size, 1].
+class Critic(object):
+    """Critic that takes image input and outputs logits.
+    Fields:
+        name: str, name of `Critic`.
+        kernel_regularizer: `l1_l2_regularizer` object, regularizar for kernel
+            variables.
+        bias_regularizer: `l1_l2_regularizer` object, regularizar for bias
+            variables.
     """
-    # Create the input layer to our DNN.
-    # shape = (cur_batch_size, height * width * depth)
-    network = X
-    print_obj("\ncritic_network", "network", network)
+    def __init__(self, kernel_regularizer, bias_regularizer, name):
+        """Instantiates and builds critic network.
+        Args:
+            kernel_regularizer: `l1_l2_regularizer` object, regularizar for
+                kernel variables.
+            bias_regularizer: `l1_l2_regularizer` object, regularizar for bias
+                variables.
+            name: str, name of critic.
+        """
+        # Set name of critic.
+        self.name = name
 
-    # Create regularizer for layer kernel weights.
-    regularizer = tf.contrib.layers.l1_l2_regularizer(
-        scale_l1=params["critic_l1_regularization_scale"],
-        scale_l2=params["critic_l2_regularization_scale"]
-    )
+        # Regularizer for kernel weights.
+        self.kernel_regularizer = kernel_regularizer
 
-    with tf.variable_scope("critic", reuse=reuse):
-        # Iteratively build downsampling layers.
-        for i in range(len(params["critic_num_filters"])):
-            # Add convolutional transpose layers with given params per layer.
+        # Regularizer for bias weights.
+        self.bias_regularizer = bias_regularizer
+
+    def get_critic_logits(self, X, params):
+        """Creates critic network and returns logits.
+
+        Args:
+            X: tensor, image tensors of shape
+                [cur_batch_size, height, width, depth].
+            params: dict, user passed parameters.
+
+        Returns:
+            Logits tensor of shape [cur_batch_size, 1].
+        """
+        func_name = "get_critic_logits"
+        # Create the input layer to our CNN.
+        # shape = (cur_batch_size, height * width * depth)
+        network = X
+        print_obj("\n" + func_name, "network", network)
+
+        with tf.variable_scope("critic", reuse=tf.AUTO_REUSE):
+            # Iteratively build downsampling layers.
+            for i in range(len(params["critic_num_filters"])):
+                # Add convolutional layers with given params per layer.
+                # shape = (
+                #     cur_batch_size,
+                #     critic_kernel_sizes[i - 1] / critic_strides[i],
+                #     critic_kernel_sizes[i - 1] / critic_strides[i],
+                #     critic_num_filters[i]
+                # )
+                network = tf.layers.conv2d(
+                    inputs=network,
+                    filters=params["critic_num_filters"][i],
+                    kernel_size=params["critic_kernel_sizes"][i],
+                    strides=params["critic_strides"][i],
+                    padding="same",
+                    activation=None,
+                    kernel_regularizer=self.kernel_regularizer,
+                    bias_regularizer=self.bias_regularizer,
+                    name="layers_conv2d_{}".format(i)
+                )
+                print_obj(func_name, "network", network)
+
+                network = tf.nn.leaky_relu(
+                    features=network,
+                    alpha=params["critic_leaky_relu_alpha"],
+                    name="leaky_relu_{}".format(i)
+                )
+                print_obj(func_name, "network", network)
+
+                if params["critic_use_layer_normalization"]:
+                    # Normalize layer.
+                    network = tf.contrib.layers.layer_norm(inputs=network)
+
+            # Flatten network output.
             # shape = (
             #     cur_batch_size,
-            #     critic_kernel_sizes[i - 1] / critic_strides[i],
-            #     critic_kernel_sizes[i - 1] / critic_strides[i],
-            #     critic_num_filters[i]
+            #     (critic_kernel_sizes[-2] / critic_strides[-1]) ** 2 * critic_num_filters[-1]
             # )
-            network = tf.layers.conv2d(
-                inputs=network,
-                filters=params["critic_num_filters"][i],
-                kernel_size=params["critic_kernel_sizes"][i],
-                strides=params["critic_strides"][i],
-                padding="same",
-                activation=tf.nn.leaky_relu,
-                kernel_regularizer=regularizer,
-                name="layers_conv2d_{}".format(i)
+            network_flat = tf.layers.Flatten()(inputs=network)
+            print_obj(func_name, "network_flat", network_flat)
+
+            # Final linear layer for logits.
+            # shape = (cur_batch_size, 1)
+            logits = tf.layers.dense(
+                inputs=network_flat,
+                units=1,
+                activation=None,
+                kernel_regularizer=self.kernel_regularizer,
+                bias_regularizer=self.bias_regularizer,
+                name="layers_dense_logits"
             )
-            print_obj("critic_network", "network", network)
+            print_obj(func_name, "logits", logits)
 
-            # Add some dropout for better regularization and stability.
-            network = tf.layers.dropout(
-                inputs=network,
-                rate=params["critic_dropout_rates"][i],
-                name="layers_dropout_{}".format(i)
+        return logits
+
+    def get_gradient_penalty_loss(
+            self, cur_batch_size, fake_images, real_images, params):
+        """Gets critic gradient penalty loss.
+
+        Args:
+            cur_batch_size: tensor, in case of a partial batch instead of
+                using the user passed int.
+            fake_images: tensor, images generated by the generator from random
+                noise of shape [cur_batch_size, image_size, image_size, 3].
+            real_images: tensor, real images from input of shape
+                [cur_batch_size, image_size, image_size, 3].
+            params: dict, user passed parameters.
+
+        Returns:
+            Critic's gradient penalty loss of shape [].
+        """
+        func_name = "get_gradient_penalty_loss"
+        with tf.name_scope(name="critic/gradient_penalty"):
+            # Get a random uniform number rank 4 tensor.
+            random_uniform_num = tf.random.uniform(
+                shape=[cur_batch_size, 1, 1, 1],
+                minval=0., maxval=1.,
+                dtype=tf.float32,
+                name="random_uniform_num"
             )
-            print_obj("critic_network", "network", network)
+            print_obj(
+                "\n" + func_name, "random_uniform_num", random_uniform_num
+            )
 
-        # Flatten network output.
-        # shape = (
-        #     cur_batch_size,
-        #     (critic_kernel_sizes[-2] / critic_strides[-1]) ** 2 * critic_num_filters[-1]
-        # )
-        network_flat = tf.layers.Flatten()(inputs=network)
-        print_obj("critic_network", "network_flat", network_flat)
+            # Find the element-wise difference between images.
+            image_difference = fake_images - real_images
+            print_obj(func_name, "image_difference", image_difference)
 
-        # Final linear layer for logits.
-        # shape = (cur_batch_size, 1)
-        logits = tf.layers.dense(
-            inputs=network_flat,
-            units=1,
-            activation=None,
-            kernel_regularizer=regularizer,
-            name="layers_dense_logits"
+            # Get random samples from this mixed image distribution.
+            mixed_images = random_uniform_num * image_difference
+            mixed_images += real_images
+            print_obj(func_name, "mixed_images", mixed_images)
+
+            # Send to the critic to get logits.
+            mixed_logits = self.get_critic_logits(
+                X=mixed_images, params=params
+            )
+            print_obj(func_name, "mixed_logits", mixed_logits)
+
+            # Get the mixed loss.
+            mixed_loss = tf.reduce_sum(
+                input_tensor=mixed_logits, name="mixed_loss"
+            )
+            print_obj(func_name, "mixed_loss", mixed_loss)
+
+            # Get gradient from returned list of length 1.
+            mixed_gradients = tf.gradients(
+                ys=mixed_loss, xs=[mixed_images], name="gradients"
+            )[0]
+            print_obj(func_name, "mixed_gradients", mixed_gradients)
+
+            # Get gradient's L2 norm.
+            mixed_norms = tf.sqrt(
+                x=tf.reduce_sum(
+                    input_tensor=tf.square(
+                        x=mixed_gradients,
+                        name="squared_grads"
+                    ),
+                    axis=[1, 2, 3]
+                ) + 1e-8
+            )
+            print_obj(func_name, "mixed_norms", mixed_norms)
+
+            # Get squared difference from target of 1.0.
+            squared_difference = tf.square(
+                x=mixed_norms - 1.0, name="squared_difference"
+            )
+            print_obj(func_name, "squared_difference", squared_difference)
+
+            # Get gradient penalty scalar.
+            gradient_penalty = tf.reduce_mean(
+                input_tensor=squared_difference, name="gradient_penalty"
+            )
+            print_obj(func_name, "gradient_penalty", gradient_penalty)
+
+            # Multiply with lambda to get gradient penalty loss.
+            gradient_penalty_loss = tf.multiply(
+                x=params["critic_gradient_penalty_coefficient"],
+                y=gradient_penalty,
+                name="gradient_penalty_loss"
+            )
+
+            return gradient_penalty_loss
+
+    def get_critic_loss(
+            self,
+            cur_batch_size,
+            fake_images,
+            real_images,
+            fake_logits,
+            real_logits,
+            params):
+        """Gets critic's total loss.
+
+        Args:
+            cur_batch_size: tensor, in case of a partial batch instead of
+                using the user passed int.
+            fake_images: tensor, images generated by the generator from random
+                noise of shape [cur_batch_size, image_size, image_size, 3].
+            real_images: tensor, real images from input of shape
+                [cur_batch_size, image_size, image_size, 3].
+            fake_logits: tensor, shape of [cur_batch_size, 1] that came from
+                critic having processed generator's output image.
+            fake_logits: tensor, shape of [cur_batch_size, 1] that came from
+                critic having processed real image.
+            params: dict, user passed parameters.
+
+        Returns:
+            Critic's total loss tensor of shape [].
+        """
+        func_name = "get_critic_loss"
+        # Calculate base critic loss.
+        critic_real_loss = tf.reduce_mean(
+            input_tensor=real_logits, name="critic_real_loss"
         )
-        print_obj("critic_network", "logits", logits)
+        print_obj("\n" + func_name, "critic_real_loss", critic_real_loss)
 
-    return logits
-
-
-def get_gradient_penalty_loss(
-        cur_batch_size,
-        fake_images,
-        real_images,
-        params):
-    """Gets critic gradient penalty loss.
-
-    Args:
-        cur_batch_size: tensor, in case of a partial batch instead of
-            using the user passed int.
-        fake_images: tensor, images generated by the generator from random
-            noise of shape [cur_batch_size, image_size, image_size, 3].
-        real_images: tensor, real images from input of shape
-            [cur_batch_size, image_size, image_size, 3].
-        params: dict, user passed parameters.
-
-    Returns:
-        Critic's gradient penalty loss of shape [].
-    """
-    func_name = "get_gradient_penalty_loss"
-
-    with tf.name_scope(name="critic/gradient_penalty"):
-        # Get a random uniform number rank 4 tensor.
-        random_uniform_num = tf.random.uniform(
-            shape=[cur_batch_size, 1, 1, 1],
-            minval=0., maxval=1.,
-            dtype=tf.float32,
-            name="random_uniform_num"
+        critic_fake_loss = tf.reduce_mean(
+            input_tensor=fake_logits, name="critic_fake_loss"
         )
-        print_obj("\n" + func_name, "random_uniform_num", random_uniform_num)
-
-        # Find the element-wise difference between images.
-        image_difference = fake_images - real_images
-        print_obj(func_name, "image_difference", image_difference)
-
-        # Get random samples from this mixed image distribution.
-        mixed_images = random_uniform_num * image_difference
-        mixed_images += real_images
-        print_obj(func_name, "mixed_images", mixed_images)
-
-        # Send to the critic to get logits.
-        mixed_logits = critic_network(
-            X=mixed_images, params=params, reuse=True
-        )
-        print_obj(func_name, "mixed_logits", mixed_logits)
-
-        # Get the mixed loss.
-        mixed_loss = tf.reduce_sum(
-            input_tensor=mixed_logits,
-            name="mixed_loss"
-        )
-        print_obj(func_name, "mixed_loss", mixed_loss)
-
-        # Get gradient from returned list of length 1.
-        mixed_gradients = tf.gradients(
-            ys=mixed_loss,
-            xs=[mixed_images],
-            name="gradients"
-        )[0]
-        print_obj(func_name, "mixed_gradients", mixed_gradients)
-
-        # Get gradient's L2 norm.
-        mixed_norms = tf.sqrt(
-            x=tf.reduce_sum(
-                input_tensor=tf.square(
-                    x=mixed_gradients,
-                    name="squared_grads"
-                ),
-                axis=[1, 2, 3]
-            ) + 1e-8
-        )
-        print_obj(func_name, "mixed_norms", mixed_norms)
-
-        # Get squared difference from target of 1.0.
-        squared_difference = tf.square(
-            x=mixed_norms - 1.0,
-            name="squared_difference"
-        )
-        print_obj(func_name, "squared_difference", squared_difference)
-
-        # Get gradient penalty scalar.
-        gradient_penalty = tf.reduce_mean(
-            input_tensor=squared_difference, name="gradient_penalty"
-        )
-        print_obj(func_name, "gradient_penalty", gradient_penalty)
-
-        # Multiply with lambda to get gradient penalty loss.
-        gradient_penalty_loss = tf.multiply(
-            x=params["critic_gradient_penalty_coefficient"],
-            y=gradient_penalty,
-            name="gradient_penalty_loss"
+        print_obj(
+            func_name, "critic_fake_loss", critic_fake_loss
         )
 
-    return gradient_penalty_loss
+        critic_loss = tf.subtract(
+            x=critic_fake_loss, y=critic_real_loss, name="critic_loss"
+        )
+        print_obj(func_name, "critic_loss", critic_loss)
 
+        # Get critic gradient penalty loss.
+        gradient_penalty_loss = self.get_gradient_penalty_loss(
+            cur_batch_size=cur_batch_size,
+            fake_images=fake_images,
+            real_images=real_images,
+            params=params
+        )
+        print_obj(func_name, "gradient_penalty_loss", gradient_penalty_loss)
 
-def get_critic_loss(
-        cur_batch_size,
-        fake_images,
-        real_images,
-        fake_logits,
-        real_logits,
-        params):
-    """Gets critic's total loss.
+        # Get critic Wasserstein GP loss.
+        critic_wasserstein_gp_loss = tf.add(
+            x=critic_loss,
+            y=gradient_penalty_loss,
+            name="critic_wasserstein_gp_loss"
+        )
+        print_obj(
+            func_name,
+            "critic_wasserstein_gp_loss",
+            critic_wasserstein_gp_loss
+        )
 
-    Args:
-        cur_batch_size: tensor, in case of a partial batch instead of
-            using the user passed int.
-        fake_images: tensor, images generated by the generator from random
-            noise of shape [cur_batch_size, image_size, image_size, 3].
-        real_images: tensor, real images from input of shape
-            [cur_batch_size, image_size, image_size, 3].
-        fake_logits: tensor, shape of [cur_batch_size, 1] that came from
-            critic having processed generator's output image.
-        fake_logits: tensor, shape of [cur_batch_size, 1] that came from
-            critic having processed real image.
-        params: dict, user passed parameters.
+        # Get regularization losses.
+        critic_reg_loss = tf.losses.get_regularization_loss(
+            scope="critic", name="critic_reg_loss"
+        )
+        print_obj(func_name, "critic_reg_loss", critic_reg_loss)
 
-    Returns:
-        Critic's total loss tensor of shape [].
-    """
-    # Calculate base critic loss.
-    critic_real_loss = tf.reduce_mean(
-        input_tensor=real_logits,
-        name="critic_real_loss"
-    )
-    print_obj(
-        "\nget_critic_loss",
-        "critic_real_loss",
-        critic_real_loss
-    )
+        # Combine losses for total losses.
+        critic_total_loss = tf.math.add(
+            x=critic_wasserstein_gp_loss,
+            y=critic_reg_loss,
+            name="critic_total_loss"
+        )
+        print_obj(func_name, "critic_total_loss", critic_total_loss)
 
-    critic_generated_loss = tf.reduce_mean(
-        input_tensor=fake_logits,
-        name="critic_generated_loss"
-    )
-    print_obj(
-        "get_critic_loss",
-        "critic_generated_loss",
-        critic_generated_loss
-    )
+        # Add summaries for TensorBoard.
+        tf.summary.scalar(
+            name="critic_real_loss", tensor=critic_real_loss, family="losses"
+        )
+        tf.summary.scalar(
+            name="critic_fake_loss", tensor=critic_fake_loss, family="losses"
+        )
+        tf.summary.scalar(
+            name="critic_loss", tensor=critic_loss, family="losses"
+        )
+        tf.summary.scalar(
+            name="gradient_penalty_loss",
+            tensor=gradient_penalty_loss,
+            family="losses"
+        )
+        tf.summary.scalar(
+            name="critic_wasserstein_gp_loss",
+            tensor=critic_wasserstein_gp_loss,
+            family="losses"
+        )
+        tf.summary.scalar(
+            name="critic_reg_loss", tensor=critic_reg_loss, family="losses"
+        )
+        tf.summary.scalar(
+            name="critic_total_loss",
+            tensor=critic_total_loss,
+            family="total_losses"
+        )
 
-    critic_loss = tf.add(
-        x=critic_real_loss, y=-critic_generated_loss,
-        name="critic_loss"
-    )
-    print_obj(
-        "get_critic_loss",
-        "critic_loss",
-        critic_loss
-    )
-
-    # Get critic gradient penalty loss.
-    critic_gradient_penalty = get_gradient_penalty_loss(
-        cur_batch_size=cur_batch_size,
-        fake_images=fake_images,
-        real_images=real_images,
-        params=params
-    )
-
-    # Get critic Wasserstein GP loss.
-    critic_wasserstein_gp_loss = tf.add(
-        x=critic_loss,
-        y=critic_gradient_penalty,
-        name="critic_wasserstein_gp_loss"
-    )
-
-    # Get regularization losses.
-    critic_regularization_loss = tf.losses.get_regularization_loss(
-        scope="critic",
-        name="critic_regularization_loss"
-    )
-    print_obj(
-        "get_critic_loss",
-        "critic_regularization_loss",
-        critic_regularization_loss
-    )
-
-    # Combine losses for total losses.
-    critic_total_loss = tf.math.add(
-        x=critic_wasserstein_gp_loss,
-        y=critic_regularization_loss,
-        name="critic_total_loss"
-    )
-    print_obj(
-        "get_critic_loss",
-        "critic_total_loss",
-        critic_total_loss
-    )
-
-    return critic_total_loss
+        return critic_total_loss
