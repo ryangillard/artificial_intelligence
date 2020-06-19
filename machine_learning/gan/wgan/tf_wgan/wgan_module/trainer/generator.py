@@ -44,10 +44,7 @@ class Generator(object):
                 [cur_batch_size, height, width, depth].
         """
         func_name = "get_fake_images"
-        # Create the input layer to our CNN.
-        # shape = (cur_batch_size, latent_size)
-        network = Z
-        print_obj("\n" + func_name, "network", network)
+        print_obj("\n" + func_name, "Z", Z)
 
         # Dictionary containing possible final activations.
         final_activation_dict = {
