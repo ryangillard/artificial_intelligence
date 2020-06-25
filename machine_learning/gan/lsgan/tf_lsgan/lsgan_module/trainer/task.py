@@ -218,6 +218,12 @@ if __name__ == "__main__":
         default="True"
     )
     parser.add_argument(
+        "--generator_batch_norm_before_act",
+        help="Whether generator layers have batch norm before activation.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--generator_use_leaky_relu",
         help="Whether generator layers use leaky relu activations.",
         type=str,
@@ -312,6 +318,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--discriminator_use_batch_norm",
         help="Whether discriminator layer uses batch norm.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--discriminator_batch_norm_before_act",
+        help="Whether discriminator layers have batch norm before activation.",
         type=str,
         default="True"
     )
@@ -453,6 +465,15 @@ if __name__ == "__main__":
 
     arguments["discriminator_use_batch_norm"] = convert_string_to_list_of_bools(
         string=arguments["discriminator_use_batch_norm"], sep=","
+    )
+
+    # Fix batch_norm_before_act.
+    arguments["generator_batch_norm_before_act"] = convert_string_to_bool(
+        string=arguments["generator_batch_norm_before_act"]
+    )
+
+    arguments["discriminator_batch_norm_before_act"] = convert_string_to_bool(
+        string=arguments["discriminator_batch_norm_before_act"]
     )
 
     # Fix use_leaky_relu.

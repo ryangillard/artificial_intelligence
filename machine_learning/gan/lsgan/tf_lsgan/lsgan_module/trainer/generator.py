@@ -141,6 +141,16 @@ class Generator(object):
                 )
                 print_obj(func_name, "network", network)
 
+                if params["generator_use_batch_norm"][i]:
+                    # Add batch normalization to keep inputs from blowing up.
+                    if params["generator_batch_norm_before_act"]:
+                        network = tf.layers.batch_normalization(
+                            inputs=network,
+                            training=(mode == tf.estimator.ModeKeys.TRAIN),
+                            name="layers_batch_norm_{}".format(i)
+                        )
+                        print_obj(func_name, "network", network)
+
                 if params["generator_use_leaky_relu"]:
                     network = tf.nn.leaky_relu(
                         features=network,
@@ -154,14 +164,15 @@ class Generator(object):
                     )
                 print_obj(func_name, "network", network)
 
-                # Add batch normalization to keep the inputs from blowing up.
                 if params["generator_use_batch_norm"][i]:
-                    network = tf.layers.batch_normalization(
-                        inputs=network,
-                        training=(mode == tf.estimator.ModeKeys.TRAIN),
-                        name="layers_batch_norm_{}".format(i)
-                    )
-                    print_obj(func_name, "network", network)
+                    # Add batch normalization to keep inputs from blowing up.
+                    if not params["generator_batch_norm_before_act"]:
+                        network = tf.layers.batch_normalization(
+                            inputs=network,
+                            training=(mode == tf.estimator.ModeKeys.TRAIN),
+                            name="layers_batch_norm_{}".format(i)
+                        )
+                        print_obj(func_name, "network", network)
 
             # Final conv2d transpose layer for image output.
             # shape = (cur_batch_size, height, width, depth)
