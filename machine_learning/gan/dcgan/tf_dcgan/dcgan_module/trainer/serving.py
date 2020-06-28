@@ -22,7 +22,6 @@ def serving_input_fn(params):
             name="serving_input_placeholder_Z"
         )
     }
-
     print_obj("\n" + func_name, "feature_placeholders", feature_placeholders)
 
     # Create clones of the feature placeholder tensors so that the SavedModel
