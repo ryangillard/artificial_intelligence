@@ -117,7 +117,6 @@ class Generator(networks.Network):
             else:
                 network = projection_batch_norm_image
             
-
             # Iteratively build upsampling layers.
             for i in range(len(params["generator_num_filters"])):
                 # Add conv transpose layers with given params per layer.

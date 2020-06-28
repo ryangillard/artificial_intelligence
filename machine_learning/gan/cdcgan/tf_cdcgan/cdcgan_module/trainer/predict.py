@@ -16,8 +16,9 @@ def get_predictions_and_export_outputs(features, generator, params):
         Predictions dictionary and export outputs dictionary.
     """
     func_name = "get_predictions_and_export_outputs"
+
     # Extract given latent vectors from features dictionary.
-    Z = tf.cast(x=features["Z"], dtype=tf.float32)
+    Z = features["Z"]
     print_obj("\n" + func_name, "Z", Z)
 
     # Extract labels from features dictionary & expand from vector to matrix.
@@ -28,6 +29,7 @@ def get_predictions_and_export_outputs(features, generator, params):
     generated_images = generator.get_fake_images(
         Z=Z, labels=labels, mode=tf.estimator.ModeKeys.PREDICT, params=params
     )
+    print_obj(func_name, "generated_images", generated_images)
 
     # Resize generated images to match real image sizes.
     generated_images = image_utils.resize_fake_images(
