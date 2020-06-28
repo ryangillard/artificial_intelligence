@@ -109,6 +109,12 @@ if __name__ == "__main__":
         type=int,
         default=100
     )
+    parser.add_argument(
+        "--input_fn_autotune",
+        help="Whether to autotune input function performance.",
+        type=str,
+        default="True"
+    )
 
     # Eval parameters.
     parser.add_argument(
@@ -379,6 +385,11 @@ if __name__ == "__main__":
     # Unused args provided by service.
     arguments.pop("job_dir", None)
     arguments.pop("job-dir", None)
+
+    # Fix input_fn_autotune.
+    arguments["input_fn_autotune"] = convert_string_to_bool(
+        string=arguments["input_fn_autotune"]
+    )
 
     # Fix eval steps.
     arguments["eval_steps"] = convert_string_to_none_or_int(

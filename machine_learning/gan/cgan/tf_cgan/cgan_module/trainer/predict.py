@@ -16,7 +16,7 @@ def get_predictions_and_export_outputs(features, generator, params):
     """
     func_name = "get_predictions_and_export_outputs"
     # Extract latent vectors from features dictionary.
-    Z = tf.cast(x=features["Z"], dtype=tf.float32)
+    Z = features["Z"]
     print_obj("\n" + func_name, "Z", Z)
 
     # Extract labels from features dictionary & expand from vector to matrix.
