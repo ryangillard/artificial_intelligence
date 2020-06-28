@@ -23,10 +23,11 @@ def pgan_model(features, labels, mode, params):
     Returns:
         Instance of `tf.estimator.EstimatorSpec` class.
     """
-    print_obj("\npgan_model", "features", features)
-    print_obj("pgan_model", "labels", labels)
-    print_obj("pgan_model", "mode", mode)
-    print_obj("pgan_model", "params", params)
+    func_name = "pgan_model"
+    print_obj("\n" + func_name, "features", features)
+    print_obj(func_name, "labels", labels)
+    print_obj(func_name, "mode", mode)
+    print_obj(func_name, "params", params)
 
     # Loss function, training/eval ops, etc.
     predictions_dict = None
@@ -64,7 +65,7 @@ def pgan_model(features, labels, mode, params):
         initializer=tf.zeros(shape=[], dtype=tf.float32),
         trainable=False
     )
-    print_obj("pgan_model", "alpha_var", alpha_var)
+    print_obj(func_name, "alpha_var", alpha_var)
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         # Get predictions and export outputs.

@@ -7,16 +7,13 @@ def get_predictions(Z, generator, params, block_idx):
     """Gets predictions from latent vectors Z.
 
     Args:
-        image: tensor, tf.float32 query image of shape
-            [None, height, width, depth].
-        generator: instance of generator.`Generator`.
-        encoder: instance of encoder.`Encoder`.
+        Z: tensor, latent vectors of shape [cur_batch_size, latent_size].
+        generator: instance of `Generator`.
         params: dict, user passed parameters.
         block_idx: int, current conv layer block's index.
 
     Returns:
-        Predictions dictionary of encoded images from generator, anomaly
-            scores, and anomaly flags.
+        Predictions dictionary of generated images from generator.
     """
     # Get predictions from generator.
     generated_images = generator.get_predict_generator_outputs(
@@ -38,20 +35,21 @@ def get_predictions_and_export_outputs(features, generator, params):
 
     Args:
         features: dict, feature tensors from serving input function.
-        generator: instance of generator.`Generator`.
+        generator: instance of `Generator`.
         params: dict, user passed parameters.
 
     Returns:
         Predictions dictionary and export outputs dictionary.
     """
+    func_name = "get_predictions_and_export_outputs"
     # Extract given latent vectors from features dictionary.
     Z = tf.cast(x=features["Z"], dtype=tf.float32)
-    print_obj("\nget_predictions_and_export_outputs", "Z", Z)
+    print_obj("\n" + func_name, "Z", Z)
 
     loop_end = len(params["conv_num_filters"])
     loop_start = 0 if params["predict_all_resolutions"] else loop_end - 1
-    print_obj("get_predictions_and_export_outputs", "loop_start", loop_start)
-    print_obj("get_predictions_and_export_outputs", "loop_end", loop_end)
+    print_obj(func_name, "loop_start", loop_start)
+    print_obj(func_name, "loop_end", loop_end)
 
     # Create predictions dictionary.
     predictions_dict = {}
@@ -63,19 +61,13 @@ def get_predictions_and_export_outputs(features, generator, params):
             block_idx=i
         )
         predictions_dict.update(predictions)
-    print_obj(
-        "get_predictions_and_export_outputs",
-        "predictions_dict",
-        predictions_dict
-    )
+    print_obj(func_name, "predictions_dict", predictions_dict)
 
     # Create export outputs.
     export_outputs = {
         "predict_export_outputs": tf.estimator.export.PredictOutput(
             outputs=predictions_dict)
     }
-    print_obj(
-        "get_predictions_and_export_outputs", "export_outputs", export_outputs
-    )
+    print_obj(func_name, "export_outputs", export_outputs)
 
     return predictions_dict, export_outputs

@@ -50,7 +50,6 @@ def create_variable_and_gradient_histogram_summaries(loss_dict, params):
             # Get variables and their gradients wrt. loss.
             variables, gradients = get_variables_and_gradients(loss, scope)
 
-
             # Add summaries for TensorBoard.
             for g, v in zip(gradients, variables):
                 tf.summary.histogram(
@@ -191,14 +190,14 @@ def train_network(
             beta2=params["{}_adam_beta2".format(scope)],
             epsilon=params["{}_adam_epsilon".format(scope)],
             name="{}_{}_optimizer".format(
-                scope, params["{}_optimizer".format(scope)]
+                scope, params["{}_optimizer".format(scope)].lower()
             )
         )
     else:
         optimizer = optimizers[params["{}_optimizer".format(scope)]](
             learning_rate=params["{}_learning_rate".format(scope)],
             name="{}_{}_optimizer".format(
-                scope, params["{}_optimizer".format(scope)]
+                scope, params["{}_optimizer".format(scope)].lower()
             )
         )
     print_obj("{}_{}".format(func_name, scope), "optimizer", optimizer)
@@ -336,17 +335,17 @@ def train_generator(
     return loss, train_op
 
 
-def update_alpha(global_step, alpha_var, params):
-    """Returns update op for alpha variable.
+def known_update_alpha(global_step, alpha_var, params):
+    """Returns ref for updated alpha variable.
     Args:
         global_step: tensor, the current training step or batch in the
             training loop.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
         params: dict, user passed parameters.
     Returns:
-        Updated alpha variable.
+        Ref for updated alpha variable.
     """
-    func_name = "update_alpha"
+    func_name = "known_update_alpha"
     # If never grow, then no need to update alpha since it is not used.
     if len(params["conv_num_filters"]) > 1 and params["growth_idx"] > 0:
         if params["growth_idx"] % 2 == 1:
@@ -367,14 +366,135 @@ def update_alpha(global_step, alpha_var, params):
                     ),
                     y=params["num_steps_until_growth"]
                 ),
-                name="{}_assign_linear".format(func_name)
+                name="update_alpha_assign_linear"
             )
         else:
             alpha_var = tf.assign(
                 ref=alpha_var,
                 value=tf.ones(shape=[], dtype=tf.float32),
-                name="{}_assign_ones".format(func_name)
+                name="update_alpha_assign_ones"
             )
+    print_obj(func_name, "alpha_var", alpha_var)
+
+    return alpha_var
+
+
+def unknown_update_alpha_transition(global_step, alpha_var, params):
+    """Returns ref for updated alpha variable.
+    Args:
+        global_step: tensor, the current training step or batch in the
+            training loop.
+        alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        params: dict, user passed parameters.
+    Returns:
+        Ref for updated alpha variable.
+    """
+    alpha_var = tf.assign(
+        ref=alpha_var,
+        value=tf.divide(
+            x=tf.cast(
+                # Add 1 since it trains on global step 0, so off by 1.
+                x=tf.add(
+                    x=tf.mod(
+                        x=global_step,
+                        y=params["num_steps_until_growth"]
+                    ),
+                    y=1
+                ),
+                dtype=tf.float32
+            ),
+            y=params["num_steps_until_growth"]
+        ),
+        name="update_alpha_assign_linear"
+    )
+
+    return alpha_var
+
+
+def unknown_update_alpha_stable(global_step, alpha_var, params):
+    """Returns ref for updated alpha variable.
+    Args:
+        global_step: tensor, the current training step or batch in the
+            training loop.
+        alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        params: dict, user passed parameters.
+    Returns:
+        Ref for updated alpha variable.
+    """
+    alpha_var = tf.assign(
+        ref=alpha_var,
+        value=tf.ones(shape=[], dtype=tf.float32),
+        name="update_alpha_assign_ones"
+    )
+
+    return alpha_var
+
+
+def unknown_update_alpha(global_step, alpha_var, params):
+    """Returns ref for updated alpha variable.
+    Args:
+        global_step: tensor, the current training step or batch in the
+            training loop.
+        alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        params: dict, user passed parameters.
+    Returns:
+        Ref for updated alpha variable.
+    """
+    func_name = "unknown_update_alpha"
+
+    # If never grow, then no need to update alpha since it is not used.
+    if len(params["conv_num_filters"]) > 1:
+        # Find growth index based on global step and growth frequency.
+        growth_index = tf.minimum(
+            x=tf.cast(
+                x=tf.floordiv(
+                    x=global_step,
+                    y=params["num_steps_until_growth"]
+                ),
+                dtype=tf.int32),
+            y=(len(params["conv_num_filters"]) - 1) * 2,
+            name="update_alpha_growth_index"
+        )
+
+        # True if this is a transition stage, False if this is a stable stage.
+        condition = tf.equal(
+            x=tf.mod(x=growth_index, y=2),
+            y=1,
+            name="{}_condition".format(func_name)
+        )
+
+        # Conditionally update alpha.
+        alpha_var = tf.cond(
+            pred=condition,
+            true_fn=lambda: unknown_update_alpha_transition(
+                global_step, alpha_var, params
+            ),
+            false_fn=lambda: unknown_update_alpha_stable(
+                global_step, alpha_var, params
+            ),
+            name="{}_cond".format(func_name)
+        )
+    print_obj(func_name, "alpha_var", alpha_var)
+
+    return alpha_var
+
+
+def update_alpha(global_step, alpha_var, params):
+    """Returns ref for updated alpha variable.
+    Args:
+        global_step: tensor, the current training step or batch in the
+            training loop.
+        alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        params: dict, user passed parameters.
+    Returns:
+        Ref for updated alpha variable.
+    """
+    func_name = "update_alpha"
+    # If never grow, then no need to update alpha since it is not used.
+    if params["growth_idx"] is not None:
+        alpha_var = known_update_alpha(global_step, alpha_var, params)
+    else:
+        alpha_var = unknown_update_alpha(global_step, alpha_var, params)
     print_obj(func_name, "alpha_var", alpha_var)
 
     return alpha_var

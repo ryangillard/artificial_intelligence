@@ -290,6 +290,12 @@ if __name__ == "__main__":
         default="True"
     )
     parser.add_argument(
+        "--growth_idx",
+        help="Index of current growth stage. If None, then model will dynamically calculate.",
+        type=str,
+        default="None"
+    )
+    parser.add_argument(
         "--save_optimizer_metrics_to_checkpoint",
         help="Whether to save optimizer metrics to checkpoint or not.",
         type=str,
@@ -312,6 +318,12 @@ if __name__ == "__main__":
         help="Max number of checkpoints to keep.",
         type=int,
         default=100
+    )
+    parser.add_argument(
+        "--input_fn_autotune",
+        help="Whether to autotune input function performance.",
+        type=str,
+        default="True"
     )
 
     # Eval parameters.
@@ -634,9 +646,23 @@ if __name__ == "__main__":
         arguments["use_estimator_train_and_evaluate"]
     )
 
+    # Fix growth_idx.
+    arguments["growth_idx"] = convert_string_to_none_or_int(
+        arguments["growth_idx"]
+    )
+    if (arguments["use_tpu"] or
+            not arguments["use_estimator_train_and_evaluate"]):
+        if arguments["growth_idx"] is None:
+            arguments["growth_idx"] = 0
+
     # Fix save_optimizer_metrics_to_checkpoint.
     arguments["save_optimizer_metrics_to_checkpoint"] = convert_string_to_bool(
         arguments["save_optimizer_metrics_to_checkpoint"]
+    )
+
+    # Fix input_fn_autotune.
+    arguments["input_fn_autotune"] = convert_string_to_bool(
+        string=arguments["input_fn_autotune"]
     )
 
     # Fix eval steps.
@@ -748,10 +774,12 @@ if __name__ == "__main__":
 
     # Fix clip_gradients.
     arguments["generator_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["generator_clip_gradients"])
+        arguments["generator_clip_gradients"]
+    )
 
     arguments["discriminator_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["discriminator_clip_gradients"])
+        arguments["discriminator_clip_gradients"]
+    )
 
     # Fix train_steps. Ensure chosen image size gets at least one transition
     # stage and one stable stage.

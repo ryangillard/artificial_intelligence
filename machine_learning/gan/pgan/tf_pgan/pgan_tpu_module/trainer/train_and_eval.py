@@ -25,7 +25,7 @@ def get_logits_and_losses(
     X = features["image"]
     print_obj("\n" + func_name, "X", X)
 
-    if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
+    if params["growth_idx"] is not None:
         cur_batch_size = X.shape[0]
         # Create random noise latent vector for each batch example.
         Z = tf.random.normal(

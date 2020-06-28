@@ -220,7 +220,7 @@ class VectorToImage(object):
                     strides=to_rgb[i][4:6],
                     padding="same",
                     activation=activation_dict.get(
-                        "{}_to_rgb_activation".format(self.kind).lower(), None
+                        params["generator_to_rgb_activation"].lower(), None
                     ),
                     kernel_initializer=(
                         tf.random_normal_initializer(mean=0., stddev=1.0)
@@ -1164,7 +1164,7 @@ class VectorToImage(object):
                 Z=Z, params=params
             )
         else:
-            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
+            if params["growth_idx"] is not None:
                 # Switch to case based on number of steps for gen outputs.
                 generated_outputs = self.known_switch_case_vec_to_img_outputs(
                     Z=Z,

@@ -908,7 +908,7 @@ class ImageToVector(object):
             # 4x4
             logits = self.create_base_img_to_vec_network(X=X, params=params)
         else:
-            if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
+            if params["growth_idx"] is not None:
                 logits = self.known_switch_case_img_to_vec_logits(
                     X=X, alpha_var=alpha_var, params=params
                 )

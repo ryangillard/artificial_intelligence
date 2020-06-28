@@ -73,9 +73,7 @@ def pgan_model(features, labels, mode, params):
         # Get predictions and export outputs.
         (predictions_dict,
          export_outputs) = predict.get_predictions_and_export_outputs(
-            features=features,
-            generator=pgan_generator,
-            params=params
+            features=features, generator=pgan_generator, params=params
         )
     else:
         # Get logits and losses from networks for train and eval modes.

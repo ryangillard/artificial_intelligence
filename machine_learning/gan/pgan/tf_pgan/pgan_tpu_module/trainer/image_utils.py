@@ -76,7 +76,7 @@ def resize_real_images(image, params):
             image=image, params=params, block_idx=0
         )
     else:
-        if params["use_tpu"] or not params["use_estimator_train_and_evaluate"]:
+        if params["growth_idx"] is not None:
             block_idx = min(
                 (params["growth_idx"] - 1) // 2 + 1,
                 len(params["conv_num_filters"]) - 1

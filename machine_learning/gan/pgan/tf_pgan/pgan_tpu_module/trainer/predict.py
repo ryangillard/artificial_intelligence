@@ -46,8 +46,9 @@ def get_predictions_and_export_outputs(features, generator, params):
         Predictions dictionary and export outputs dictionary.
     """
     func_name = "get_predictions_and_export_outputs"
+
     # Extract given latent vectors from features dictionary.
-    Z = tf.cast(x=features["Z"], dtype=tf.float32)
+    Z = features["Z"]
     print_obj("\n" + func_name, "Z", Z)
 
     loop_end = len(params["conv_num_filters"])
