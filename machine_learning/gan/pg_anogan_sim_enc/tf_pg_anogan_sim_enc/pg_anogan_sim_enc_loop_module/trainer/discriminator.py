@@ -429,7 +429,7 @@ class Discriminator(object):
             # The base conv block is always the 0th one.
             base_conv_layer_block = self.conv_layer_blocks[0]
 
-            # batch_batch stddev comes before first base conv layer,
+            # Minibatch stddev comes before first base conv layer,
             # creating 1 extra feature map.
             if params["use_minibatch_stddev"]:
                 # Therefore, the number of input channels will be 1 higher
@@ -619,13 +619,13 @@ class Discriminator(object):
         Returns:
             Minibatch standard deviation feature map image added to
                 channels of shape
-                [cur_batch_size, image_size, image_size, 1].
+                [batch_size, image_size, image_size, 1].
         """
         with tf.variable_scope(
                 "{}/{}_minibatch_stddev".format(self.name, caller)):
             # Calculate standard deviation over the group plus small epsilon.
             # shape = (
-            #     {"grouped": cur_batch_size / group_size, "ungrouped": 1},
+            #     {"grouped": batch_size / group_size, "ungrouped": 1},
             #     image_size,
             #     image_size,
             #     num_channels
@@ -639,7 +639,7 @@ class Discriminator(object):
 
             # Take average over feature maps and pixels.
             if params["minibatch_stddev_averaging"]:
-                # grouped shape = (cur_batch_size / group_size, 1, 1, 1)
+                # grouped shape = (batch_size / group_size, 1, 1, 1)
                 # ungrouped shape = (1, 1, 1, 1)
                 stddev = tf.reduce_mean(
                     input_tensor=stddev,
@@ -655,7 +655,7 @@ class Discriminator(object):
 
             # Replicate over group and pixels.
             # shape = (
-            #     cur_batch_size,
+            #     batch_size,
             #     image_size,
             #     image_size,
             #     1
@@ -676,7 +676,6 @@ class Discriminator(object):
     def grouped_minibatch_stddev(
             self,
             X,
-            cur_batch_size,
             static_image_shape,
             params,
             group_size):
@@ -684,8 +683,8 @@ class Discriminator(object):
 
         Args:
             X: tf.float32 tensor, image of shape
-                [cur_batch_size, image_size, image_size, num_channels].
-            cur_batch_size: tf.int64 tensor, the dynamic batch size (in case
+                [batch_size, image_size, image_size, num_channels].
+            batch_size: tf.int64 tensor, the dynamic batch size (in case
                 of partial batch).
             static_image_shape: list, the static shape of each image.
             params: dict, user passed parameters.
@@ -694,24 +693,19 @@ class Discriminator(object):
         Returns:
             Minibatch standard deviation feature map image added to
                 channels of shape
-                [cur_batch_size, image_size, image_size, 1].
+                [batch_size, image_size, image_size, 1].
         """
         with tf.variable_scope(
                 "{}/grouped_minibatch_stddev".format(self.name)):
             # The group size should be less than or equal to the batch size.
-            if params["use_tpu"]:
-                group_size = min(group_size, cur_batch_size)
-            else:
-                # shape = ()
-                group_size = tf.minimum(
-                    x=group_size, y=cur_batch_size, name="group_size"
-                )
+            # shape = ()
+            group_size = min(group_size, X.shape[0])
             print_obj("grouped_minibatch_stddev", "group_size", group_size)
 
             # Split minibatch into M groups of size group_size, rank 5 tensor.
             # shape = (
             #     group_size,
-            #     cur_batch_size / group_size,
+            #     batch_size / group_size,
             #     image_size,
             #     image_size,
             #     num_channels
@@ -730,7 +724,7 @@ class Discriminator(object):
             # Find the mean of each group.
             # shape = (
             #     1,
-            #     cur_batch_size / group_size,
+            #     batch_size / group_size,
             #     image_size,
             #     image_size,
             #     num_channels
@@ -748,7 +742,7 @@ class Discriminator(object):
             # Center each group using the mean.
             # shape = (
             #     group_size,
-            #     cur_batch_size / group_size,
+            #     batch_size / group_size,
             #     image_size,
             #     image_size,
             #     num_channels
@@ -764,7 +758,7 @@ class Discriminator(object):
 
             # Calculate variance over group.
             # shape = (
-            #     cur_batch_size / group_size,
+            #     batch_size / group_size,
             #     image_size,
             #     image_size,
             #     num_channels
@@ -798,15 +792,15 @@ class Discriminator(object):
     def ungrouped_minibatch_stddev(
             self,
             X,
-            cur_batch_size,
+            batch_size,
             static_image_shape,
             params):
         """Adds minibatch stddev feature map added to image channels.
 
         Args:
             X: tensor, image of shape
-                [cur_batch_size, image_size, image_size, num_channels].
-            cur_batch_size: tf.int64 tensor, the dynamic batch size (in case
+                [batch_size, image_size, image_size, num_channels].
+            batch_size: tf.int64 tensor, the dynamic batch size (in case
                 of partial batch).
             static_image_shape: list, the static shape of each image.
             params: dict, user passed parameters.
@@ -814,7 +808,7 @@ class Discriminator(object):
         Returns:
             Minibatch standard deviation feature map image added to
                 channels of shape
-                [cur_batch_size, image_size, image_size, 1].
+                [batch_size, image_size, image_size, 1].
         """
         with tf.variable_scope(
                 "{}/ungrouped_minibatch_stddev".format(self.name)):
@@ -832,7 +826,7 @@ class Discriminator(object):
 
             # Center each group using the mean.
             # shape = (
-            #     cur_batch_size,
+            #     batch_size,
             #     image_size,
             #     image_size,
             #     num_channels
@@ -868,7 +862,7 @@ class Discriminator(object):
             # Get stddev image using ops common to both grouped & ungrouped.
             stddev_feature_map = self.minibatch_stddev_common(
                 variance=variance,
-                tile_multiples=[cur_batch_size] + static_image_shape[0:2] + [1],
+                tile_multiples=[batch_size] + static_image_shape[0:2] + [1],
                 params=params,
                 caller="ungrouped"
             )
@@ -885,14 +879,14 @@ class Discriminator(object):
 
         Args:
             X: tensor, image of shape
-                [cur_batch_size, image_size, image_size, num_channels].
+                [batch_size, image_size, image_size, num_channels].
             params: dict, user passed parameters.
             group_size: int, size of image groups.
 
         Returns:
             Image with minibatch standard deviation feature map added to
                 channels of shape
-                [cur_batch_size, image_size, image_size, num_channels + 1].
+                [batch_size, image_size, image_size, num_channels + 1].
         """
         with tf.variable_scope("{}/minibatch_stddev".format(self.name)):
             # Get static shape of image.
@@ -902,81 +896,28 @@ class Discriminator(object):
                 "minibatch_stddev", "static_image_shape", static_image_shape
             )
 
-            if params["use_tpu"]:
-                if (params["batch_size"] % group_size == 0 or
-                    params["batch_size"] < group_size):
-                    stddev_feature_map = self.grouped_minibatch_stddev(
-                        X=X,
-                        cur_batch_size=params["batch_size"],
-                        static_image_shape=static_image_shape,
-                        params=params,
-                        group_size=group_size
-                    )
-                else:
-                    stddev_feature_map = self.ungrouped_minibatch_stddev(
-                        X=X,
-                        cur_batch_size=params["batch_size"],
-                        static_image_shape=static_image_shape,
-                        params=params
-                    )
+            # batch_size must be divisible by or smaller than group_size.
+            # Get minibatch stddev feature map image from grouped or
+            # ungrouped branch.
+            if (params["batch_size"] % group_size == 0 or
+                params["batch_size"] < group_size):
+                stddev_feature_map = self.grouped_minibatch_stddev(
+                    X=X,
+                    static_image_shape=static_image_shape,
+                    params=params,
+                    group_size=group_size
+                )
             else:
-                # Get dynamic shape of image.
-                # shape = (4,)
-                dynamic_image_shape = tf.shape(
-                    input=X, name="dynamic_image_shape"
+                stddev_feature_map = self.ungrouped_minibatch_stddev(
+                    X=X,
+                    batch_size=X.shape[0],
+                    static_image_shape=static_image_shape,
+                    params=params
                 )
-                print_obj(
-                    "\nminibatch_stddev",
-                    "dynamic_image_shape",
-                    dynamic_image_shape
-                )
-
-                # Extract current batch size (in case this is a partial batch).
-                cur_batch_size = dynamic_image_shape[0]
-
-                # cur_batch_size must be divisible by or smaller than group_size.
-                divisbility_condition = tf.equal(
-                    x=tf.mod(x=cur_batch_size, y=group_size),
-                    y=0,
-                    name="divisbility_condition"
-                )
-
-                less_than_condition = tf.less(
-                    x=cur_batch_size, y=group_size, name="less_than_condition"
-                )
-
-                or_condition = tf.logical_or(
-                    x=divisbility_condition,
-                    y=less_than_condition,
-                    name="or_condition"
-                )
-
-                # Get minibatch stddev feature map image from grouped or
-                # ungrouped branch.
-                stddev_feature_map = tf.cond(
-                    pred=or_condition,
-                    true_fn=lambda: self.grouped_minibatch_stddev(
-                        X=X,
-                        cur_batch_size=cur_batch_size,
-                        static_image_shape=static_image_shape,
-                        params=params,
-                        group_size=group_size
-                    ),
-                    false_fn=lambda: self.ungrouped_minibatch_stddev(
-                        X=X,
-                        cur_batch_size=cur_batch_size,
-                        static_image_shape=static_image_shape,
-                        params=params
-                    ),
-                    name="stddev_feature_map_cond"
-                )
-            print_obj(
-                "minibatch_stddev", "stddev_feature_map", stddev_feature_map
-            )
 
             # Append to image as new feature map.
             # shape = (
-            #     cur_batch_size,
+            #     batch_size,
             #     image_size,
             #     image_size,
             #     num_channels + 1
@@ -991,7 +932,7 @@ class Discriminator(object):
                 "appended_image",
                 appended_image
             )
-            
+
         return appended_image
 
     def use_discriminator_logits_layer(self, block_conv, params):
@@ -1301,87 +1242,101 @@ class Discriminator(object):
 
         Args:
             X: tensor, image tensors of shape
-                [cur_batch_size, image_size, image_size, depth].
+                [batch_size, image_size, image_size, depth].
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
             growth_index: int, current growth stage.
 
         Returns:
-            Logits tensor of shape [cur_batch_size, 1].
+            Logits tensor of shape [batch_size, 1].
         """
         # Switch to case based on number of steps to get logits.
-        logits = tf.switch_case(
-            branch_index=growth_index,
-            branch_fns=[
-                # 4x4
-                lambda: self.create_base_discriminator_network(
-                    X=X, params=params
-                ),
-                # 8x8
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(0, len(params["conv_num_filters"]) - 2)
-                ),
-                # 16x16
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(1, len(params["conv_num_filters"]) - 2)
-                ),
-                # 32x32
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(2, len(params["conv_num_filters"]) - 2)
-                ),
-                # 64x64
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(3, len(params["conv_num_filters"]) - 2)
-                ),
-                # 128x128
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(4, len(params["conv_num_filters"]) - 2)
-                ),
-                # 256x256
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(5, len(params["conv_num_filters"]) - 2)
-                ),
-                # 512x512
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(6, len(params["conv_num_filters"]) - 2)
-                ),
-                # 1024x1024
-                lambda: self.create_growth_transition_discriminator_network(
-                    X=X,
-                    alpha_var=alpha_var,
-                    params=params,
-                    trans_idx=min(7, len(params["conv_num_filters"]) - 2)
-                ),
-                # 1024x1024
-                lambda: self.create_final_discriminator_network(
-                    X=X, params=params
+        if params["growth_idx"] == 0:
+            logits = self.create_base_discriminator_network(
+                X=X, params=params
+            )
+        elif params["growth_idx"] < 9:
+            logits = self.create_growth_transition_discriminator_network(
+                X=X,
+                alpha_var=alpha_var,
+                params=params,
+                trans_idx=min(
+                    params["growth_idx"] - 1,
+                    len(params["conv_num_filters"]) - 2
                 )
-            ],
-            name="{}_switch_case_logits".format(self.name)
-        )
+            )
+        else:
+            logits = self.create_final_discriminator_network(
+                X=X, params=params
+            )
 
         return logits
+#         logits_list = [
+#             # 4x4
+#             self.create_base_discriminator_network(X=X, params=params),
+#             # 8x8
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(0, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 16x16
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(1, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 32x32
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(2, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 64x64
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(3, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 128x128
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(4, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 256x256
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(5, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 512x512
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(6, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 1024x1024
+#             self.create_growth_transition_discriminator_network(
+#                 X=X,
+#                 alpha_var=alpha_var,
+#                 params=params,
+#                 trans_idx=min(7, len(params["conv_num_filters"]) - 2)
+#             ),
+#             # 1024x1024
+#             self.create_final_discriminator_network(X=X, params=params)
+#         ]
+
+#         logits = logits_list[trans_idx]
+
+#         return logits
 
     ##########################################################################
     ##########################################################################
@@ -1392,12 +1347,12 @@ class Discriminator(object):
 
         Args:
             X: tensor, image tensors of shape
-                [cur_batch_size, image_size, image_size, depth].
+                [batch_size, image_size, image_size, depth].
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
 
         Returns:
-            Logits tensor of shape [cur_batch_size, 1].
+            Logits tensor of shape [batch_size, 1].
         """
         print_obj("\nget_discriminator_logits", "X", X)
 
@@ -1415,23 +1370,11 @@ class Discriminator(object):
                 X=X, params=params
             )
         else:
-            # Find growth index based on global step and growth frequency.
-            growth_index = tf.cast(
-                x=tf.floordiv(
-                    x=tf.train.get_or_create_global_step(),
-                    y=params["num_steps_until_growth"],
-                    name="{}_global_step_floordiv".format(self.name)
-                ),
-                dtype=tf.int32,
-                name="{}_growth_index".format(self.name)
-            )
-
             # Switch to case based on number of steps for logits.
             logits = self.switch_case_discriminator_logits(
                 X=X,
                 alpha_var=alpha_var,
-                params=params,
-                growth_index=growth_index
+                params=params
             )
 
         print_obj(
@@ -1454,7 +1397,6 @@ class Discriminator(object):
 
     def get_gradient_penalty_loss(
             self,
-            cur_batch_size,
             fake_images,
             real_images,
             alpha_var,
@@ -1462,53 +1404,69 @@ class Discriminator(object):
         """Gets discriminator gradient penalty loss.
 
         Args:
-            cur_batch_size: tensor, in case of a partial batch instead of
+            batch_size: tensor, in case of a partial batch instead of
                 using the user passed int.
             fake_images: tensor, images generated by the generator from random
-                noise of shape [cur_batch_size, image_size, image_size, 3].
+                noise of shape [batch_size, image_size, image_size, 3].
             real_images: tensor, real images from input of shape
-                [cur_batch_size, image_size, image_size, 3].
+                [batch_size, image_size, image_size, 3].
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
 
         Returns:
             Discriminator's gradient penalty loss of shape [].
         """
-        func_name = "get_gradient_penalty_loss"
-
         with tf.name_scope(name="{}/gradient_penalty".format(self.name)):
             # Get a random uniform number rank 4 tensor.
             random_uniform_num = tf.random.uniform(
-                shape=[cur_batch_size, 1, 1, 1],
+                shape=[fake_images.shape[0], 1, 1, 1],
                 minval=0., maxval=1.,
                 dtype=tf.float32,
                 name="random_uniform_num"
             )
             print_obj(
-                "\n" + func_name, "random_uniform_num", random_uniform_num
+                "\nget_gradient_penalty_loss",
+                "random_uniform_num",
+                random_uniform_num
             )
 
             # Find the element-wise difference between images.
-            image_difference = fake_images - real_images
-            print_obj(func_name, "image_difference", image_difference)
+            image_difference = real_images - fake_images
+            print_obj(
+                "get_gradient_penalty_loss",
+                "image_difference",
+                image_difference
+            )
 
             # Get random samples from this mixed image distribution.
             mixed_images = random_uniform_num * image_difference
-            mixed_images += real_images
-            print_obj(func_name, "mixed_images", mixed_images)
+            mixed_images += fake_images
+            print_obj(
+                "get_gradient_penalty_loss",
+                "mixed_images",
+                mixed_images
+            )
 
             # Send to the discriminator to get logits.
             mixed_logits = self.get_discriminator_logits(
                 X=mixed_images, alpha_var=alpha_var, params=params
             )
-            print_obj(func_name, "mixed_logits", mixed_logits)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "mixed_logits",
+                mixed_logits
+            )
 
             # Get the mixed loss.
             mixed_loss = tf.reduce_sum(
-                input_tensor=mixed_logits,
+                input_tensor=mixed_images,
                 name="mixed_loss"
             )
-            print_obj(func_name, "mixed_loss", mixed_loss)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "mixed_loss",
+                mixed_loss
+            )
 
             # Get gradient from returned list of length 1.
             mixed_gradients = tf.gradients(
@@ -1516,7 +1474,11 @@ class Discriminator(object):
                 xs=[mixed_images],
                 name="gradients"
             )[0]
-            print_obj(func_name, "mixed_gradients", mixed_gradients)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "mixed_gradients",
+                mixed_gradients
+            )
 
             # Get gradient's L2 norm.
             mixed_norms = tf.sqrt(
@@ -1526,22 +1488,34 @@ class Discriminator(object):
                         name="squared_grads"
                     ),
                     axis=[1, 2, 3]
-                ) + 1e-8
+                )
             )
-            print_obj(func_name, "mixed_norms", mixed_norms)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "mixed_norms",
+                mixed_norms
+            )
 
             # Get squared difference from target of 1.0.
             squared_difference = tf.square(
                 x=mixed_norms - 1.0,
                 name="squared_difference"
             )
-            print_obj(func_name, "squared_difference", squared_difference)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "squared_difference",
+                squared_difference
+            )
 
             # Get gradient penalty scalar.
             gradient_penalty = tf.reduce_mean(
                 input_tensor=squared_difference, name="gradient_penalty"
             )
-            print_obj(func_name, "gradient_penalty", gradient_penalty)
+            print_obj(
+                "get_gradient_penalty_loss",
+                "gradient_penalty",
+                gradient_penalty
+            )
 
             # Multiply with lambda to get gradient penalty loss.
             gradient_penalty_loss = tf.multiply(
@@ -1550,11 +1524,10 @@ class Discriminator(object):
                 name="gradient_penalty_loss"
             )
 
-        return gradient_penalty_loss
+            return gradient_penalty_loss
 
     def get_discriminator_loss(
             self,
-            cur_batch_size,
             fake_images,
             real_images,
             fake_logits,
@@ -1564,15 +1537,15 @@ class Discriminator(object):
         """Gets discriminator loss.
 
         Args:
-            cur_batch_size: tensor, in case of a partial batch instead of
+            batch_size: tensor, in case of a partial batch instead of
                 using the user passed int.
             fake_images: tensor, images generated by the generator from random
-                noise of shape [cur_batch_size, image_size, image_size, 3].
+                noise of shape [batch_size, image_size, image_size, 3].
             real_images: tensor, real images from input of shape
-                [cur_batch_size, image_size, image_size, 3].
-            fake_logits: tensor, shape of [cur_batch_size, 1] that came from
+                [batch_size, image_size, image_size, 3].
+            fake_logits: tensor, shape of [batch_size, 1] that came from
                 discriminator having processed generator's output image.
-            real_logits: tensor, shape of [cur_batch_size, 1] that came from
+            real_logits: tensor, shape of [batch_size, 1] that came from
                 discriminator having processed real image.
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
             params: dict, user passed parameters.
@@ -1613,7 +1586,6 @@ class Discriminator(object):
 
         # Get discriminator gradient penalty loss.
         discriminator_gradient_penalty = self.get_gradient_penalty_loss(
-            cur_batch_size=cur_batch_size,
             fake_images=fake_images,
             real_images=real_images,
             alpha_var=alpha_var,

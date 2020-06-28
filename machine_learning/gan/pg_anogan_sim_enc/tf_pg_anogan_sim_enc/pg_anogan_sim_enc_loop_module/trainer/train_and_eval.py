@@ -23,30 +23,14 @@ def get_logits_and_losses(
     X = features["image"]
     print_obj("\nget_logits_and_losses", "X", X)
 
-    if params["use_tpu"]:
-        # Get dynamic batch size in case of partial batch.
-        cur_batch_size = tf.shape(
-            input=X,
-            out_type=tf.int32,
-            name="get_logits_and_losses_cur_batch_size"
-        )[0]
 
-        # Create random noise latent vector for each batch example.
-        Z = tf.random.normal(
-            shape=[cur_batch_size, params["latent_size"]],
-            mean=0.0,
-            stddev=1.0,
-            dtype=tf.float32
-        )
-    else:
-        cur_batch_size = X.shape[0]
-        # Create random noise latent vector for each batch example.
-        Z = tf.random.normal(
-            shape=[cur_batch_size, params["latent_size"]],
-            mean=0.0,
-            stddev=1.0,
-            dtype=tf.float32
-        )
+    # Create random noise latent vector for each batch example.
+    Z = tf.random.normal(
+        shape=[X.shape[0], params["latent_size"]],
+        mean=0.0,
+        stddev=1.0,
+        dtype=tf.float32
+    )
     print_obj("get_logits_and_losses", "Z", Z)
 
     # Get generated image from generator network from gaussian noise.
@@ -103,7 +87,6 @@ def get_logits_and_losses(
 
     # Get discriminator total loss.
     discriminator_total_loss = discriminator.get_discriminator_loss(
-        cur_batch_size=cur_batch_size,
         fake_images=generator_outputs,
         real_images=real_images,
         fake_logits=fake_logits,

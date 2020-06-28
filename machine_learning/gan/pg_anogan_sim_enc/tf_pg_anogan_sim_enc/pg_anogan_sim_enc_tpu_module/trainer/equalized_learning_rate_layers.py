@@ -79,10 +79,10 @@ class Dense(tf.layers.Dense):
             inputs: tensor, input tensor of shape [batch_size, features].
         """
         if self.equalized_learning_rate:
-            # Scale kernel weights by He init constant.
-            he_constant = tf.sqrt(
-                x=2. / tf.size(input=self.kernel, out_type=tf.float32)
-            )
+            # Scale kernel weights by He init fade-in constant.
+            kernel_shape = self.kernel.shape
+            fade_in = kernel_shape[0]
+            he_constant = tf.sqrt(x=2. / fade_in)
             kernel = self.kernel * he_constant
         else:
             kernel = self.kernel
@@ -222,9 +222,9 @@ class Conv2D(tf.layers.Conv2D):
         """
         if self.equalized_learning_rate:
             # Scale kernel weights by He init constant.
-            he_constant = tf.sqrt(
-                x=2. / tf.size(input=self.kernel, out_type=tf.float32)
-            )
+            kernel_shape = self.kernel.shape
+            fade_in = kernel_shape[0] * kernel_shape[1] * kernel_shape[2]
+            he_constant = tf.sqrt(x=2. / fade_in)
             kernel = self.kernel * he_constant
         else:
             kernel = self.kernel

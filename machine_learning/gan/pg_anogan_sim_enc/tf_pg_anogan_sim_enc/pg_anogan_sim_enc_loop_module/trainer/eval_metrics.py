@@ -7,9 +7,9 @@ def get_eval_metric_ops(fake_logits, real_logits):
     """Gets eval metric ops.
 
     Args:
-        fake_logits: tensor, shape of [cur_batch_size, 1] that came from
+        fake_logits: tensor, shape of [batch_size, 1] that came from
             discriminator having processed generator's output image.
-        real_logits: tensor, shape of [cur_batch_size, 1] that came from
+        real_logits: tensor, shape of [batch_size, 1] that came from
             discriminator having processed real image.
 
     Returns:

@@ -108,8 +108,8 @@ def pg_anogan_sim_enc_model(features, labels, mode, params):
             # Get loss and train op for EstimatorSpec.
             loss, train_op = train.get_loss_and_train_op(
                 generator_total_loss=generator_total_loss,
-                encoder_total_loss=encoder_total_loss,
                 discriminator_total_loss=discriminator_total_loss,
+                encoder_total_loss=encoder_total_loss,
                 alpha_var=alpha_var,
                 params=params
             )

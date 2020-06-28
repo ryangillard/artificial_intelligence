@@ -307,6 +307,12 @@ if __name__ == "__main__":
         type=int,
         default=100
     )
+    parser.add_argument(
+        "--input_fn_autotune",
+        help="Whether to autotune input function performance.",
+        type=str,
+        default="True"
+    )
 
     # Eval parameters.
     parser.add_argument(
@@ -703,6 +709,11 @@ if __name__ == "__main__":
         arguments["save_optimizer_metrics_to_checkpoint"]
     )
 
+    # Fix input_fn_autotune.
+    arguments["input_fn_autotune"] = convert_string_to_bool(
+        string=arguments["input_fn_autotune"]
+    )
+
     # Fix eval steps.
     arguments["eval_steps"] = convert_string_to_none_or_int(
         arguments["eval_steps"])
@@ -822,13 +833,16 @@ if __name__ == "__main__":
 
     # Fix clip_gradients.
     arguments["generator_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["generator_clip_gradients"])
+        arguments["generator_clip_gradients"]
+    )
 
     arguments["discriminator_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["discriminator_clip_gradients"])
+        arguments["discriminator_clip_gradients"]
+    )
 
     arguments["encoder_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["encoder_clip_gradients"])
+        arguments["encoder_clip_gradients"]
+    )
 
     # Fix train_steps. Ensure chosen image size gets at least one transition
     # stage and one stable stage.

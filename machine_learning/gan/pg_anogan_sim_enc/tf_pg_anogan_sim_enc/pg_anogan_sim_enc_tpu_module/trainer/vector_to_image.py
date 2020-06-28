@@ -220,7 +220,7 @@ class VectorToImage(object):
                     strides=to_rgb[i][4:6],
                     padding="same",
                     activation=activation_dict.get(
-                        "{}_to_rgb_activation".format(self.kind).lower(), None
+                        params["generator_to_rgb_activation"].lower(), None
                     ),
                     kernel_initializer=(
                         tf.random_normal_initializer(mean=0., stddev=1.0)

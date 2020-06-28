@@ -168,7 +168,10 @@ def read_dataset(filename, mode, batch_size, params):
         )
 
         # Prefetch data to improve latency.
-        dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        if params["input_fn_autotune"]:
+            dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        else:
+            dataset = dataset.prefetch(buffer_size=1)
 
         # Create a iterator, then get batch of features from example queue.
         batched_dataset = dataset.make_one_shot_iterator().get_next()

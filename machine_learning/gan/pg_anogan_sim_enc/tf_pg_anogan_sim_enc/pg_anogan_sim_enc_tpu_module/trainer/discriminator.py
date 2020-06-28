@@ -704,8 +704,7 @@ class Discriminator(image_to_vector.ImageToVector):
 
             # Get the mixed loss.
             mixed_loss = tf.reduce_sum(
-                input_tensor=mixed_logits,
-                name="mixed_loss"
+                input_tensor=mixed_logits, name="mixed_loss"
             )
             print_obj(func_name, "mixed_loss", mixed_loss)
 
@@ -721,8 +720,7 @@ class Discriminator(image_to_vector.ImageToVector):
             mixed_norms = tf.sqrt(
                 x=tf.reduce_sum(
                     input_tensor=tf.square(
-                        x=mixed_gradients,
-                        name="squared_grads"
+                        x=mixed_gradients, name="squared_grads"
                     ),
                     axis=[1, 2, 3]
                 ) + 1e-8
@@ -731,8 +729,7 @@ class Discriminator(image_to_vector.ImageToVector):
 
             # Get squared difference from target of 1.0.
             squared_difference = tf.square(
-                x=mixed_norms - 1.0,
-                name="squared_difference"
+                x=mixed_norms - 1.0, name="squared_difference"
             )
             print_obj(func_name, "squared_difference", squared_difference)
 

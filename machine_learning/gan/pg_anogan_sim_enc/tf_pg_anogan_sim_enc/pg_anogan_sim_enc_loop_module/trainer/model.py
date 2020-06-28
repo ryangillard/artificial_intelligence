@@ -1,4 +1,3 @@
-import os
 import tensorflow as tf
 
 from . import input
@@ -23,7 +22,7 @@ def train_and_evaluate(args):
 
     # Create TPU config.
     if args["use_tpu"]:
-        STEPS_PER_EVAL = args["num_steps_until_growth"]
+        STEPS_PER_EVAL = args["train_steps"]
         tpu_cluster_resolver = tf.distribute.cluster_resolver.TPUClusterResolver()
         tf.config.experimental_connect_to_cluster(tpu_cluster_resolver)
         # This is the TPU initialization code that has to be at the beginning.
@@ -51,41 +50,47 @@ def train_and_evaluate(args):
 #           per_host_input_for_training=is_per_host))
     else:
         config = tf.contrib.tpu.RunConfig()
-
-    # Create our custom estimator using our model function.
-    estimator = tf.estimator.tpu.TPUEstimator(
-        model_fn=pg_anogan_sim_enc.pg_anogan_sim_enc_model,
-        model_dir=args["output_dir"],
-        config=config,
-        params=args,
-        use_tpu=args["use_tpu"],
-        train_batch_size=args["train_batch_size"],
-        eval_batch_size=args["eval_batch_size"],
-        eval_on_tpu=args["eval_on_tpu"],
-        export_to_tpu=args["export_to_tpu"],
-        export_to_cpu=args["export_to_cpu"]
-    )
-
+    
     if args["use_tpu"]:
-        # Train estimator.
-        estimator.train(
-            input_fn=input.read_dataset(
-                filename=args["train_file_pattern"],
-                mode=tf.estimator.ModeKeys.TRAIN,
-                batch_size=args["train_batch_size"],
-                params=args
-            ),
-            max_steps=args["train_steps"]
-        )
+        args["growth_idx"] = -1
+        for i in range(500):
+            if i % args["num_steps_until_growth"]:
+                args["growth_idx"] += 1
+            if i % 2 == 0:
+                args["training_phase"] = "discriminator"
+            else:
+                args["training_phase"] = "encoder"
 
-        # Export SavedModel.
-        tf.logging.info("Starting to export model.")
+            # Create our custom estimator using our model function.
+            estimator = tf.estimator.tpu.TPUEstimator(
+                model_fn=pg_anogan_sim_enc.pg_anogan_sim_enc_model,
+                model_dir=args["output_dir"],
+                config=config,
+                params=args,
+                use_tpu=args["use_tpu"],
+                train_batch_size=args["train_batch_size"],
+                eval_batch_size=args["eval_batch_size"],
+                eval_on_tpu=args["eval_on_tpu"],
+                export_to_tpu=args["export_to_tpu"],
+                export_to_cpu=args["export_to_cpu"]
+            )
+
+            print("CALLING TRAIN WITH TRAINING_PHASE {} AND GROWTH_IDX {} FOR STEP".format(args["training_phase"], args["growth_idx"]))
+            estimator.train(
+                input_fn=input.read_dataset(
+                    filename=args["train_file_pattern"],
+                    mode=tf.estimator.ModeKeys.TRAIN,
+                    batch_size=args["train_batch_size"],
+                    params=args
+                ),
+                steps=args["train_steps"]
+            )
+
+        # export similar to Cloud ML Engine / TF Serving convention
+        tf.logging.info('Starting to export model.')
         estimator.export_savedmodel(
-            export_dir_base=os.path.join(
-                args["output_dir"], "export/exporter"
-            ),
-            serving_input_receiver_fn=lambda: serving.serving_input_fn(args)
-        )
+            export_dir_base=os.path.join(args["output_dir"], "export/exporter"),
+            serving_input_receiver_fn=lambda: serving.serving_input_fn(args))
     else:
         # Create train spec to read in our training data.
         train_spec = tf.estimator.TrainSpec(
