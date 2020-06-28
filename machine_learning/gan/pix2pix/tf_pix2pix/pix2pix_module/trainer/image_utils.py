@@ -37,12 +37,14 @@ def decode_image(image_bytes, params):
     return image
 
 
-def preprocess_image(image, params):
+def preprocess_image(image, mode, params):
     """Preprocess image tensor.
 
     Args:
         image: tensor, input image with shape
             [cur_batch_size, height, width, depth].
+        mode: tf.estimator.ModeKeys with values of either TRAIN, EVAL, or
+            PREDICT.
         params: dict, user passed parameters.
 
     Returns:
@@ -52,22 +54,23 @@ def preprocess_image(image, params):
     func_name = "preprocess_image"
     print_obj("\n" + func_name, "image", image)
 
-    # Add some random jitter.
-    if params["preprocess_image_resize_jitter_size"]:
-        image = tf.image.resize(
-            images=image,
-            size=params["preprocess_image_resize_jitter_size"],
-            method="bilinear",
-            name="{}_jitter_resize".format(func_name)
-        )
-        print_obj(func_name, "image", image)
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        # Add some random jitter.
+        if params["preprocess_image_resize_jitter_size"]:
+            image = tf.image.resize(
+                images=image,
+                size=params["preprocess_image_resize_jitter_size"],
+                method="bilinear",
+                name="{}_jitter_resize".format(func_name)
+            )
+            print_obj(func_name, "image", image)
 
-        image = tf.image.random_crop(
-            value=image,
-            size=[params["height"], params["width"], params["depth"]],
-            name="{}_jitter_crop".format(func_name)
-        )
-        print_obj(func_name, "image", image)
+            image = tf.image.random_crop(
+                value=image,
+                size=[params["height"], params["width"], params["depth"]],
+                name="{}_jitter_crop".format(func_name)
+            )
+            print_obj(func_name, "image", image)
 
     # Convert from [0, 255] -> [-1.0, 1.0] floats.
     image = tf.subtract(
@@ -80,11 +83,12 @@ def preprocess_image(image, params):
     return image
 
 
-def handle_input_image(image_bytes, params):
+def handle_input_image(image_bytes, mode, params):
     """Handles image tensor transformations.
 
     Args:
         image_bytes: tensor, image bytes with shape [?,].
+        mode: tf.estimator.ModeKeys with values of either TRAIN or EVAL.
         params: dict, user passed parameters.
 
     Returns:
@@ -95,13 +99,11 @@ def handle_input_image(image_bytes, params):
     print_obj("\n" + func_name, "image_bytes", image_bytes)
 
     # Decode image.
-    image = decode_image(
-        image_bytes=image_bytes, params=params
-    )
+    image = decode_image(image_bytes=image_bytes, params=params)
     print_obj(func_name, "image", image)
 
     # Preprocess image.
-    image = preprocess_image(image=image, params=params)
+    image = preprocess_image(image=image, mode=mode, params=params)
     print_obj(func_name, "image", image)
 
     return image

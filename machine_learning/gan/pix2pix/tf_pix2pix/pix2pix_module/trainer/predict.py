@@ -18,7 +18,7 @@ def get_predictions_and_export_outputs(features, generator, params):
     func_name = "get_predictions_and_export_outputs"
 
     # Extract given latent vectors from features dictionary.
-    source_images = tf.cast(x=features["source_image"], dtype=tf.float32)
+    source_images = features["source_image"]
     print_obj("\n" + func_name, "source_images", source_images)
 
     # Get generated images from generator using latent vector.

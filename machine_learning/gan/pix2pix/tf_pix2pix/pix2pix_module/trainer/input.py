@@ -4,13 +4,14 @@ from . import image_utils
 from .print_object import print_obj
 
 
-def decode_example(protos, params):
+def decode_example(protos, mode, params):
     """Decodes TFRecord file into tensors.
 
     Given protobufs, decode into image and label tensors.
 
     Args:
         protos: protobufs from TFRecord file.
+        mode: tf.estimator.ModeKeys with values of either TRAIN or EVAL.
         params: dict, user passed parameters.
 
     Returns:
@@ -32,13 +33,17 @@ def decode_example(protos, params):
 
     # Decode source image.
     source_image = image_utils.handle_input_image(
-        image_bytes=parsed_features["source_image_raw"], params=params
+        image_bytes=parsed_features["source_image_raw"],
+        mode=mode,
+        params=params
     )
     print_obj(func_name, "source_image", source_image)
 
     # Decode target image.
     target_image = image_utils.handle_input_image(
-        image_bytes=parsed_features["target_image_raw"], params=params
+        image_bytes=parsed_features["target_image_raw"],
+        mode=mode,
+        params=params
     )
     print_obj(func_name, "target_image", target_image)
 
@@ -72,9 +77,12 @@ def read_dataset(filename, mode, batch_size, params):
         file_list = tf.gfile.Glob(filename=filename)
 
         # Create dataset from file list.
-        dataset = tf.data.TFRecordDataset(
-            filenames=file_list, num_parallel_reads=tf.contrib.data.AUTOTUNE
-        )
+        if params["input_fn_autotune"]:
+            dataset = tf.data.TFRecordDataset(
+                filenames=file_list, num_parallel_reads=tf.contrib.data.AUTOTUNE
+            )
+        else:
+            dataset = tf.data.TFRecordDataset(filenames=file_list)
 
         # Shuffle and repeat if training with fused op.
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -86,19 +94,35 @@ def read_dataset(filename, mode, batch_size, params):
             )
 
         # Decode CSV file into a features dictionary of tensors, then batch.
-        dataset = dataset.apply(
-            tf.contrib.data.map_and_batch(
-                map_func=lambda x: decode_example(
-                    protos=x,
-                    params=params
-                ),
-                batch_size=batch_size,
-                num_parallel_calls=tf.contrib.data.AUTOTUNE
+        if params["input_fn_autotune"]:
+            dataset = dataset.apply(
+                tf.contrib.data.map_and_batch(
+                    map_func=lambda x: decode_example(
+                        protos=x,
+                        mode=mode,
+                        params=params
+                    ),
+                    batch_size=batch_size,
+                    num_parallel_calls=tf.contrib.data.AUTOTUNE
+                )
             )
-        )
+        else:
+            dataset = dataset.apply(
+                tf.contrib.data.map_and_batch(
+                    map_func=lambda x: decode_example(
+                        protos=x,
+                        mode=mode,
+                        params=params
+                    ),
+                    batch_size=batch_size
+                )
+            )
 
         # Prefetch data to improve latency.
-        dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        if params["input_fn_autotune"]:
+            dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        else:
+            dataset = dataset.prefetch(buffer_size=1)
 
         # Create a iterator, then get batch of features from example queue.
         batched_dataset = dataset.make_one_shot_iterator().get_next()

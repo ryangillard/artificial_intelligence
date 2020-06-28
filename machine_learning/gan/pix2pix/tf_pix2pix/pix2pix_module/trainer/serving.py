@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from . import image_utils
 from .print_object import print_obj
 
 
@@ -33,6 +34,14 @@ def serving_input_fn(params):
         )
         for key, value in feature_placeholders.items()
     }
+    print_obj(func_name, "features", features)
+
+    # Apply same preprocessing as before.
+    features["source_image"] = image_utils.preprocess_image(
+        image=features["source_image"],
+        mode=tf.estimator.ModeKeys.PREDICT,
+        params=params
+    )
     print_obj(func_name, "features", features)
 
     return tf.estimator.export.ServingInputReceiver(
