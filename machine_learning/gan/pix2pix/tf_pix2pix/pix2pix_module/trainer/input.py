@@ -79,7 +79,8 @@ def read_dataset(filename, mode, batch_size, params):
         # Create dataset from file list.
         if params["input_fn_autotune"]:
             dataset = tf.data.TFRecordDataset(
-                filenames=file_list, num_parallel_reads=tf.contrib.data.AUTOTUNE
+                filenames=file_list,
+                num_parallel_reads=tf.contrib.data.AUTOTUNE
             )
         else:
             dataset = tf.data.TFRecordDataset(filenames=file_list)
