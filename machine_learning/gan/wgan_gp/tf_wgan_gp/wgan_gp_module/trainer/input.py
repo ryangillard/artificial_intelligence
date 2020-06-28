@@ -82,9 +82,13 @@ def read_dataset(filename, mode, batch_size, params):
         file_list = tf.gfile.Glob(filename=filename)
 
         # Create dataset from file list.
-        dataset = tf.data.TFRecordDataset(
-            filenames=file_list, num_parallel_reads=tf.contrib.data.AUTOTUNE
-        )
+        if params["input_fn_autotune"]:
+            dataset = tf.data.TFRecordDataset(
+                filenames=file_list,
+                num_parallel_reads=tf.contrib.data.AUTOTUNE
+            )
+        else:
+            dataset = tf.data.TFRecordDataset(filenames=file_list)
 
         # Shuffle and repeat if training with fused op.
         if mode == tf.estimator.ModeKeys.TRAIN:
@@ -96,19 +100,33 @@ def read_dataset(filename, mode, batch_size, params):
             )
 
         # Decode CSV file into a features dictionary of tensors, then batch.
-        dataset = dataset.apply(
-            tf.contrib.data.map_and_batch(
-                map_func=lambda x: decode_example(
-                    protos=x,
-                    params=params
-                ),
-                batch_size=batch_size,
-                num_parallel_calls=tf.contrib.data.AUTOTUNE
+        if params["input_fn_autotune"]:
+            dataset = dataset.apply(
+                tf.contrib.data.map_and_batch(
+                    map_func=lambda x: decode_example(
+                        protos=x,
+                        params=params
+                    ),
+                    batch_size=batch_size,
+                    num_parallel_calls=tf.contrib.data.AUTOTUNE
+                )
             )
-        )
+        else:
+            dataset = dataset.apply(
+                tf.contrib.data.map_and_batch(
+                    map_func=lambda x: decode_example(
+                        protos=x,
+                        params=params
+                    ),
+                    batch_size=batch_size
+                )
+            )
 
         # Prefetch data to improve latency.
-        dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        if params["input_fn_autotune"]:
+            dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+        else:
+            dataset = dataset.prefetch(buffer_size=1)
 
         # Create a iterator, then get batch of features from example queue.
         batched_dataset = dataset.make_one_shot_iterator().get_next()
