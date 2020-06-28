@@ -97,6 +97,12 @@ if __name__ == "__main__":
         type=int,
         default=100
     )
+    parser.add_argument(
+        "--input_fn_autotune",
+        help="Whether to autotune input function performance.",
+        type=str,
+        default="True"
+    )
 
     # Eval parameters.
     parser.add_argument(

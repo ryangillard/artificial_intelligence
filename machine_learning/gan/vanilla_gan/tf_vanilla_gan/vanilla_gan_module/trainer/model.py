@@ -3,6 +3,7 @@ import tensorflow as tf
 from . import input
 from . import serving
 from . import vanilla_gan
+from .print_object import print_obj
 
 
 def train_and_evaluate(args):
