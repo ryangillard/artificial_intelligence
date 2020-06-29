@@ -15,7 +15,7 @@ def decode_example(protos, mode, params):
         params: dict, user passed parameters.
 
     Returns:
-        Image and label tensors.
+        Image tensors for source and target.
     """
     func_name = "decode_example"
 
