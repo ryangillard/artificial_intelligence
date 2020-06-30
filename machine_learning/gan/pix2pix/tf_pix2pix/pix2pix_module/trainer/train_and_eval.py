@@ -19,7 +19,7 @@ def get_logits_and_losses(features, generator, discriminator, mode, params):
     """
     func_name = "get_logits_and_losses"
 
-    # Extract real images from features dictionary.
+    # Extract images from features dictionary.
     source_images = features["source_image"]
     real_target_images = features["target_image"]
     print_obj("\n" + func_name, "source_images", source_images)

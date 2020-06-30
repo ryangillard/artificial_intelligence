@@ -4,7 +4,7 @@ from .print_object import print_obj
 
 
 class Generator(object):
-    """Generator that takes latent vector input and outputs image.
+    """Generator that takes source image input and outputs target image.
     Fields:
         name: str, name of `Generator`.
         kernel_regularizer: `l1_l2_regularizer` object, regularizar for kernel

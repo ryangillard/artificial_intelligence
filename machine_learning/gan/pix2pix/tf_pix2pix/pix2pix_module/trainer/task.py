@@ -193,9 +193,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--preprocess_image_resize_jitter_size",
-        help="List of [height, width] to resize and crop to add jitter to image.",
+        help="List of [height, width] to resize and crop to add jitter to image during training.",
         type=str,
         default="286,286"
+    )
+    parser.add_argument(
+        "--preprocess_image_use_random_mirroring",
+        help="Whether to randomly mirror image during training.",
+        type=str,
+        default="True"
     )
 
     # Generator parameters.
@@ -484,6 +490,11 @@ if __name__ == "__main__":
     # Fix preprocess_image_resize_jitter_size.
     arguments["preprocess_image_resize_jitter_size"] = convert_string_to_list_of_ints(
         string=arguments["preprocess_image_resize_jitter_size"], sep=","
+    )
+
+    # Fix preprocess_image_use_random_mirroring.
+    arguments["preprocess_image_use_random_mirroring"] = convert_string_to_bool(
+        string=arguments["preprocess_image_use_random_mirroring"]
     )
 
     # Fix generator_use_unet_decoder.

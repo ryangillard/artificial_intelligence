@@ -72,6 +72,11 @@ def preprocess_image(image, mode, params):
             )
             print_obj(func_name, "image", image)
 
+        # Random mirroring.
+        if params["preprocess_image_use_random_mirroring"]:
+            image = tf.image.random_flip_left_right(image=image)
+            print_obj(func_name, "image", image)
+
     # Convert from [0, 255] -> [-1.0, 1.0] floats.
     image = tf.subtract(
         x=tf.cast(x=image, dtype=tf.float32) * (2. / 255),

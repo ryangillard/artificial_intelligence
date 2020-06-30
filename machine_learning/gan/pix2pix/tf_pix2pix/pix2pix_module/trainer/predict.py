@@ -17,11 +17,11 @@ def get_predictions_and_export_outputs(features, generator, params):
     """
     func_name = "get_predictions_and_export_outputs"
 
-    # Extract given latent vectors from features dictionary.
+    # Extract given source images from features dictionary.
     source_images = features["source_image"]
     print_obj("\n" + func_name, "source_images", source_images)
 
-    # Get generated images from generator using latent vector.
+    # Get generated target images from generator using source images.
     generated_images = generator.get_fake_images(
         source_images=source_images, params=params
     )
