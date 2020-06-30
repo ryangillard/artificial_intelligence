@@ -94,6 +94,11 @@ class Generator(object):
         func_name = "encoder"
         print_obj("\n" + func_name, "source_images", source_images)
 
+        # Create kernel weight initializer.
+        kernel_initializer = tf.random_normal_initializer(
+            mean=0.0, stddev=0.02
+        )
+
         # Create list for encoder activations if using optional U-net decoder.
         encoder_activations = []
 
@@ -120,6 +125,7 @@ class Generator(object):
                     strides=params["generator_encoder_strides"][i],
                     padding="same",
                     activation=None,
+                    kernel_initializer=kernel_initializer,
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
                     name="layers_conv2d_tranpose_{}".format(i)
@@ -193,6 +199,11 @@ class Generator(object):
         print_obj("\n" + func_name, "bottleneck", bottleneck)
         print_obj(func_name, "encoder_activations", encoder_activations)
 
+        # Create kernel weight initializer.
+        kernel_initializer = tf.random_normal_initializer(
+            mean=0.0, stddev=0.02
+        )
+
         # The set of allowed activations.
         activation_set = {"relu", "leaky_relu", "tanh"}
 
@@ -216,6 +227,7 @@ class Generator(object):
                     strides=params["generator_decoder_strides"][i],
                     padding="same",
                     activation=None,
+                    kernel_initializer=kernel_initializer,
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
                     name="layers_conv2d_tranpose_{}".format(i)
