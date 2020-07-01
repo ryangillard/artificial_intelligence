@@ -45,7 +45,7 @@ class Generator(object):
             activation_name: str, name of activation function to apply.
             activation_set: set, allowable set of activation functions.
             params: dict, user passed parameters.
-            scope: str, current scope of generator network.
+            scope: str, current scope of network.
             layer_idx: int, index of current layer of network.
 
         Returns:
@@ -109,7 +109,7 @@ class Generator(object):
         network = source_images
 
         with tf.variable_scope("generator/encoder", reuse=tf.AUTO_REUSE):
-            # Iteratively build upsampling layers.
+            # Iteratively build downsampling layers.
             for i in range(len(params["generator_encoder_num_filters"])):
                 # Add convolutional layers with given params per layer.
                 # shape = (
@@ -128,7 +128,7 @@ class Generator(object):
                     kernel_initializer=kernel_initializer,
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
-                    name="layers_conv2d_tranpose_{}".format(i)
+                    name="layers_conv2d_{}".format(i)
                 )
                 print_obj(func_name, "network", network)
 
@@ -230,7 +230,7 @@ class Generator(object):
                     kernel_initializer=kernel_initializer,
                     kernel_regularizer=self.kernel_regularizer,
                     bias_regularizer=self.bias_regularizer,
-                    name="layers_conv2d_tranpose_{}".format(i)
+                    name="layers_conv2d_transpose_{}".format(i)
                 )
                 print_obj(func_name, "network", network)
 
@@ -316,7 +316,7 @@ class Generator(object):
         # Encode image into bottleneck.
         bottleneck, encoder_activations = self.encoder(source_images, params)
         print_obj("\n" + func_name, "bottleneck", bottleneck)
-        print_obj(func_name, "bottleneck", bottleneck)
+        print_obj(func_name, "encoder_activations", encoder_activations)
 
         # Decode bottleneck back into image.
         fake_target_images = self.decoder(
