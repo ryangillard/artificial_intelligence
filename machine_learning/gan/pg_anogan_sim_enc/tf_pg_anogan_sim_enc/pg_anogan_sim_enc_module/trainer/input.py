@@ -55,6 +55,16 @@ def decode_example(protos, params):
 
 
 def set_static_shape(features, labels, batch_size):
+    """Sets static shape of batched input tensors in dataset.
+
+    Args:
+        features: dict, keys are feature names and values are feature tensors.
+        labels: tensor, label data.
+        batch_size: int, number of examples per batch.
+
+    Returns:
+        Features tensor dictionary and labels tensor.
+    """
     features["image"].set_shape(
         features["image"].get_shape().merge_with(
             tf.TensorShape([batch_size, None, None, None])
@@ -68,11 +78,11 @@ def set_static_shape(features, labels, batch_size):
 
 
 def read_dataset(filename, mode, batch_size, params):
-    """Reads CSV time series data using tf.data, doing necessary preprocessing.
+    """Reads TF Record data using tf.data, doing necessary preprocessing.
 
-    Given filename, mode, batch size, and other parameters, read CSV dataset
-    using Dataset API, apply necessary preprocessing, and return an input
-    function to the Estimator API.
+    Given filename, mode, batch size, and other parameters, read TF Record
+    dataset using Dataset API, apply necessary preprocessing, and return an
+    input function to the Estimator API.
 
     Args:
         filename: str, file pattern that to read into our tf.data dataset.

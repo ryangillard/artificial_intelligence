@@ -55,11 +55,11 @@ def decode_example(protos, params):
 
 
 def read_dataset(filename, mode, batch_size, params):
-    """Reads CSV time series data using tf.data, doing necessary preprocessing.
+    """Reads TF Record data using tf.data, doing necessary preprocessing.
 
-    Given filename, mode, batch size, and other parameters, read CSV dataset
-    using Dataset API, apply necessary preprocessing, and return an input
-    function to the Estimator API.
+    Given filename, mode, batch size, and other parameters, read TF Record
+    dataset using Dataset API, apply necessary preprocessing, and return an
+    input function to the Estimator API.
 
     Args:
         filename: str, file pattern that to read into our tf.data dataset.
