@@ -63,7 +63,7 @@ class Discriminator(object):
 
                 network = tf.nn.leaky_relu(
                     features=network,
-                    alpha=params["generator_leaky_relu_alpha"],
+                    alpha=params["discriminator_leaky_relu_alpha"],
                     name="leaky_relu_{}".format(i)
                 )
                 print_obj(func_name, "network", network)
