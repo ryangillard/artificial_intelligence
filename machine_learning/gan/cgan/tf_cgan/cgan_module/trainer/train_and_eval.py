@@ -7,7 +7,7 @@ def get_logits_and_losses(features, labels, generator, discriminator, params):
     """Gets logits and losses for both train and eval modes.
 
     Args:
-        features: dict, feature tensors from serving input function.
+        features: dict, feature tensors from input function.
         labels: tensor, labels to condition on of shape
             [cur_batch_size, 1].
         generator: instance of generator.`Generator`.

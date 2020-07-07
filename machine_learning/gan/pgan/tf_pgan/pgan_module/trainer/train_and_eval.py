@@ -9,7 +9,7 @@ def get_logits_and_losses(
     """Gets logits and losses for both train and eval modes.
 
     Args:
-        features: dict, feature tensors from serving input function.
+        features: dict, feature tensors from input function.
         generator: instance of generator.`Generator`.
         discriminator: instance of discriminator.`Discriminator`.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.

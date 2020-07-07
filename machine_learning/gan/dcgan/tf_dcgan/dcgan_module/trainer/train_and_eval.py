@@ -8,7 +8,7 @@ def get_logits_and_losses(features, generator, discriminator, mode, params):
     """Gets logits and losses for both train and eval modes.
 
     Args:
-        features: dict, feature tensors from serving input function.
+        features: dict, feature tensors from input function.
         generator: instance of generator.`Generator`.
         discriminator: instance of discriminator.`Discriminator`.
         mode: tf.estimator.ModeKeys with values of either TRAIN or EVAL.
