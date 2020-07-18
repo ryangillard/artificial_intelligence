@@ -6,6 +6,7 @@ class Generator(object):
 
     Fields:
         name: str, name of `Generator`.
+        params: dict, user passed parameters.
         model: instance of generator `Model`.
     """
     def __init__(
@@ -30,13 +31,15 @@ class Generator(object):
         # Set name of generator.
         self.name = name
 
+        self.params = params
+
         # Instantiate generator `Model`.
         self.model = self._define_generator(
-            input_shape, kernel_regularizer, bias_regularizer, params
+            input_shape, kernel_regularizer, bias_regularizer
         )
 
     def _define_generator(
-            self, input_shape, kernel_regularizer, bias_regularizer, params):
+            self, input_shape, kernel_regularizer, bias_regularizer):
         """Defines generator network.
 
         Args:
@@ -46,7 +49,6 @@ class Generator(object):
                 kernel variables.
             bias_regularizer: `l1_l2_regularizer` object, regularizar for bias
                 variables.
-            params: dict, user passed parameters.
 
         Returns:
             Instance of `Model` object.
@@ -62,7 +64,7 @@ class Generator(object):
         final_activation_set = {"sigmoid", "relu", "tanh"}
 
         # Add hidden layers with given number of units/neurons per layer.
-        for i, units in enumerate(params["generator_hidden_units"]):
+        for i, units in enumerate(self.params["generator_hidden_units"]):
             # shape = (batch_size, generator_hidden_units[i])
             network = tf.keras.layers.Dense(
                 units=units,
@@ -73,17 +75,17 @@ class Generator(object):
             )(inputs=network)
 
             network = tf.keras.layers.LeakyReLU(
-                alpha=params["generator_leaky_relu_alpha"],
+                alpha=self.params["generator_leaky_relu_alpha"],
                 name="{}_leaky_relu_{}".format(self.name, i)
             )(inputs=network)
 
         # Final linear layer for outputs.
         # shape = (batch_size, height * width * depth)
         generated_outputs = tf.keras.layers.Dense(
-            units=params["height"] * params["width"] * params["depth"],
+            units=self.params["height"] * self.params["width"] * self.params["depth"],
             activation=(
-                params["generator_final_activation"].lower()
-                if params["generator_final_activation"].lower()
+                self.params["generator_final_activation"].lower()
+                if self.params["generator_final_activation"].lower()
                 in final_activation_set
                 else None
             ),
@@ -111,7 +113,6 @@ class Generator(object):
         self,
         global_batch_size,
         fake_logits,
-        params,
         global_step,
         summary_file_writer
     ):
@@ -121,28 +122,38 @@ class Generator(object):
             global_batch_size: int, global batch size for distribution.
             fake_logits: tensor, shape of
                 [batch_size, 1].
-            params: dict, user passed parameters.
             global_step: int, current global step for training.
             summary_file_writer: summary file writer.
 
         Returns:
             Tensor of generator's total loss of shape [].
         """
-        # Calculate base generator loss.
-        generator_loss = tf.nn.compute_average_loss(
-            per_example_loss=tf.keras.losses.BinaryCrossentropy(
-                from_logits=True,
-                reduction=tf.keras.losses.Reduction.NONE
+        if self.params["distribution_strategy"]:
+            # Calculate base generator loss.
+            generator_loss = tf.nn.compute_average_loss(
+                per_example_loss=tf.keras.losses.BinaryCrossentropy(
+                    from_logits=True,
+                    reduction=tf.keras.losses.Reduction.NONE
+                )(
+                    y_true=tf.ones_like(input=fake_logits), y_pred=fake_logits
+                ),
+                global_batch_size=global_batch_size
+            )
+
+            # Get regularization losses.
+            generator_reg_loss = tf.nn.scale_regularization_loss(
+                regularization_loss=sum(self.model.losses)
+            )
+        else:
+            # Calculate base generator loss.
+            generator_loss = tf.keras.losses.BinaryCrossentropy(
+                from_logits=True
             )(
                 y_true=tf.ones_like(input=fake_logits), y_pred=fake_logits
-            ),
-            global_batch_size=global_batch_size
-        )
+            )
 
-        # Get regularization losses.
-        generator_reg_loss = tf.nn.scale_regularization_loss(
-            regularization_loss=sum(self.model.losses)
-        )
+            # Get regularization losses.
+            generator_reg_loss = sum(self.model.losses)
 
         # Combine losses for total losses.
         generator_total_loss = tf.math.add(
@@ -154,7 +165,7 @@ class Generator(object):
         # Add summaries for TensorBoard.
         with summary_file_writer.as_default():
             with tf.summary.record_if(
-                global_step % params["save_summary_steps"] == 0
+                global_step % self.params["save_summary_steps"] == 0
             ):
                 tf.summary.scalar(
                     name="losses/generator_loss",

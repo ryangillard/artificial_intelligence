@@ -1,7 +1,7 @@
 Metadata-Version: 1.0
 Name: trainer
 Version: 0.1
-Summary: Vanilla GAN Keras model.
+Summary: Vanilla GAN TF2 model.
 Home-page: UNKNOWN
 Author: Ryan Gillard
 Author-email: ryangillard@google.com

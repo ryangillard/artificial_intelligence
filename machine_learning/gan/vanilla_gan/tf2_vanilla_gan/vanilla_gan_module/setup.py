@@ -12,6 +12,6 @@ setup(
     install_requires=REQUIRED_PACKAGES,
     packages=find_packages(),
     include_package_data=True,
-    description="Vanilla GAN Keras model.",
+    description="Vanilla GAN TF2 model.",
     requires=[]
 )

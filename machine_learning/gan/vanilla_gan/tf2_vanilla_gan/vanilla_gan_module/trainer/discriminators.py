@@ -6,6 +6,7 @@ class Discriminator(object):
 
     Fields:
         name: str, name of `Discriminator`.
+        params: dict, user passed parameters.
         model: instance of discriminator `Model`.
     """
     def __init__(
@@ -30,19 +31,15 @@ class Discriminator(object):
         # Set name of discriminator.
         self.name = name
 
-        # Regularizer for kernel weights.
-        self.kernel_regularizer = kernel_regularizer
-
-        # Regularizer for bias weights.
-        self.bias_regularizer = bias_regularizer
+        self.params = params
 
         # Instantiate discriminator `Model`.
         self.model = self._define_discriminator(
-            input_shape, kernel_regularizer, bias_regularizer, params
+            input_shape, kernel_regularizer, bias_regularizer
         )
 
     def _define_discriminator(
-            self, input_shape, kernel_regularizer, bias_regularizer, params):
+            self, input_shape, kernel_regularizer, bias_regularizer):
         """Defines discriminator network.
 
         Args:
@@ -52,7 +49,6 @@ class Discriminator(object):
                 kernel variables.
             bias_regularizer: `l1_l2_regularizer` object, regularizar for bias
                 variables.
-            params: dict, user passed parameters.
 
         Returns:
             Instance of `Model` object.
@@ -66,7 +62,7 @@ class Discriminator(object):
         network = inputs
 
         # Add hidden layers with given number of units/neurons per layer.
-        for i, units in enumerate(params["discriminator_hidden_units"]):
+        for i, units in enumerate(self.params["discriminator_hidden_units"]):
             # shape = (batch_size, discriminator_hidden_units[i])
             network = tf.keras.layers.Dense(
                 units=units,
@@ -77,7 +73,7 @@ class Discriminator(object):
             )(inputs=network)
 
             network = tf.keras.layers.LeakyReLU(
-                alpha=params["discriminator_leaky_relu_alpha"],
+                alpha=self.params["discriminator_leaky_relu_alpha"],
                 name="{}_leaky_relu_{}".format(self.name, i)
             )(inputs=network)
 
@@ -111,7 +107,6 @@ class Discriminator(object):
         global_batch_size,
         fake_logits,
         real_logits,
-        params,
         global_step,
         summary_file_writer
     ):
@@ -123,34 +118,48 @@ class Discriminator(object):
                 [batch_size, 1].
             real_logits: tensor, shape of
                 [batch_size, 1].
-            params: dict, user passed parameters.
             global_step: int, current global step for training.
             summary_file_writer: summary file writer.
 
         Returns:
             Tensor of discriminator's total loss of shape [].
         """
-        # Calculate base discriminator loss.
-        discriminator_real_loss = tf.nn.compute_average_loss(
-            per_example_loss=tf.keras.losses.BinaryCrossentropy(
+        if self.params["distribution_strategy"]:
+            # Calculate base discriminator loss.
+            discriminator_real_loss = tf.nn.compute_average_loss(
+                per_example_loss=tf.keras.losses.BinaryCrossentropy(
+                    from_logits=True,
+                    label_smoothing=self.params["label_smoothing"],
+                    reduction=tf.keras.losses.Reduction.NONE
+                )(
+                    y_true=tf.ones_like(input=real_logits), y_pred=real_logits
+                ),
+                global_batch_size=global_batch_size
+            )
+
+            discriminator_fake_loss = tf.nn.compute_average_loss(
+                per_example_loss=tf.keras.losses.BinaryCrossentropy(
+                    from_logits=True,
+                    reduction=tf.keras.losses.Reduction.NONE
+                )(
+                    y_true=tf.zeros_like(input=fake_logits), y_pred=fake_logits
+                ),
+                global_batch_size=global_batch_size
+            )
+        else:
+            # Calculate base discriminator loss.
+            discriminator_real_loss = tf.keras.losses.BinaryCrossentropy(
                 from_logits=True,
-                label_smoothing=params["label_smoothing"],
-                reduction=tf.keras.losses.Reduction.NONE
+                label_smoothing=self.params["label_smoothing"]
             )(
                 y_true=tf.ones_like(input=real_logits), y_pred=real_logits
-            ),
-            global_batch_size=global_batch_size
-        )
+            )
 
-        discriminator_fake_loss = tf.nn.compute_average_loss(
-            per_example_loss=tf.keras.losses.BinaryCrossentropy(
-                from_logits=True,
-                reduction=tf.keras.losses.Reduction.NONE
+            discriminator_fake_loss = tf.keras.losses.BinaryCrossentropy(
+                from_logits=True
             )(
                 y_true=tf.zeros_like(input=fake_logits), y_pred=fake_logits
-            ),
-            global_batch_size=global_batch_size
-        )
+            )
 
         discriminator_loss = tf.add(
             x=discriminator_real_loss,
@@ -158,10 +167,14 @@ class Discriminator(object):
             name="discriminator_loss"
         )
 
-        # Get regularization losses.
-        discriminator_reg_loss = tf.nn.scale_regularization_loss(
-            regularization_loss=sum(self.model.losses)
-        )
+        if self.params["distribution_strategy"]:
+            # Get regularization losses.
+            discriminator_reg_loss = tf.nn.scale_regularization_loss(
+                regularization_loss=sum(self.model.losses)
+            )
+        else:
+            # Get regularization losses.
+            discriminator_reg_loss = sum(self.model.losses)
 
         # Combine losses for total losses.
         discriminator_total_loss = tf.math.add(
@@ -173,7 +186,7 @@ class Discriminator(object):
         # Add summaries for TensorBoard.
         with summary_file_writer.as_default():
             with tf.summary.record_if(
-                global_step % params["save_summary_steps"] == 0
+                global_step % self.params["save_summary_steps"] == 0
             ):
                 tf.summary.scalar(
                     name="losses/discriminator_real_loss",

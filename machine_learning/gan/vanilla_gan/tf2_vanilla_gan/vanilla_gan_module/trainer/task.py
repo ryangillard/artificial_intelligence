@@ -84,6 +84,18 @@ if __name__ == "__main__":
         default=2.2
     )
     parser.add_argument(
+        "--distribution_strategy",
+        help="Which distribution strategy to use, if any.",
+        type=str,
+        default=""
+    )
+    parser.add_argument(
+        "--use_graph_mode",
+        help="Whether to use graph mode or not (eager).",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--num_epochs",
         help="Number of epochs to train for.",
         type=int,
@@ -327,6 +339,11 @@ if __name__ == "__main__":
     # Unused args provided by service.
     arguments.pop("job_dir", None)
     arguments.pop("job-dir", None)
+
+    # Fix use_graph_mode.
+    arguments["use_graph_mode"] = convert_string_to_bool(
+        string=arguments["use_graph_mode"]
+    )
 
     # Fix input_fn_autotune.
     arguments["input_fn_autotune"] = convert_string_to_bool(
