@@ -3,13 +3,12 @@ import tensorflow as tf
 from .print_object import print_obj
 
 
-def preprocess_image(image, params):
+def preprocess_image(image):
     """Preprocess image tensor.
 
     Args:
         image: tensor, input image with shape
             [cur_batch_size, height, width, depth].
-        params: dict, user passed parameters.
 
     Returns:
         Preprocessed image tensor with shape
@@ -64,7 +63,7 @@ def decode_example(protos, params):
     print_obj(func_name, "image", image)
 
     # Preprocess image.
-    image = preprocess_image(image=image, params=params)
+    image = preprocess_image(image=image)
     print_obj(func_name, "image", image)
 
     # Convert label from a scalar uint8 tensor to an int32 scalar.
