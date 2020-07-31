@@ -100,12 +100,12 @@ class Train(object):
         with tf.GradientTape() as gen_tape, tf.GradientTape() as dis_tape:
             # Get fake logits from generator.
             fake_logits, generator_loss = self.generator_loss_phase(
-                mode="TRAIN", training=(scope == "generator")
+                mode="TRAIN", training=True
             )
 
             # Get discriminator loss.
             _, discriminator_loss = self.discriminator_loss_phase(
-                real_images, fake_logits, training=(scope == "discriminator")
+                real_images, fake_logits, training=True
             )
 
         # Create empty dicts to hold loss, variables, gradients.

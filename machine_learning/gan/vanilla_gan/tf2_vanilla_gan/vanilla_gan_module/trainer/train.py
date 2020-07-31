@@ -131,7 +131,7 @@ def get_discriminator_loss_variables_and_gradients(
             global_step,
             summary_file_writer,
             mode="TRAIN",
-            training=False
+            training=True
         )
 
         # Get discriminator loss.
@@ -233,7 +233,7 @@ def get_select_loss_variables_and_gradients(
             global_step,
             summary_file_writer,
             mode="TRAIN",
-            training=(scope == "generator")
+            training=True
         )
 
         # Get discriminator loss.
@@ -246,7 +246,7 @@ def get_select_loss_variables_and_gradients(
             global_step,
             summary_file_writer,
             mode="TRAIN",
-            training=(scope == "discriminator")
+            training=True
         )
 
     # Create empty dicts to hold loss, variables, gradients.

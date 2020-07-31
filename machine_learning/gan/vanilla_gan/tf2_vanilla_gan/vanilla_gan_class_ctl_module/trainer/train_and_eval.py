@@ -66,7 +66,7 @@ class TrainAndEval(object):
 
         # Get fake logits from discriminator using generator's output image.
         fake_logits = self.network_models["discriminator"](
-            inputs=fake_images, training=False
+            inputs=fake_images, training=training
         )
 
         # Get generator total loss.

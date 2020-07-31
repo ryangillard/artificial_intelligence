@@ -66,7 +66,7 @@ def generator_loss_phase(
 
     # Get fake logits from discriminator using generator's output image.
     fake_logits = discriminator.get_model()(
-        inputs=fake_images, training=False
+        inputs=fake_images, training=training
     )
 
     # Get generator total loss.
