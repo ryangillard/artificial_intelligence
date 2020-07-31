@@ -2,10 +2,10 @@ import datetime
 import os
 import tensorflow as tf
 
-from . import inputs
-from . import instantiate_model
-from . import train
-from . import train_and_eval
+from dcgan_class_ctl_module.trainer import inputs
+from dcgan_class_ctl_module.trainer import instantiate_model
+from dcgan_class_ctl_module.trainer import train
+from dcgan_class_ctl_module.trainer import train_and_eval
 
 
 class TrainAndEvaluateLoop(

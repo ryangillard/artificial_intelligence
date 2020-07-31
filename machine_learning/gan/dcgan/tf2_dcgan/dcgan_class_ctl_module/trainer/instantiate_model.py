@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from . import discriminators
-from . import generators
+from dcgan_class_ctl_module.trainer import discriminators
+from dcgan_class_ctl_module.trainer import generators
 
 
 class InstantiateModel(object):

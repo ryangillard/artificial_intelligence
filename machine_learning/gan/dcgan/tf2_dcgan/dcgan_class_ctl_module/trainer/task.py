@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from . import model
+from dcgan_class_ctl_module.trainer import model
 
 
 def convert_string_to_bool(string):
