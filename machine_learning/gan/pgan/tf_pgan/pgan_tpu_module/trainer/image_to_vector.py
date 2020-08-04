@@ -453,8 +453,6 @@ class ImageToVector(object):
 
         Args:
             block_conv: tensor, output of last conv layer of img_to_vec.
-            flatten_layer: `Flatten` layer.
-            logits_layer: `Dense` layer for logits.
             params: dict, user passed parameters.
 
         Returns:
@@ -467,8 +465,8 @@ class ImageToVector(object):
         block_conv.set_shape(
             [
                 block_conv.get_shape()[0],
-                params["generator_projection_dims"][0] / 4,
-                params["generator_projection_dims"][1] / 4,
+                params["generator_projection_dims"][0] // 4,
+                params["generator_projection_dims"][1] // 4,
                 block_conv.get_shape()[-1]]
         )
         print_obj(func_name, "block_conv", block_conv)
@@ -653,7 +651,7 @@ class ImageToVector(object):
             trans_idx: int, index of current growth transition.
 
         Returns:
-            Tensor from final permanant block `Conv2D` layer.
+            Tensor from final permanent block `Conv2D` layer.
         """
         func_name = "create_{}_perm_block_network".format(self.kind)
 

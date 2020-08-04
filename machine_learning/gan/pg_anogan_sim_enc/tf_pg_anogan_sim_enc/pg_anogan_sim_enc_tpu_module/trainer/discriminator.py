@@ -519,7 +519,6 @@ class Discriminator(image_to_vector.ImageToVector):
         with tf.variable_scope(name_or_scope=self.name, reuse=tf.AUTO_REUSE):
             # Only need the first fromRGB conv layer & block for base network.
             from_rgb_conv_layer = self.from_rgb_conv_layers[0]
-            block_layers = self.conv_layer_blocks[0]
 
             # Pass inputs through layer chain.
             from_rgb_conv = from_rgb_conv_layer(inputs=X)
