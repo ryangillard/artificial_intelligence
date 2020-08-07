@@ -1,3 +1,4 @@
+import os
 import tensorflow as tf
 
 
@@ -5,6 +6,8 @@ class Train(object):
     """Class that contains methods used for only training.
     """
     def __init__(self):
+        """Instantiate instance of `Train`.
+        """
         pass
 
     def get_variables_and_gradients(self, loss, gradient_tape, scope):
@@ -30,7 +33,7 @@ class Train(object):
         if self.params["{}_clip_gradients".format(scope)]:
             gradients, _ = tf.clip_by_global_norm(
                 t_list=gradients,
-                clip_norm=params["{}_clip_gradients".format(scope)],
+                clip_norm=self.params["{}_clip_gradients".format(scope)],
                 name="{}_clip_by_global_norm_gradients".format(scope)
             )
 
@@ -223,161 +226,92 @@ class Train(object):
 
         return loss
 
-    def distributed_eager_discriminator_train_step(self, features):
-        """Perform one distributed, eager discriminator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
+    def create_checkpoint_machinery(self):
+        """Creates checkpoint machinery needed to save & restore checkpoints.
         """
-        if self.params["tf_version"] > 2.1:
-            run_function = self.strategy.run
-        else:
-            run_function = self.strategy.experimental_run_v2
-
-        per_replica_losses = run_function(
-            fn=self.train_discriminator, kwargs={"features": features}
+        # Create checkpoint instance.
+        checkpoint_dir = os.path.join(
+            self.params["output_dir"], "checkpoints"
         )
+        checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 
-        return self.strategy.reduce(
-            reduce_op=tf.distribute.ReduceOp.SUM,
-            value=per_replica_losses,
-            axis=None
-        )
+        max_growth_idx = (len(self.params["conv_num_filters"]) - 1) * 2
+        image_multiplier = 2 ** ((max_growth_idx + 1) // 2)
+        height, width = self.params["generator_projection_dims"][0:2]
 
-    def non_distributed_eager_discriminator_train_step(self, features):
-        """Perform one non-distributed, eager discriminator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        return self.train_discriminator(features=features)
-
-    @tf.function
-    def distributed_graph_discriminator_train_step(self, features):
-        """Perform one distributed, graph discriminator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        if self.params["tf_version"] > 2.1:
-            run_function = self.strategy.run
-        else:
-            run_function = self.strategy.experimental_run_v2
-
-        per_replica_losses = run_function(
-            fn=self.train_discriminator, kwargs={"features": features}
-        )
-
-        return self.strategy.reduce(
-            reduce_op=tf.distribute.ReduceOp.SUM,
-            value=per_replica_losses,
-            axis=None
-        )
-
-    @tf.function
-    def non_distributed_graph_discriminator_train_step(self, features):
-        """Perform one non-distributed, graph discriminator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        return self.train_discriminator(features=features)
-
-    def distributed_eager_generator_train_step(self, features):
-        """Perform one distributed, eager generator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        if self.params["tf_version"] > 2.1:
-            run_function = self.strategy.run
-        else:
-            run_function = self.strategy.experimental_run_v2
-
-        per_replica_losses = run_function(
-            fn=self.train_generator, kwargs={"features": features}
-        )
-
-        return self.strategy.reduce(
-            reduce_op=tf.distribute.ReduceOp.SUM,
-            value=per_replica_losses,
-            axis=None
-        )
-
-    def non_distributed_eager_generator_train_step(self, features):
-        """Perform one non-distributed, eager generator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        return self.train_generator(features=features)
-
-    @tf.function
-    def distributed_graph_generator_train_step(self, features):
-        """Perform one distributed, graph generator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        if self.params["tf_version"] > 2.1:
-            run_function = self.strategy.run
-        else:
-            run_function = self.strategy.experimental_run_v2
-
-        per_replica_losses = run_function(
-            fn=self.train_generator, kwargs={"features": features}
-        )
-
-        return self.strategy.reduce(
-            reduce_op=tf.distribute.ReduceOp.SUM,
-            value=per_replica_losses,
-            axis=None
-        )
-
-    @tf.function
-    def non_distributed_graph_generator_train_step(self, features):
-        """Perform one non-distributed, graph generator train step.
-
-        Args:
-            features: dict, feature tensors from input function.
-
-        Returns:
-            Reduced loss tensor for chosen network across replicas.
-        """
-        return self.train_generator(features=features)
-
-    def log_step_loss(self, epoch, epoch_step, loss):
-        """Logs step information and loss.
-
-        Args:
-            epoch: int, current iteration fully through the dataset.
-            epoch_step: int, number of batches through epoch.
-            loss: float, the loss of the model at the current step.
-        """
-        if self.global_step % self.params["log_step_count_steps"] == 0:
-            print(
-                "epoch = {}, global_step = {}, epoch_step = {}, loss = {}".format(
-                    epoch, self.global_step, epoch_step, loss
+        checkpoint = tf.train.Checkpoint(
+            generator_model=self.network_objects["generator"].get_model(
+                input_shape=(self.params["generator_latent_size"]),
+                batch_size=1,
+                growth_idx=max_growth_idx
+            ),
+            discriminator_model=(
+                self.network_objects["discriminator"].get_model(
+                    input_shape=(
+                        height * image_multiplier,
+                        width * image_multiplier,
+                        self.params["depth"]
+                    ),
+                    batch_size=1,
+                    growth_idx=max_growth_idx
                 )
+            ),
+            generator_optimizer=self.optimizers["generator"],
+            discriminator_optimizer=self.optimizers["discriminator"]
+        )
+
+        # Create checkpoint manager.
+        self.checkpoint_manager = tf.train.CheckpointManager(
+            checkpoint=checkpoint,
+            directory=checkpoint_dir,
+            max_to_keep=self.params["keep_checkpoint_max"],
+            step_counter=self.global_step,
+            checkpoint_interval=self.params["save_checkpoints_steps"]
+        )
+
+        # Restore any prior checkpoints.
+        status = checkpoint.restore(
+            save_path=self.checkpoint_manager.latest_checkpoint
+        )
+
+    def prepare_training_components(self):
+        """Prepares all components necessary for training.
+        """
+        # Instantiate model objects.
+        self.instantiate_model_objects()
+
+        # Create checkpoint machinery to save/restore checkpoints.
+        self.create_checkpoint_machinery()
+
+        # Create summary file writer.
+        self.summary_file_writer = tf.summary.create_file_writer(
+            logdir=os.path.join(self.params["output_dir"], "summaries"),
+            name="summary_file_writer"
+        )
+
+    def set_active_network_models(self):
+        """Sets active network models for current growth phase.
+        """
+        self.network_models["generator"] = (
+            self.network_objects["generator"].get_model(
+                input_shape=(self.params["generator_latent_size"]),
+                batch_size=self.params["train_batch_size"],
+                growth_idx=self.growth_idx
             )
+        )
+
+        image_multiplier = 2 ** ((self.growth_idx + 1) // 2)
+        height = (
+            self.params["generator_projection_dims"][0] * image_multiplier
+        )
+        width = (
+            self.params["generator_projection_dims"][1] * image_multiplier
+        )
+        self.network_models["discriminator"] = (
+            self.network_objects["discriminator"].get_model(
+                    input_shape=(height, width, self.params["depth"]
+                ),
+                batch_size=self.params["train_batch_size"],
+                growth_idx=self.growth_idx
+            )
+        )

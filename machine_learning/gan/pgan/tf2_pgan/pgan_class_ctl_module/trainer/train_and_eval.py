@@ -5,6 +5,8 @@ class TrainAndEval(object):
     """Class that contains methods used for both training and evaluation.
     """
     def __init__(self):
+        """Instantiate instance of `TrainAndEval`.
+        """
         pass
 
     def generator_loss_phase(self, mode, training):

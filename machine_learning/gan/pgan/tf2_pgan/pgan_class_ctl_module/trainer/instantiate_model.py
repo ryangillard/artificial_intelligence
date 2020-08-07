@@ -8,6 +8,8 @@ class InstantiateModel(object):
     """Class that contains methods used for instantiating model objects.
     """
     def __init__(self):
+        """Instantiate instance of `InstantiateModel`.
+        """
         pass
 
     def instantiate_network_objects(self):

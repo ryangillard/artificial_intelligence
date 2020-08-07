@@ -1,19 +1,23 @@
-import datetime
-import os
 import tensorflow as tf
 
+from . import export
 from . import inputs
 from . import instantiate_model
 from . import train
 from . import train_and_eval
+from . import train_step
+from . import training_loop
 
 
-class TrainAndEvaluateLoop(
+class TrainAndEvaluateModel(
     train_and_eval.TrainAndEval,
     train.Train,
-    instantiate_model.InstantiateModel
+    instantiate_model.InstantiateModel,
+    train_step.TrainStep,
+    training_loop.TrainingLoop,
+    export.Export
 ):
-    """Train and evaluate loop trainer.
+    """Train and evaluate loop trainer for model.
 
     Attributes:
         params: dict, user passed parameters.
@@ -22,16 +26,22 @@ class TrainAndEvaluateLoop(
         network_models: dict, instances of Keras `Model`s for each network.
         optimizers: dict, instances of Keras `Optimizer`s for each network.
         strategy: instance of tf.distribute.strategy.
+        discriminator_train_step_fn: unbound function, function for a
+            dicriminator train step using correct strategy and mode.
+        generator_train_step_fn: unbound function, function for a
+            generator train step using correct strategy and mode.
         global_batch_size: int, the global batch size after summing batch
             sizes across replicas.
         global_step: tf.Variable, the global step counter across epochs and
             steps within epoch.
-        checkpoint_manager: instance of `tf.train.CheckpointManager`.
-        summary_file_writer: instance of tf.summary.create_file_writer for
-            summaries for TensorBoard.
         alpha_var: tf.Variable, used in growth transition network's weighted
             sum.
+        summary_file_writer: instance of tf.summary.create_file_writer for
+            summaries for TensorBoard.
         growth_idx: int, current growth index model has progressed to.
+        epoch_step: int, the current step through current epoch.
+        previous_timestamp: float, the previous timestamp for profiling the
+            steps/sec rate.
     """
     def __init__(self, params):
         """Instantiate trainer.
@@ -39,6 +49,7 @@ class TrainAndEvaluateLoop(
         Args:
             params: dict, user passed parameters.
         """
+        super().__init__()
         self.params = params
 
         self.network_objects = {}
@@ -47,46 +58,28 @@ class TrainAndEvaluateLoop(
 
         self.strategy = None
 
+        self.discriminator_train_step_fn = None
+        self.generator_train_step_fn = None
+
         self.global_batch_size = None
+
         self.global_step = tf.Variable(
             initial_value=tf.zeros(shape=[], dtype=tf.int64),
             trainable=False,
             name="global_step"
         )
-        self.checkpoint_manager = None
-        self.summary_file_writer = None
 
         self.alpha_var = tf.Variable(
             initial_value=tf.zeros(shape=[], dtype=tf.float32),
             trainable=False,
             name="alpha_var"
         )
+
+        self.summary_file_writer = None
+
         self.growth_idx = 0
-
-    @tf.function
-    def increment_global_step(self):
-        self.global_step.assign_add(
-            delta=tf.ones(shape=[], dtype=tf.int64)
-        )
-
-    @tf.function
-    def increment_alpha_var(self):
-        self.alpha_var.assign(
-            value=tf.divide(
-                x=tf.cast(
-                    # Add 1 since it trains on global step 0, so off by 1.
-                    x=tf.add(
-                        x=tf.math.floormod(
-                            x=self.global_step,
-                            y=self.params["num_steps_until_growth"]
-                        ),
-                        y=1
-                    ),
-                    dtype=tf.float32
-                ),
-                y=self.params["num_steps_until_growth"]
-            )
-        )
+        self.epoch_step = 0
+        self.previous_timestamp = 0.0
 
     def get_train_eval_datasets(self, num_replicas):
         """Gets train and eval datasets.
@@ -115,183 +108,6 @@ class TrainAndEvaluateLoop(
 
         return train_dataset, eval_dataset
 
-    def create_checkpoint_machinery(self):
-        """Creates checkpoint machinery needed to save & restore checkpoints.
-        """
-        # Create checkpoint instance.
-        checkpoint_dir = os.path.join(
-            self.params["output_dir"], "checkpoints"
-        )
-        checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-
-        max_growth_idx = (len(self.params["conv_num_filters"]) - 1) * 2
-        image_multiplier = 2 ** ((max_growth_idx + 1) // 2)
-        height, width = self.params["generator_projection_dims"][0:2]
-
-        checkpoint = tf.train.Checkpoint(
-            generator_model=self.network_objects["generator"].get_model(
-                input_shape=(self.params["generator_latent_size"]),
-                batch_size=1,
-                growth_idx=max_growth_idx
-            ),
-            discriminator_model=(
-                self.network_objects["discriminator"].get_model(
-                    input_shape=(
-                        height * image_multiplier,
-                        width * image_multiplier,
-                        self.params["depth"]
-                    ),
-                    batch_size=1,
-                    growth_idx=max_growth_idx
-                )
-            ),
-            generator_optimizer=self.optimizers["generator"],
-            discriminator_optimizer=self.optimizers["discriminator"]
-        )
-
-        # Create checkpoint manager.
-        self.checkpoint_manager = tf.train.CheckpointManager(
-            checkpoint=checkpoint,
-            directory=checkpoint_dir,
-            max_to_keep=self.params["keep_checkpoint_max"],
-            step_counter=self.global_step,
-            checkpoint_interval=self.params["save_checkpoints_steps"]
-        )
-
-        # Restore any prior checkpoints.
-        status = checkpoint.restore(
-            save_path=self.checkpoint_manager.latest_checkpoint
-        )
-
-    def training_loop(self, steps_per_epoch, train_dataset_iter):
-        """Loops through training dataset to train model.
-
-        Args:
-            steps_per_epoch: int, number of steps/batches to take each epoch.
-            train_dataset_iter: iterator, training dataset iterator.
-        """
-        # Get correct train function based on parameters.
-        if self.strategy:
-            if self.params["use_graph_mode"]:
-                discriminator_train_step_fn = (
-                    self.distributed_graph_discriminator_train_step
-                )
-                generator_train_step_fn = (
-                    self.distributed_graph_generator_train_step
-                )
-            else:
-                discriminator_train_step_fn = (
-                    self.distributed_eager_discriminator_train_step
-                )
-                generator_train_step_fn = (
-                    self.distributed_eager_generator_train_step
-                )
-        else:
-            if self.params["use_graph_mode"]:
-                discriminator_train_step_fn = (
-                    self.non_distributed_graph_discriminator_train_step
-                )
-                generator_train_step_fn = (
-                    self.non_distributed_graph_generator_train_step
-                )
-            else:
-                discriminator_train_step_fn = (
-                    self.non_distributed_eager_discriminator_train_step
-                )
-                generator_train_step_fn = (
-                    self.non_distributed_eager_generator_train_step
-                )
-
-        # Calculate number of growths. Each progression involves 2 growths,
-        # a transition and stablization phase.
-        num_growths = len(self.params["conv_num_filters"]) * 2 - 1
-
-        for self.growth_idx in range(num_growths):
-            print("\ngrowth_idx = {}".format(self.growth_idx))
-
-            # Get generator and discriminator `Model`s.
-            self.network_models["generator"] = (
-                self.network_objects["generator"].get_model(
-                    input_shape=(self.params["generator_latent_size"]),
-                    batch_size=self.params["train_batch_size"],
-                    growth_idx=self.growth_idx
-                )
-            )
-
-            image_multiplier = 2 ** ((self.growth_idx + 1) // 2)
-            height = (
-                self.params["generator_projection_dims"][0] * image_multiplier
-            )
-            width = (
-                self.params["generator_projection_dims"][1] * image_multiplier
-            )
-            self.network_models["discriminator"] = (
-                self.network_objects["discriminator"].get_model(
-                        input_shape=(height, width, self.params["depth"]
-                    ),
-                    batch_size=self.params["train_batch_size"],
-                    growth_idx=self.growth_idx
-                )
-            )
-
-            for epoch in range(self.params["num_epochs"]):
-                for epoch_step in range(steps_per_epoch):
-                    # Train model on batch of features and get loss.
-                    features, labels = next(train_dataset_iter)
-
-                    # Determine if it is time to train generator or discriminator.
-                    cycle_step = self.global_step % (
-                        self.params["discriminator_train_steps"] + self.params["generator_train_steps"]
-                    )
-
-                    # Conditionally choose to train generator or discriminator subgraph.
-                    if cycle_step < self.params["discriminator_train_steps"]:
-                        loss = discriminator_train_step_fn(features=features)
-                    else:
-                        loss = generator_train_step_fn(features=features)
-
-                    # Log step information and loss.
-                    self.log_step_loss(epoch, epoch_step, loss)
-
-                    # Checkpoint model every save_checkpoints_steps steps.
-                    self.checkpoint_manager.save(
-                        checkpoint_number=self.global_step, check_interval=True
-                    )
-
-                    # Increment global step.
-                    self.increment_global_step()
-
-                    # If this is a growth transition phase.
-                    if self.growth_idx % 2 == 1:
-                        # Increment alpha variable.
-                        self.increment_alpha_var()
-
-                    if self.global_step % self.params["num_steps_until_growth"] == 0:
-                        break
-
-                if self.global_step % self.params["num_steps_until_growth"] == 0:
-                    break
-
-    def training_loop_end_save_model(self):
-        """Saving model when training loop ends.
-        """
-        # Write final checkpoint.
-        self.checkpoint_manager.save(
-            checkpoint_number=self.global_step, check_interval=False
-        )
-
-        # Export SavedModel for serving.
-        export_path = os.path.join(
-            self.params["output_dir"],
-            "export",
-            datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        )
-
-        # Signature will be serving_default.
-        tf.saved_model.save(
-            obj=self.network_models["generator"], export_dir=export_path
-        )
-
     def train_block(self, train_dataset, eval_dataset):
         """Training block setups training, then loops through datasets.
 
@@ -307,17 +123,8 @@ class TrainAndEvaluateLoop(
             self.params["train_dataset_length"] // self.global_batch_size
         )
 
-        # Instantiate model objects.
-        self.instantiate_model_objects()
-
-        # Create checkpoint machinery to save/restore checkpoints.
-        self.create_checkpoint_machinery()
-
-        # Create summary file writer.
-        self.summary_file_writer = tf.summary.create_file_writer(
-            logdir=os.path.join(self.params["output_dir"], "summaries"),
-            name="summary_file_writer"
-        )
+        # Instantiate models, create checkpoints, create summary file writer.
+        self.prepare_training_components()
 
         # Run training loop.
         self.training_loop(steps_per_epoch, train_dataset_iter)

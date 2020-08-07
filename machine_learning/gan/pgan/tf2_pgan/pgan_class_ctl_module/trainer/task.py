@@ -302,6 +302,12 @@ if __name__ == "__main__":
         default=32
     )
     parser.add_argument(
+        "--input_fn_autotune",
+        help="Whether to autotune input function performance.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
         "--log_step_count_steps",
         help="How many steps to train before writing steps and loss to log.",
         type=int,
@@ -326,8 +332,8 @@ if __name__ == "__main__":
         default=100
     )
     parser.add_argument(
-        "--input_fn_autotune",
-        help="Whether to autotune input function performance.",
+        "--export_every_growth_phase",
+        help="Whether to export SavedModel every growth phase.",
         type=str,
         default="True"
     )
@@ -611,6 +617,11 @@ if __name__ == "__main__":
         string=arguments["input_fn_autotune"]
     )
 
+    # Fix export_every_growth_phase.
+    arguments["export_every_growth_phase"] = convert_string_to_bool(
+        string=arguments["export_every_growth_phase"]
+    )
+
     # Fix eval steps.
     arguments["eval_steps"] = convert_string_to_none_or_int(
         string=arguments["eval_steps"])
@@ -716,7 +727,7 @@ if __name__ == "__main__":
     print(arguments)
 
     # Instantiate instance of model train and evaluate loop.
-    train_and_evaluate_loop = model.TrainAndEvaluateLoop(params=arguments)
+    train_and_evaluate_model = model.TrainAndEvaluateModel(params=arguments)
 
     # Run the training job.
-    train_and_evaluate_loop.train_and_evaluate()
+    train_and_evaluate_model.train_and_evaluate()
