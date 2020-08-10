@@ -559,11 +559,15 @@ class Discriminator(object):
             Final logits tensor of discriminator.
         """
         # Set shape to remove ambiguity for dense layer.
+        height, width =  self.params["generator_projection_dims"][0:2]
+        valid_kernel_size = (
+            self.params["discriminator_base_conv_blocks"][0][-1][0]
+        )
         inputs.set_shape(
             [
                 inputs.get_shape()[0],
-                self.params["generator_projection_dims"][0] // 4,
-                self.params["generator_projection_dims"][1] // 4,
+                height - valid_kernel_size + 1,
+                width - valid_kernel_size + 1,
                 inputs.get_shape()[-1]]
         )
 
