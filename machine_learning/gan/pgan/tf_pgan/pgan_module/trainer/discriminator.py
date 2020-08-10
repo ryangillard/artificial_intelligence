@@ -985,11 +985,15 @@ class Discriminator(object):
             "\nuse_discriminator_logits_layer", "block_conv", block_conv
         )
         # Set shape to remove ambiguity for dense layer.
+        height, width =  params["generator_projection_dims"][0:2]
+        valid_kernel_size = (
+            params["discriminator_base_conv_blocks"][0][-1][0]
+        )
         block_conv.set_shape(
             [
                 block_conv.get_shape()[0],
-                params["generator_projection_dims"][0] / 4,
-                params["generator_projection_dims"][1] / 4,
+                height - valid_kernel_size + 1,
+                width - valid_kernel_size + 1,
                 block_conv.get_shape()[-1]]
         )
         print_obj("use_discriminator_logits_layer", "block_conv", block_conv)
