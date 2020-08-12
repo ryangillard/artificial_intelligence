@@ -284,6 +284,18 @@ if __name__ == "__main__":
         default="True"
     )
     parser.add_argument(
+        "--growth_idx",
+        help="Index of current growth stage. If None, then model will dynamically calculate.",
+        type=str,
+        default="None"
+    )
+    parser.add_argument(
+        "--previous_train_steps",
+        help="Previous number of training steps.",
+        type=int,
+        default=0
+    )
+    parser.add_argument(
         "--save_optimizer_metrics_to_checkpoint",
         help="Whether to save optimizer metrics to checkpoint or not.",
         type=str,
@@ -703,6 +715,15 @@ if __name__ == "__main__":
     arguments["use_estimator_train_and_evaluate"] = convert_string_to_bool(
         arguments["use_estimator_train_and_evaluate"]
     )
+
+    # Fix growth_idx.
+    arguments["growth_idx"] = convert_string_to_none_or_int(
+        arguments["growth_idx"]
+    )
+    if (arguments["use_tpu"] or
+            not arguments["use_estimator_train_and_evaluate"]):
+        if arguments["growth_idx"] is None:
+            arguments["growth_idx"] = 0
 
     # Fix save_optimizer_metrics_to_checkpoint.
     arguments["save_optimizer_metrics_to_checkpoint"] = convert_string_to_bool(

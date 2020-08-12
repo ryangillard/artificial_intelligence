@@ -260,12 +260,6 @@ if __name__ == "__main__":
 
     # Training parameters.
     parser.add_argument(
-        "--dataset",
-        help="Which dataset we're using.",
-        type=str,
-        default="cifar10"
-    )
-    parser.add_argument(
         "--train_batch_size",
         help="Number of examples in training batch.",
         type=int,
@@ -294,6 +288,12 @@ if __name__ == "__main__":
         help="Index of current growth stage. If None, then model will dynamically calculate.",
         type=str,
         default="None"
+    )
+    parser.add_argument(
+        "--previous_train_steps",
+        help="Previous number of training steps.",
+        type=int,
+        default=0
     )
     parser.add_argument(
         "--save_optimizer_metrics_to_checkpoint",
@@ -382,6 +382,24 @@ if __name__ == "__main__":
         help="If want all resolutions predicted or just largest one.",
         type=str,
         default="True"
+    )
+    parser.add_argument(
+        "--predict_g_z",
+        help="If want to also predict G(z), where z is a serving input latent vector.",
+        type=str,
+        default="True"
+    )
+    parser.add_argument(
+        "--anomaly_threshold",
+        help="Anomaly threshold to test anomaly scores against.",
+        type=float,
+        default=0.0
+    )
+    parser.add_argument(
+        "--anom_convex_combo_factor",
+        help="Weight for sum of residual and origin distance loss for anomaly scores.",
+        type=float,
+        default=0.05
     )
 
     # Image parameters.
@@ -626,6 +644,62 @@ if __name__ == "__main__":
         default=100
     )
 
+    # Encoder parameters.
+    parser.add_argument(
+        "--encoder_leaky_relu_alpha",
+        help="The amount of leakyness of encoder's leaky relus.",
+        type=float,
+        default=0.2
+    )
+    parser.add_argument(
+        "--encoder_l1_regularization_scale",
+        help="Scale factor for L1 regularization for encoder.",
+        type=float,
+        default=0.0
+    )
+    parser.add_argument(
+        "--encoder_l2_regularization_scale",
+        help="Scale factor for L2 regularization for encoder.",
+        type=float,
+        default=0.0
+    )
+    parser.add_argument(
+        "--encoder_optimizer",
+        help="Name of optimizer to use for encoder.",
+        type=str,
+        default="Adam"
+    )
+    parser.add_argument(
+        "--encoder_learning_rate",
+        help="How quickly we train our model by scaling the gradient for encoder.",
+        type=float,
+        default=0.1
+    )
+    parser.add_argument(
+        "--encoder_adam_beta1",
+        help="Adam optimizer's beta1 hyperparameter for first moment.",
+        type=float,
+        default=0.9
+    )
+    parser.add_argument(
+        "--encoder_adam_beta2",
+        help="Adam optimizer's beta2 hyperparameter for second moment.",
+        type=float,
+        default=0.999
+    )
+    parser.add_argument(
+        "--encoder_adam_epsilon",
+        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
+        type=float,
+        default=1e-8
+    )
+    parser.add_argument(
+        "--encoder_clip_gradients",
+        help="Global clipping to prevent gradient norm to exceed this value for encoder.",
+        type=str,
+        default="None"
+    )
+
     # Parse all arguments.
     args = parser.parse_args()
     arguments = args.__dict__
@@ -633,10 +707,6 @@ if __name__ == "__main__":
     # Unused args provided by service.
     arguments.pop("job_dir", None)
     arguments.pop("job-dir", None)
-
-    # Fix dataset.
-    dataset_set = {"cifar10", "celeba_hq"}
-    assert arguments["dataset"].lower() in dataset_set
 
     # Fix use_tpu.
     arguments["use_tpu"] = convert_string_to_bool(arguments["use_tpu"])
@@ -686,6 +756,11 @@ if __name__ == "__main__":
     # Fix predict_all_resolutions.
     arguments["predict_all_resolutions"] = convert_string_to_bool(
         arguments["predict_all_resolutions"]
+    )
+
+    # Fix predict_g_z.
+    arguments["predict_g_z"] = convert_string_to_bool(
+        arguments["predict_g_z"]
     )
 
     # Fix use_equalized_learning_rate.
@@ -752,6 +827,11 @@ if __name__ == "__main__":
     arguments["discriminator_base_conv_blocks"] = discriminator_base_conv_blocks
     arguments["discriminator_growth_conv_blocks"] = discriminator_growth_conv_blocks
 
+    # For now just have encoder match architecture of discriminator.
+    arguments["encoder_from_rgb_layers"] = discriminator_from_rgb_layers
+    arguments["encoder_base_conv_blocks"] = discriminator_base_conv_blocks
+    arguments["encoder_growth_conv_blocks"] = discriminator_growth_conv_blocks
+
     # Fix normalize_latent.
     arguments["normalize_latent"] = convert_string_to_bool(
         arguments["normalize_latent"]
@@ -781,6 +861,10 @@ if __name__ == "__main__":
         arguments["discriminator_clip_gradients"]
     )
 
+    arguments["encoder_clip_gradients"] = convert_string_to_none_or_float(
+        arguments["encoder_clip_gradients"]
+    )
+
     # Fix train_steps. Ensure chosen image size gets at least one transition
     # stage and one stable stage.
     num_stages = 2 * len(arguments["conv_num_filters"]) - 1
@@ -790,6 +874,7 @@ if __name__ == "__main__":
     arguments["train_steps"] = max(
         arguments["train_steps"], min_train_steps_for_full_growth
     )
+
 
     # Append trial_id to path if we are doing hptuning.
     # This code can be removed if you are not using hyperparameter tuning.

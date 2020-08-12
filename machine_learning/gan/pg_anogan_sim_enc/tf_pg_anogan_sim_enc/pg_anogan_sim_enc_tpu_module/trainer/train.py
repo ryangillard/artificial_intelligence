@@ -388,7 +388,10 @@ def known_update_alpha(global_step, alpha_var, params):
                         # Add 1 since it trains on global step 0, so off by 1.
                         x=tf.add(
                             x=tf.mod(
-                                x=global_step,
+                                x=tf.subtract(
+                                    x=global_step,
+                                    y=params["previous_train_steps"]
+                                ),
                                 y=params["num_steps_until_growth"]
                             ),
                             y=1
@@ -427,7 +430,10 @@ def unknown_update_alpha_transition(global_step, alpha_var, params):
                 # Add 1 since it trains on global step 0, so off by 1.
                 x=tf.add(
                     x=tf.mod(
-                        x=global_step,
+                        x=tf.subtract(
+                            x=global_step,
+                            y=params["previous_train_steps"]
+                        ),
                         y=params["num_steps_until_growth"]
                     ),
                     y=1
@@ -478,9 +484,15 @@ def unknown_update_alpha(global_step, alpha_var, params):
         # Find growth index based on global step and growth frequency.
         growth_index = tf.minimum(
             x=tf.cast(
-                x=tf.floordiv(
-                    x=global_step,
-                    y=params["num_steps_until_growth"]
+                x=tf.add(
+                    x=tf.floordiv(
+                        x=tf.subtract(
+                            x=global_step,
+                            y=params["previous_train_steps"]
+                        ),
+                        y=params["num_steps_until_growth"]
+                    ),
+                    y=0 if not params["growth_idx"] else params["growth_idx"]
                 ),
                 dtype=tf.int32),
             y=(len(params["conv_num_filters"]) - 1) * 2,
