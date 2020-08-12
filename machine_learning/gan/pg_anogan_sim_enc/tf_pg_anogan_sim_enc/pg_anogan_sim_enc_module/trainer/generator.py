@@ -496,7 +496,7 @@ class Generator(object):
             return X * tf.rsqrt(
                 x=tf.add(
                     x=tf.reduce_mean(
-                        input_tensor=tf.square(x=X), axis=1, keepdims=True
+                        input_tensor=tf.square(x=X), axis=-1, keepdims=True
                     ),
                     y=epsilon
                 )

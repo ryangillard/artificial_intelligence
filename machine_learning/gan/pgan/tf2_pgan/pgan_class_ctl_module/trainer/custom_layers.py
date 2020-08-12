@@ -274,7 +274,7 @@ class PixelNormalization(tf.keras.layers.Layer):
         return inputs * tf.math.rsqrt(
             x=tf.add(
                 x=tf.reduce_mean(
-                    input_tensor=tf.square(x=inputs), axis=1, keepdims=True
+                    input_tensor=tf.square(x=inputs), axis=-1, keepdims=True
                 ),
                 y=self.epsilon
             )
