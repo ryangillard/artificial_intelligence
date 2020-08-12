@@ -296,6 +296,12 @@ if __name__ == "__main__":
         default="None"
     )
     parser.add_argument(
+        "--previous_train_steps",
+        help="Previous number of training steps.",
+        type=int,
+        default=0
+    )
+    parser.add_argument(
         "--save_optimizer_metrics_to_checkpoint",
         help="Whether to save optimizer metrics to checkpoint or not.",
         type=str,

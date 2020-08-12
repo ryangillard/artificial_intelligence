@@ -101,9 +101,12 @@ def progressive_train_loop(args, config):
         config: instance of `tf.contrib.tpu.RunConfig`.
     """
     func_name = "progressive_train_loop"
+
     # Detrmine number of stages.
+    args["growth_idx"] = 0 if not args["growth_idx"] else args["growth_idx"]
+    new_stages = ((args["train_steps"] - 1) // args["num_steps_until_growth"])
     min_potential_stages = min(
-        ((args["train_steps"] - 1) // args["num_steps_until_growth"]) + 1,
+        args["growth_idx"] + new_stages + 1,
         17
     )
     print_obj("\n" + func_name, "min_potential_stages", min_potential_stages)
@@ -116,7 +119,6 @@ def progressive_train_loop(args, config):
     num_stages = min_possible_stages - 1
     print_obj(func_name, "num_stages", num_stages)
     # Growth phases.
-    args["growth_idx"] = 0
     for i in range(num_stages):
         # Perfom one training loop iteration.
         train_loop_iteration(
