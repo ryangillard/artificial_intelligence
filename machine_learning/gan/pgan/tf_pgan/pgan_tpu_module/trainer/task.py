@@ -260,6 +260,12 @@ if __name__ == "__main__":
 
     # Training parameters.
     parser.add_argument(
+        "--dataset",
+        help="Which dataset we're using.",
+        type=str,
+        default="cifar10"
+    )
+    parser.add_argument(
         "--train_batch_size",
         help="Number of examples in training batch.",
         type=int,
@@ -707,6 +713,10 @@ if __name__ == "__main__":
     # Unused args provided by service.
     arguments.pop("job_dir", None)
     arguments.pop("job-dir", None)
+
+    # Fix dataset.
+    dataset_set = {"cifar10", "celeba_hq"}
+    assert arguments["dataset"].lower() in dataset_set
 
     # Fix use_tpu.
     arguments["use_tpu"] = convert_string_to_bool(arguments["use_tpu"])
