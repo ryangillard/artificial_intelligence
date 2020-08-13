@@ -650,62 +650,6 @@ if __name__ == "__main__":
         default=100
     )
 
-    # Encoder parameters.
-    parser.add_argument(
-        "--encoder_leaky_relu_alpha",
-        help="The amount of leakyness of encoder's leaky relus.",
-        type=float,
-        default=0.2
-    )
-    parser.add_argument(
-        "--encoder_l1_regularization_scale",
-        help="Scale factor for L1 regularization for encoder.",
-        type=float,
-        default=0.0
-    )
-    parser.add_argument(
-        "--encoder_l2_regularization_scale",
-        help="Scale factor for L2 regularization for encoder.",
-        type=float,
-        default=0.0
-    )
-    parser.add_argument(
-        "--encoder_optimizer",
-        help="Name of optimizer to use for encoder.",
-        type=str,
-        default="Adam"
-    )
-    parser.add_argument(
-        "--encoder_learning_rate",
-        help="How quickly we train our model by scaling the gradient for encoder.",
-        type=float,
-        default=0.1
-    )
-    parser.add_argument(
-        "--encoder_adam_beta1",
-        help="Adam optimizer's beta1 hyperparameter for first moment.",
-        type=float,
-        default=0.9
-    )
-    parser.add_argument(
-        "--encoder_adam_beta2",
-        help="Adam optimizer's beta2 hyperparameter for second moment.",
-        type=float,
-        default=0.999
-    )
-    parser.add_argument(
-        "--encoder_adam_epsilon",
-        help="Adam optimizer's epsilon hyperparameter for numerical stability.",
-        type=float,
-        default=1e-8
-    )
-    parser.add_argument(
-        "--encoder_clip_gradients",
-        help="Global clipping to prevent gradient norm to exceed this value for encoder.",
-        type=str,
-        default="None"
-    )
-
     # Parse all arguments.
     args = parser.parse_args()
     arguments = args.__dict__
@@ -837,11 +781,6 @@ if __name__ == "__main__":
     arguments["discriminator_base_conv_blocks"] = discriminator_base_conv_blocks
     arguments["discriminator_growth_conv_blocks"] = discriminator_growth_conv_blocks
 
-    # For now just have encoder match architecture of discriminator.
-    arguments["encoder_from_rgb_layers"] = discriminator_from_rgb_layers
-    arguments["encoder_base_conv_blocks"] = discriminator_base_conv_blocks
-    arguments["encoder_growth_conv_blocks"] = discriminator_growth_conv_blocks
-
     # Fix normalize_latent.
     arguments["normalize_latent"] = convert_string_to_bool(
         arguments["normalize_latent"]
@@ -869,10 +808,6 @@ if __name__ == "__main__":
 
     arguments["discriminator_clip_gradients"] = convert_string_to_none_or_float(
         arguments["discriminator_clip_gradients"]
-    )
-
-    arguments["encoder_clip_gradients"] = convert_string_to_none_or_float(
-        arguments["encoder_clip_gradients"]
     )
 
     # Fix train_steps. Ensure chosen image size gets at least one transition

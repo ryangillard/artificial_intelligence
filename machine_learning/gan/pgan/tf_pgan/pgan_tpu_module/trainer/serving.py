@@ -1,6 +1,5 @@
 import tensorflow as tf
 
-from . import image_utils
 from .print_object import print_obj
 
 
