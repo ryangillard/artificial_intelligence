@@ -22,7 +22,8 @@ class Export(object):
 
         # Signature will be serving_default.
         tf.saved_model.save(
-            obj=self.network_models["generator"], export_dir=export_path
+            obj=self.network_objects["generator"].models[self.growth_idx],
+            export_dir=export_path
         )
 
     def training_loop_end_save_model(self):
@@ -35,23 +36,3 @@ class Export(object):
 
         # Export SavedModel for serving.
         self.export_saved_model()
-
-    def training_loop_end_save_model(self):
-        """Saving model when training loop ends.
-        """
-        # Write final checkpoint.
-        self.checkpoint_manager.save(
-            checkpoint_number=self.global_step, check_interval=False
-        )
-
-        # Export SavedModel for serving.
-        export_path = os.path.join(
-            self.params["output_dir"],
-            "export",
-            datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        )
-
-        # Signature will be serving_default.
-        tf.saved_model.save(
-            obj=self.network_models["generator"], export_dir=export_path
-        )

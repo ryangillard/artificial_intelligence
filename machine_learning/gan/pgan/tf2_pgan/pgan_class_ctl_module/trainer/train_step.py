@@ -9,7 +9,9 @@ class TrainStep(object):
         """
         pass
 
-    def distributed_eager_discriminator_train_step(self, features):
+    def distributed_eager_discriminator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one distributed, eager discriminator train step.
 
         Args:
@@ -24,7 +26,8 @@ class TrainStep(object):
             run_function = self.strategy.experimental_run_v2
 
         per_replica_losses = run_function(
-            fn=self.train_discriminator, kwargs={"features": features}
+            fn=self.train_discriminator,
+            kwargs={"features": features, "growth_idx": growth_idx}
         )
 
         return self.strategy.reduce(
@@ -33,7 +36,9 @@ class TrainStep(object):
             axis=None
         )
 
-    def non_distributed_eager_discriminator_train_step(self, features):
+    def non_distributed_eager_discriminator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one non-distributed, eager discriminator train step.
 
         Args:
@@ -42,10 +47,14 @@ class TrainStep(object):
         Returns:
             Reduced loss tensor for chosen network across replicas.
         """
-        return self.train_discriminator(features=features)
+        return self.train_discriminator(
+            features=features, growth_idx=growth_idx
+        )
 
     @tf.function
-    def distributed_graph_discriminator_train_step(self, features):
+    def distributed_graph_discriminator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one distributed, graph discriminator train step.
 
         Args:
@@ -60,7 +69,8 @@ class TrainStep(object):
             run_function = self.strategy.experimental_run_v2
 
         per_replica_losses = run_function(
-            fn=self.train_discriminator, kwargs={"features": features}
+            fn=self.train_discriminator,
+            kwargs={"features": features, "growth_idx": growth_idx}
         )
 
         return self.strategy.reduce(
@@ -70,7 +80,9 @@ class TrainStep(object):
         )
 
     @tf.function
-    def non_distributed_graph_discriminator_train_step(self, features):
+    def non_distributed_graph_discriminator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one non-distributed, graph discriminator train step.
 
         Args:
@@ -79,9 +91,11 @@ class TrainStep(object):
         Returns:
             Reduced loss tensor for chosen network across replicas.
         """
-        return self.train_discriminator(features=features)
+        return self.train_discriminator(
+            features=features, growth_idx=growth_idx
+        )
 
-    def distributed_eager_generator_train_step(self, features):
+    def distributed_eager_generator_train_step(self, features, growth_idx):
         """Perform one distributed, eager generator train step.
 
         Args:
@@ -96,7 +110,8 @@ class TrainStep(object):
             run_function = self.strategy.experimental_run_v2
 
         per_replica_losses = run_function(
-            fn=self.train_generator, kwargs={"features": features}
+            fn=self.train_generator,
+            kwargs={"features": features, "growth_idx": growth_idx}
         )
 
         return self.strategy.reduce(
@@ -105,7 +120,9 @@ class TrainStep(object):
             axis=None
         )
 
-    def non_distributed_eager_generator_train_step(self, features):
+    def non_distributed_eager_generator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one non-distributed, eager generator train step.
 
         Args:
@@ -114,10 +131,10 @@ class TrainStep(object):
         Returns:
             Reduced loss tensor for chosen network across replicas.
         """
-        return self.train_generator(features=features)
+        return self.train_generator(features=features, growth_idx=growth_idx)
 
     @tf.function
-    def distributed_graph_generator_train_step(self, features):
+    def distributed_graph_generator_train_step(self, features, growth_idx):
         """Perform one distributed, graph generator train step.
 
         Args:
@@ -132,7 +149,8 @@ class TrainStep(object):
             run_function = self.strategy.experimental_run_v2
 
         per_replica_losses = run_function(
-            fn=self.train_generator, kwargs={"features": features}
+            fn=self.train_generator,
+            kwargs={"features": features, "growth_idx": growth_idx}
         )
 
         return self.strategy.reduce(
@@ -142,7 +160,9 @@ class TrainStep(object):
         )
 
     @tf.function
-    def non_distributed_graph_generator_train_step(self, features):
+    def non_distributed_graph_generator_train_step(
+        self, features, growth_idx
+    ):
         """Perform one non-distributed, graph generator train step.
 
         Args:
@@ -151,7 +171,7 @@ class TrainStep(object):
         Returns:
             Reduced loss tensor for chosen network across replicas.
         """
-        return self.train_generator(features=features)
+        return self.train_generator(features=features, growth_idx=growth_idx)
 
     def get_train_step_functions(self):
         """Gets network model train step functions for strategy and mode.
@@ -225,16 +245,19 @@ class TrainStep(object):
     def increment_alpha_var(self):
         """Increments alpha variable through range [0., 1.] during transition.
         """
+        block_idx = self.block_idx
+        num_steps_until_growth = (
+            self.num_steps_until_growth_schedule[block_idx]
+        )
         self.alpha_var.assign(
             value=tf.divide(
                 x=tf.cast(
                     x=tf.math.floormod(
-                        x=self.global_step,
-                        y=self.params["num_steps_until_growth"]
+                        x=self.global_step, y=num_steps_until_growth
                     ),
                     dtype=tf.float32
                 ),
-                y=self.params["num_steps_until_growth"]
+                y=num_steps_until_growth
             )
         )
 
@@ -268,7 +291,7 @@ class TrainStep(object):
                 # Train model on batch of features and get loss.
                 features, labels = next(train_dataset_iter)
 
-            loss = train_step_fn(features=features)
+            loss = train_step_fn(features=features, growth_idx=self.growth_idx)
 
             # Log step information and loss.
             self.log_step_loss(epoch, loss)
@@ -280,6 +303,7 @@ class TrainStep(object):
 
             # Increment steps.
             self.increment_global_step()
+            self.growth_step += 1
             self.epoch_step += 1
 
             # If this is a growth transition phase.
@@ -287,6 +311,10 @@ class TrainStep(object):
                 # Increment alpha variable.
                 self.increment_alpha_var()
 
-            if self.global_step % self.params["num_steps_until_growth"] == 0:
+            num_steps_until_growth = (
+                self.num_steps_until_growth_schedule[self.block_idx]
+            )
+
+            if self.growth_step % num_steps_until_growth == 0:
                 return True, features, labels
         return False, features, labels

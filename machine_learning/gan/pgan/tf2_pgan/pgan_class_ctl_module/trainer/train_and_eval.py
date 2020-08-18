@@ -22,8 +22,9 @@ class TrainAndEval(object):
                 logits tensor of shape [batch_size, 1], and generator loss
                 tensor of shape [].
         """
+        block_idx = (self.growth_idx + 1) // 2
         batch_size = (
-            self.params["train_batch_size"]
+            self.params["train_batch_size_schedule"][block_idx]
             if mode == "TRAIN"
             else self.params["eval_batch_size"]
         )
@@ -37,20 +38,23 @@ class TrainAndEval(object):
         )
 
         # Get generated image from generator network from gaussian noise.
-        fake_images = self.network_models["generator"](
-            inputs=Z, training=training
+        fake_images = (
+            self.network_objects["generator"].models[self.growth_idx](
+                inputs=Z, training=training
+            )
         )
 
         if self.params["write_summaries"] and mode == "TRAIN":
             # Add summaries for TensorBoard.
             with self.summary_file_writer.as_default():
                 with tf.summary.record_if(
-                condition=tf.equal(
-                    x=tf.math.floormod(
-                        x=self.global_step,
-                        y=self.params["save_summary_steps"]
-                    ), y=0
-                )
+                    condition=tf.equal(
+                        x=tf.math.floormod(
+                            x=self.global_step,
+                            y=self.params["save_summary_steps"]
+                        ),
+                        y=0
+                    )
                 ):
                     tf.summary.image(
                         name="fake_images",
@@ -61,17 +65,22 @@ class TrainAndEval(object):
                     self.summary_file_writer.flush()
 
         # Get fake logits from discriminator using generator's output image.
-        fake_logits = self.network_models["discriminator"](
-            inputs=fake_images, training=training
+        fake_logits = (
+            self.network_objects["discriminator"].models[self.growth_idx](
+                inputs=fake_images, training=training
+            )
         )
 
         # Get generator total loss.
         generator_total_loss = (
             self.network_objects["generator"].get_generator_loss(
-                global_batch_size=self.global_batch_size,
+                global_batch_size=(
+                    self.global_batch_size_schedule[self.block_idx]
+                ),
                 fake_logits=fake_logits,
                 global_step=self.global_step,
-                summary_file_writer=self.summary_file_writer
+                summary_file_writer=self.summary_file_writer,
+                growth_idx=self.growth_idx
             )
         )
 
@@ -96,20 +105,25 @@ class TrainAndEval(object):
                 shape [].
         """
         # Get real logits from discriminator using real image.
-        real_logits = self.network_models["discriminator"](
-            inputs=real_images, training=training
+        real_logits = (
+            self.network_objects["discriminator"].models[self.growth_idx](
+                inputs=real_images, training=training
+            )
         )
 
         # Get discriminator total loss.
         discriminator_total_loss = (
             self.network_objects["discriminator"].get_discriminator_loss(
-                global_batch_size=self.global_batch_size,
+                global_batch_size=(
+                    self.global_batch_size_schedule[self.block_idx]
+                ),
                 fake_images=fake_images,
                 real_images=real_images,
                 fake_logits=fake_logits,
                 real_logits=real_logits,
                 global_step=self.global_step,
-                summary_file_writer=self.summary_file_writer
+                summary_file_writer=self.summary_file_writer,
+                growth_idx=self.growth_idx
             )
         )
 

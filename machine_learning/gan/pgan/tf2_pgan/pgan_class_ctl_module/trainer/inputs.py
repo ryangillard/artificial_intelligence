@@ -157,12 +157,6 @@ def read_dataset(filename, batch_size, params, training):
             )
         )
 
-        batch_size = (
-            params["train_batch_size"]
-            if training
-            else params["eval_batch_size"]
-        )
-
         # Batch dataset and drop remainder so there are no partial batches.
         dataset = dataset.batch(batch_size=batch_size, drop_remainder=True)
 

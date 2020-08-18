@@ -14,6 +14,7 @@ class Discriminator(object):
             variables.
         params: dict, user passed parameters.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        input_layers: list, `Input` layers for each resolution of image.
         from_rgb_conv_layers: list, `Conv2D` fromRGB layers.
         from_rgb_leaky_relu_layers: list, leaky relu layers that follow
             `Conv2D` fromRGB layers.
@@ -26,7 +27,7 @@ class Discriminator(object):
             shrinking branch.
         flatten_layer: `Flatten` layer, flattens image for logits layer.
         logits_layer: `Dense` layer, used for calculating logits.
-        model: instance of discriminator `Model`.
+        models: list, instances of discriminator `Model`s for each growth.
     """
     def __init__(
         self,
@@ -34,7 +35,8 @@ class Discriminator(object):
         bias_regularizer,
         name,
         params,
-        alpha_var
+        alpha_var,
+        num_growths
     ):
         """Instantiates and builds discriminator network.
 
@@ -46,6 +48,7 @@ class Discriminator(object):
             name: str, name of discriminator.
             params: dict, user passed parameters.
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
+            num_growths: int, number of growth phases for model.
         """
         # Set name of discriminator.
         self.name = name
@@ -61,6 +64,8 @@ class Discriminator(object):
         self.alpha_var = alpha_var
 
         # Store lists of layers.
+        self.input_layers = []
+
         self.from_rgb_conv_layers = []
         self.from_rgb_leaky_relu_layers = []
 
@@ -75,9 +80,35 @@ class Discriminator(object):
 
         # Instantiate discriminator layers.
         self._create_discriminator_layers()
+        
+        # Store list of discriminator models.
+        self.models = self._create_models(num_growths)
 
-        # Store current discriminator model.
-        self.model = None
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _create_input_layers(self):
+        """Creates discriminator input layers for each image resolution.
+
+        Returns:
+            List of `Input` layers.
+        """
+        height, width = self.params["generator_projection_dims"][0:2]
+
+        # Create list to hold `Input` layers.
+        input_layers = [
+            tf.keras.Input(
+                shape=(height * 2 ** i, width * 2 ** i, self.params["depth"]),
+                batch_size=self.params["train_batch_size_schedule"][i],
+                name="{}_{}x{}_inputs".format(
+                    self.name, height * 2 ** i, width * 2 ** i
+                )
+            )
+            for i in range(len(self.params["discriminator_from_rgb_layers"]))
+        ]
+
+        return input_layers
 
     def _create_from_rgb_layers(self):
         """Creates discriminator fromRGB layers of 1x1 convs.
@@ -108,7 +139,9 @@ class Discriminator(object):
                 ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
-                use_equalized_learning_rate=self.params["use_equalized_learning_rate"],
+                use_equalized_learning_rate=(
+                    self.params["use_equalized_learning_rate"]
+                ),
                 name="{}_from_rgb_layers_conv2d_{}_{}x{}_{}_{}".format(
                     self.name,
                     i,
@@ -124,7 +157,7 @@ class Discriminator(object):
         from_rgb_leaky_relu_layers = [
             tf.keras.layers.LeakyReLU(
                 alpha=self.params["discriminator_leaky_relu_alpha"],
-                name="{}_from_rgb_conv_leaky_relu_{}".format(self.name, i)
+                name="{}_from_rgb_layers_leaky_relu_{}".format(self.name, i)
             )
             for i in range(len(from_rgb))
         ]
@@ -202,7 +235,7 @@ class Discriminator(object):
         base_leaky_relu_layers = [
             tf.keras.layers.LeakyReLU(
                 alpha=self.params["discriminator_leaky_relu_alpha"],
-                name="{}_base_conv_leaky_relu_{}".format(self.name, i)
+                name="{}_base_layers_leaky_relu_{}".format(self.name, i)
             )
             for i in range(len(conv_block))
         ]
@@ -220,7 +253,9 @@ class Discriminator(object):
                 leaky relu layers.
         """
         # Get conv block layer properties.
-        conv_block = self.params["discriminator_growth_conv_blocks"][block_idx]
+        conv_block = (
+            self.params["discriminator_growth_conv_blocks"][block_idx]
+        )
 
         # Create new growth convolutional layers.
         growth_conv_layers = [
@@ -256,7 +291,7 @@ class Discriminator(object):
         growth_leaky_relu_layers = [
             tf.keras.layers.LeakyReLU(
                 alpha=self.params["discriminator_leaky_relu_alpha"],
-                name="{}_growth_conv_leaky_relu_{}_{}".format(
+                name="{}_growth_layers_leaky_relu_{}_{}".format(
                     self.name, block_idx, i
                 )
             )
@@ -309,6 +344,9 @@ class Discriminator(object):
             input_shape: tuple, shape of latent vector input of shape
                 [batch_size, latent_size].
         """
+        # Create input layers for each image resolution.
+        self.input_layers = self._create_input_layers()
+
         (self.from_rgb_conv_layers,
          self.from_rgb_leaky_relu_layers) = self._create_from_rgb_layers()
 
@@ -348,7 +386,11 @@ class Discriminator(object):
             name="{}_layers_dense_logits".format(self.name)
         )
 
-    def minibatch_stddev_common(self, variance, tile_multiples):
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _minibatch_stddev_common(self, variance, tile_multiples):
         """Adds minibatch stddev feature map to image using grouping.
 
         This is the code that is common between the grouped and ungroup
@@ -394,7 +436,7 @@ class Discriminator(object):
 
         return stddev_feature_map
 
-    def grouped_minibatch_stddev(self, inputs, batch_size, group_size):
+    def _grouped_minibatch_stddev(self, inputs, batch_size, group_size):
         """Adds minibatch stddev feature map to image using grouping.
 
         Args:
@@ -465,13 +507,13 @@ class Discriminator(object):
 
         # Get stddev image using ops common to both grouped & ungrouped.
         tile_multiples = [group_size] + list(inputs.shape[1:3]) + [1]
-        stddev_feature_map = self.minibatch_stddev_common(
+        stddev_feature_map = self._minibatch_stddev_common(
             variance=grouped_variance, tile_multiples=tile_multiples
         )
 
         return stddev_feature_map
 
-    def ungrouped_minibatch_stddev(self, inputs, batch_size):
+    def _ungrouped_minibatch_stddev(self, inputs, batch_size):
         """Adds minibatch stddev feature map added to image channels.
 
         Args:
@@ -508,13 +550,13 @@ class Discriminator(object):
 
         # Get stddev image using ops common to both grouped & ungrouped.
         tile_multiples = [batch_size] + list(inputs.shape[1:3]) + [1]
-        stddev_feature_map = self.minibatch_stddev_common(
+        stddev_feature_map = self._minibatch_stddev_common(
             variance=variance, tile_multiples=tile_multiples
         )
 
         return stddev_feature_map
 
-    def minibatch_stddev(self, inputs, group_size=4):
+    def _minibatch_stddev(self, inputs, group_size=4):
         """Adds minibatch stddev feature map added to image.
 
         Args:
@@ -527,15 +569,17 @@ class Discriminator(object):
                 channels of shape
                 [batch_size, image_height, image_width, num_channels + 1].
         """
-        # Get batch size.
+        # Get static batch size.
         batch_size = inputs.shape[0]
 
-        if (batch_size % group_size == 0 or batch_size < group_size):
-            stddev_feature_map = self.grouped_minibatch_stddev(
-                inputs=inputs, batch_size=batch_size, group_size=group_size
+        if batch_size % group_size == 0 or batch_size < group_size:
+            stddev_feature_map = self._grouped_minibatch_stddev(
+                inputs=inputs,
+                batch_size=batch_size,
+                group_size=group_size
             )
         else:
-            stddev_feature_map = self.ungrouped_minibatch_stddev(
+            stddev_feature_map = self._ungrouped_minibatch_stddev(
                 inputs=inputs, batch_size=batch_size
             )
 
@@ -594,7 +638,7 @@ class Discriminator(object):
 
         network = inputs
         if self.params["discriminator_use_minibatch_stddev"]:
-            network = self.minibatch_stddev(
+            network = self._minibatch_stddev(
                 inputs=network,
                 group_size=(
                     self.params["discriminator_minibatch_stddev_group_size"]
@@ -713,24 +757,23 @@ class Discriminator(object):
 
         return network
 
-    def _build_base_model(self, input_shape, batch_size):
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _build_base_model(self, input_shape):
         """Builds discriminator base model.
 
         Args:
             input_shape: tuple, shape of image vector input of shape
                 [batch_size, height, width, depth].
-            batch_size: int, fixed number of examples within batch.
 
         Returns:
             Instance of `Model` object.
         """
         # Create the input layer to discriminator.
         # shape = (batch_size, height, width, depth)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layers[0]
 
         # Only need the first fromRGB conv layer & block for base network.
         base_from_rgb_conv_layer = self.from_rgb_conv_layers[0]
@@ -756,14 +799,13 @@ class Discriminator(object):
         return model
 
     def _build_growth_transition_model(
-        self, input_shape, batch_size, block_idx
+        self, input_shape, block_idx
     ):
         """Builds discriminator growth transition model.
 
         Args:
             input_shape: tuple, shape of latent vector input of shape
                 [batch_size, height, width, depth].
-            batch_size: int, fixed number of examples within batch.
             block_idx: int, current block index of model progression.
 
         Returns:
@@ -771,11 +813,7 @@ class Discriminator(object):
         """
         # Create the input layer to discriminator.
         # shape = (batch_size, height, width, depth)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layers[block_idx]
 
         # Get weighted sum between shrinking and growing block paths.
         weighted_sum = self._create_growth_transition_weighted_sum(
@@ -799,25 +837,20 @@ class Discriminator(object):
 
         return model
 
-    def _build_growth_stable_model(self, input_shape, batch_size, block_idx):
+    def _build_growth_stable_model(self, input_shape, block_idx):
         """Builds generator growth stable model.
 
         Args:
             input_shape: tuple, shape of latent vector input of shape
                 [batch_size, latent_size].
-            batch_size: int, fixed number of examples within batch.
             block_idx: int, current block index of model progression.
 
         Returns:
             Instance of `Model` object.
         """
-        # Create the input layer to generator.
+        # Create the input layer to discriminator.
         # shape = (batch_size, latent_size)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layers[block_idx]
 
         # Get fromRGB layers.
         from_rgb_conv_layer = self.from_rgb_conv_layers[block_idx]
@@ -844,38 +877,47 @@ class Discriminator(object):
 
         return model
 
-    def get_model(self, input_shape, batch_size, growth_idx):
-        """Returns discriminator's `Model` object.
+    def _create_models(self, num_growths):
+        """Creates list of discriminator's `Model` objects for each growth.
 
         Args:
-            input_shape: tuple, shape of image input of shape
-                [batch_size, height, width, depth].
-            batch_size: int, fixed number of examples within batch.
-            growth_idx: int, index of current growth stage.
-                0 = base,
-                odd = growth transition,
-                even = growth stability.
+            num_growths: int, number of growth phases for model.
 
         Returns:
-            Discriminator's `Model` object.
+            List of `Discriminator` `Model` objects.
         """
-        block_idx = (growth_idx + 1) // 2
-        if growth_idx == 0:
-            self.model = self._build_base_model(input_shape, batch_size)
-        elif growth_idx % 2 == 1:
-            self.model = self._build_growth_transition_model(
-                input_shape, batch_size, block_idx
+        models = []
+        for growth_idx in range(num_growths):
+            block_idx = (growth_idx + 1) // 2
+            image_multiplier = 2 ** block_idx
+            height = (
+                self.params["generator_projection_dims"][0] * image_multiplier
             )
-        elif growth_idx % 2 == 0:
-            self.model = self._build_growth_stable_model(
-                input_shape, batch_size, block_idx
+            width = (
+                self.params["generator_projection_dims"][1] * image_multiplier
             )
-        else:
-            print("ERROR: Bad growth index!")
+            input_shape = (height, width, self.params["depth"])
 
-        return self.model
+            if growth_idx == 0:
+                model = self._build_base_model(input_shape)
+            elif growth_idx % 2 == 1:
+                model = self._build_growth_transition_model(
+                    input_shape=input_shape, block_idx=block_idx
+                )
+            elif growth_idx % 2 == 0:
+                model = self._build_growth_stable_model(
+                    input_shape=input_shape, block_idx=block_idx
+                )
 
-    def get_gradient_penalty_loss(self, fake_images, real_images):
+            models.append(model)
+
+        return models
+
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _get_gradient_penalty_loss(self, fake_images, real_images, growth_idx):
         """Gets discriminator gradient penalty loss.
 
         Args:
@@ -883,6 +925,7 @@ class Discriminator(object):
                 noise of shape [batch_size, image_size, image_size, 3].
             real_images: tensor, real images from input of shape
                 [batch_size, image_height, image_width, 3].
+            growth_idx: int, current growth index model has progressed to.
 
         Returns:
             Discriminator's gradient penalty loss of shape [].
@@ -910,7 +953,9 @@ class Discriminator(object):
             gp_tape.watch(tensor=mixed_images)
 
             # Send to the discriminator to get logits.
-            mixed_logits = self.model(inputs=mixed_images, training=True)
+            mixed_logits = self.models[growth_idx](
+                inputs=mixed_images, training=True
+            )
 
             # Get the mixed loss.
             mixed_loss = tf.reduce_sum(
@@ -961,7 +1006,8 @@ class Discriminator(object):
         fake_logits,
         real_logits,
         global_step,
-        summary_file_writer
+        summary_file_writer,
+        growth_idx
     ):
         """Gets discriminator loss.
 
@@ -977,6 +1023,7 @@ class Discriminator(object):
                 with shape [batch_size, 1].
             global_step: int, current global step for training.
             summary_file_writer: summary file writer.
+            growth_idx: int, current growth index model has progressed to.
 
         Returns:
             Tensor of discriminator's total loss of shape [].
@@ -1011,8 +1058,8 @@ class Discriminator(object):
         )
 
         # Get discriminator gradient penalty loss.
-        discriminator_gradient_penalty = self.get_gradient_penalty_loss(
-            fake_images=fake_images, real_images=real_images
+        discriminator_gradient_penalty = self._get_gradient_penalty_loss(
+            fake_images, real_images, growth_idx
         )
 
         # Get discriminator epsilon drift penalty.
@@ -1035,11 +1082,11 @@ class Discriminator(object):
         if self.params["distribution_strategy"]:
             # Get regularization losses.
             discriminator_reg_loss = tf.nn.scale_regularization_loss(
-                regularization_loss=sum(self.model.losses)
+                regularization_loss=sum(self.models[growth_idx].losses)
             )
         else:
             # Get regularization losses.
-            discriminator_reg_loss = sum(self.model.losses)
+            discriminator_reg_loss = sum(self.models[growth_idx].losses)
 
         # Combine losses for total loss.
         discriminator_total_loss = tf.math.add(

@@ -263,7 +263,7 @@ if __name__ == "__main__":
         "--tf_version",
         help="Version of TensorFlow",
         type=float,
-        default=2.2
+        default=2.3
     )
     parser.add_argument(
         "--use_graph_mode",
@@ -296,10 +296,10 @@ if __name__ == "__main__":
         default=100
     )
     parser.add_argument(
-        "--train_batch_size",
-        help="Number of examples in training batch.",
-        type=int,
-        default=32
+        "--train_batch_size_schedule",
+        help="Schedule of number of examples in training batch for each resolution block.",
+        type=str,
+        default="32,32,32,32,32,16,4,2,1"
     )
     parser.add_argument(
         "--input_fn_autotune",
@@ -340,10 +340,10 @@ if __name__ == "__main__":
 
     # Eval parameters.
     parser.add_argument(
-        "--eval_batch_size",
-        help="Number of examples in evaluation batch.",
-        type=int,
-        default=32
+        "--eval_batch_size_schedule",
+        help="Schedule of number of examples in evaluation batch for each resolution block.",
+        type=str,
+        default="32,32,32,32,32,16,4,2,1"
     )
     parser.add_argument(
         "--eval_steps",
@@ -374,10 +374,10 @@ if __name__ == "__main__":
 
     # Shared network parameters.
     parser.add_argument(
-        "--num_steps_until_growth",
-        help="Number of steps until layer added to generator & discriminator.",
+        "--num_examples_until_growth",
+        help="Number of examples until block added to generator & discriminator.",
         type=int,
-        default=100
+        default=0
     )
     parser.add_argument(
         "--use_equalized_learning_rate",
@@ -622,9 +622,29 @@ if __name__ == "__main__":
         string=arguments["export_every_growth_phase"]
     )
 
+    # Fix batch_size_schedules.
+    arguments["train_batch_size_schedule"] = convert_string_to_list_of_ints(
+        string=arguments["train_batch_size_schedule"], sep=","
+    )
+
+    arguments["eval_batch_size_schedule"] = convert_string_to_list_of_ints(
+        string=arguments["eval_batch_size_schedule"], sep=","
+    )
+
     # Fix eval steps.
     arguments["eval_steps"] = convert_string_to_none_or_int(
         string=arguments["eval_steps"])
+
+    # Calculate number of steps until growth schedule.
+    if not arguments["num_examples_until_growth"]:
+        arguments["num_examples_until_growth"] = (
+            arguments["num_epochs"] * arguments["train_dataset_length"]
+        )
+
+    arguments["num_steps_until_growth_schedule"] = [
+        arguments["num_examples_until_growth"] // x
+        for x in arguments["train_batch_size_schedule"]
+    ]
 
     # Fix conv layer property parameters.
     arguments["conv_num_filters"] = convert_string_to_list_of_lists_of_ints(

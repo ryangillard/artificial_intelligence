@@ -9,27 +9,40 @@ class TrainingLoop(object):
         """
         pass
 
-    def training_loop(self, steps_per_epoch, train_dataset_iter):
+    def training_loop(self):
         """Loops through training dataset to train model.
-
-        Args:
-            steps_per_epoch: int, number of steps/batches to take each epoch.
-            train_dataset_iter: iterator, training dataset iterator.
         """
         # Get correct train function based on parameters.
         self.get_train_step_functions()
 
-        # Calculate number of growths. Each progression involves 2 growths,
-        # a transition phase and stablization phase.
-        num_growths = len(self.params["conv_num_filters"]) * 2 - 1
+        for self.growth_idx in range(self.num_growths):
+            self.growth_step = 0
+            self.block_idx = (self.growth_idx + 1) // 2
+            print(
+                "\nblock_idx = {}, growth_idx = {}".format(
+                    self.block_idx, self.growth_idx
+                )
+            )
+            print(
+                "\ngenerator_model = {}".format(
+                    self.network_objects["generator"].models[self.growth_idx].summary()
+                )
+            )
+            print(
+                "\ndiscriminator_model = {}".format(
+                    self.network_objects["discriminator"].models[self.growth_idx].summary()
+                )
+            )
 
-        for self.growth_idx in range(num_growths):
-            print("\ngrowth_idx = {}".format(self.growth_idx))
-
-            # Set active generator and discriminator `Model`s.
-            self.set_active_network_models()
+            global_batch_size = (
+                self.global_batch_size_schedule[self.block_idx]
+            )
+            steps_per_epoch = (
+                self.params["train_dataset_length"] // global_batch_size
+            )
 
             for epoch in range(self.params["num_epochs"]):
+                print("\ngrowth_idx = {}, epoch = {}".format(self.growth_idx, epoch))
                 self.previous_timestamp = tf.timestamp()
 
                 self.epoch_step = 0
@@ -41,7 +54,9 @@ class TrainingLoop(object):
                         epoch=epoch,
                         train_step_fn=self.discriminator_train_step_fn,
                         train_steps=self.params["discriminator_train_steps"],
-                        train_dataset_iter=train_dataset_iter,
+                        train_dataset_iter=(
+                            self.train_datasets[self.block_idx]
+                        ),
                         features=None,
                         labels=None
                     )

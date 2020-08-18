@@ -14,11 +14,14 @@ class Generator(object):
             variables.
         params: dict, user passed parameters.
         alpha_var: variable, alpha for weighted sum of fade-in of layers.
+        input_layer: `Input` layer of every generator model.
+        projection_dense_layer: `WeightScaledDense` layer used for projecting noise
+            latent vectors into an image.
         conv_layers: list, `Conv2D` layers.
         leaky_relu_layers: list, leaky relu layers that follow `Conv2D`
             layers.
         to_rgb_conv_layers: list, `Conv2D` toRGB layers.
-        model: instance of generator `Model`.
+        models: list, instances of generator `Model`s for each growth.
     """
     def __init__(
         self,
@@ -26,7 +29,8 @@ class Generator(object):
         bias_regularizer,
         name,
         params,
-        alpha_var
+        alpha_var,
+        num_growths,
     ):
         """Instantiates and builds generator network.
 
@@ -38,6 +42,7 @@ class Generator(object):
             name: str, name of generator.
             params: dict, user passed parameters.
             alpha_var: variable, alpha for weighted sum of fade-in of layers.
+            num_growths: int, number of growth phases for model.
         """
         # Set name of generator.
         self.name = name
@@ -53,6 +58,8 @@ class Generator(object):
         self.alpha_var = alpha_var
 
         # Store lists of layers.
+        self.input_layer = None
+        self.projection_dense_layer = None
         self.conv_layers = []
         self.leaky_relu_layers = []
         self.to_rgb_conv_layers = []
@@ -60,58 +67,31 @@ class Generator(object):
         # Instantiate generator layers.
         self._create_generator_layers()
 
-        # Store current generator model.
-        self.model = None
+        # Store list of discriminator models.
+        self.models = self._create_models(num_growths)
 
-    def use_pixel_norm(self, epsilon=1e-8):
-        """Decides based on user parameter whether to use pixel norm or not.
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
 
-        Args:
-            epsilon: float, small value to add to denominator for numerical
-                stability.
-        Returns:
-            Pixel normalized feature vectors if using pixel norm, else
-                original feature vectors.
-        """
-        if self.params["generator_use_pixel_norm"]:
-            return custom_layers.PixelNormalization(epsilon=epsilon)
-        return None
-
-    def fused_conv2d_act_pixel_norm_block(
-        self, conv_layer, activation_layer, inputs
-    ):
-        """Fused Conv2D, activation, and pixel norm operation block.
-
-        Args:
-            conv_layer: instance of `Conv2D` layer.
-            activation_layer: instance of `Layer`, such as LeakyRelu layer.
-            inputs: tensor, inputs to fused block.
+    def _create_input_layer(self):
+        """Creates `Input` layer.
 
         Returns:
-            Output tensor of fused block.
+            Instance of `Input` layer.
         """
-        network = conv_layer(inputs=inputs)
-        network = activation_layer(inputs=network)
-
-        # Possibly add pixel normalization to image.
-        pixel_norm_layer = self.use_pixel_norm(
-            epsilon=self.params["generator_pixel_norm_epsilon"]
+        return tf.keras.Input(
+            shape=(self.params["generator_latent_size"],),
+            name="{}_inputs".format(self.name)
         )
 
-        if pixel_norm_layer is not None:
-            network = pixel_norm_layer(inputs=network)
-
-        return network
-
-    def _project_latent_vectors(self, latent_vectors):
-        """Defines generator network.
-
-        Args:
-            latent_vectors: tensor, latent vector inputs of shape
-                [batch_size, latent_size].
+    def _create_projection_dense_layer(self):
+        """Creates projection dense layer.
+        
+        Dense layer converts latent vectors to flattened images.
 
         Returns:
-            Projected image of latent vector inputs.
+            Instance of `WeightScaledDense` layer.
         """
         projection_height = self.params["generator_projection_dims"][0]
         projection_width = self.params["generator_projection_dims"][1]
@@ -121,7 +101,7 @@ class Generator(object):
         #     batch_size,
         #     projection_height * projection_width * projection_depth
         # )
-        projection = custom_layers.WeightScaledDense(
+        return custom_layers.WeightScaledDense(
             units=projection_height * projection_width * projection_depth,
             activation=None,
             kernel_initializer=(
@@ -135,38 +115,7 @@ class Generator(object):
                 self.params["use_equalized_learning_rate"]
             ),
             name="projection_dense_layer"
-        )(inputs=latent_vectors)
-
-        projection_leaky_relu = tf.keras.layers.LeakyReLU(
-            alpha=self.params["generator_leaky_relu_alpha"],
-            name="projection_leaky_relu"
-        )(inputs=projection)
-
-        # Reshape projection into "image".
-        # shape = (
-        #     batch_size,
-        #     projection_height,
-        #     projection_width,
-        #     projection_depth
-        # )
-        projected_image = tf.reshape(
-            tensor=projection_leaky_relu,
-            shape=[
-                -1, projection_height, projection_width, projection_depth
-            ],
-            name="projected_image"
         )
-
-        # Possibly add pixel normalization to image.
-        if self.params["generator_normalize_latents"]:
-            pixel_norm_layer = self.use_pixel_norm(
-                epsilon=self.params["generator_pixel_norm_epsilon"]
-            )
-
-            if pixel_norm_layer is not None:
-                projected_image = pixel_norm_layer(inputs=projected_image)
-
-        return projected_image
 
     def _create_base_conv_layer_block(self):
         """Creates generator base conv layer block.
@@ -192,7 +141,9 @@ class Generator(object):
                 ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
-                use_equalized_learning_rate=self.params["use_equalized_learning_rate"],
+                use_equalized_learning_rate=(
+                    self.params["use_equalized_learning_rate"]
+                ),
                 name="{}_base_layers_conv2d_{}_{}x{}_{}_{}".format(
                     self.name,
                     i,
@@ -208,7 +159,7 @@ class Generator(object):
         base_leaky_relu_layers = [
             tf.keras.layers.LeakyReLU(
                 alpha=self.params["generator_leaky_relu_alpha"],
-                name="{}_base_conv_leaky_relu_{}".format(self.name, i)
+                name="{}_base_layers_leaky_relu_{}".format(self.name, i)
             )
             for i in range(len(conv_block))
         ]
@@ -243,7 +194,9 @@ class Generator(object):
                 ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
-                use_equalized_learning_rate=self.params["use_equalized_learning_rate"],
+                use_equalized_learning_rate=(
+                    self.params["use_equalized_learning_rate"]
+                ),
                 name="{}_growth_layers_conv2d_{}_{}_{}x{}_{}_{}".format(
                     self.name,
                     block_idx,
@@ -260,7 +213,7 @@ class Generator(object):
         growth_leaky_relu_layers = [
             tf.keras.layers.LeakyReLU(
                 alpha=self.params["generator_leaky_relu_alpha"],
-                name="{}_growth_conv_leaky_relu_{}_{}".format(
+                name="{}_growth_layers_leaky_relu_{}_{}".format(
                     self.name, block_idx, i
                 )
             )
@@ -306,7 +259,9 @@ class Generator(object):
                 ),
                 kernel_regularizer=self.kernel_regularizer,
                 bias_regularizer=self.bias_regularizer,
-                use_equalized_learning_rate=self.params["use_equalized_learning_rate"],
+                use_equalized_learning_rate=(
+                    self.params["use_equalized_learning_rate"]
+                ),
                 name="{}_to_rgb_layers_conv2d_{}_{}x{}_{}_{}".format(
                     self.name,
                     i,
@@ -323,11 +278,11 @@ class Generator(object):
 
     def _create_generator_layers(self):
         """Creates generator layers.
-
-        Args:
-            input_shape: tuple, shape of latent vector input of shape
-                [batch_size, latent_size].
         """
+        self.input_layer = self._create_input_layer()
+
+        self.projection_dense_layer = self._create_projection_dense_layer()
+
         (base_conv_layers,
          base_leaky_relu_layers) = self._create_base_conv_layer_block()
         self.conv_layers.append(base_conv_layers)
@@ -344,6 +299,83 @@ class Generator(object):
             self.leaky_relu_layers.append(growth_leaky_relu_layers)
 
         self.to_rgb_conv_layers = self._create_to_rgb_layers()
+
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _maybe_use_pixel_norm(self, inputs, epsilon=1e-8):
+        """Decides based on user parameter whether to use pixel norm or not.
+
+        Args:
+            epsilon: float, small value to add to denominator for numerical
+                stability.
+            inputs: tensor, image to potentially be normalized.
+
+        Returns:
+            Pixel normalized feature vectors if using pixel norm, else
+                original feature vectors.
+        """
+        if self.params["generator_use_pixel_norm"]:
+            return custom_layers.PixelNormalization(epsilon=epsilon)(
+                inputs=inputs
+            )
+        return inputs
+
+    def _project_latent_vectors(self, latent_vectors):
+        """Defines generator network.
+
+        Args:
+            latent_vectors: tensor, latent vector inputs of shape
+                [batch_size, latent_size].
+
+        Returns:
+            Projected image of latent vector inputs.
+        """
+        # Possibly normalize latent vectors.
+        if self.params["generator_normalize_latents"]:
+            latent_vectors = self._maybe_use_pixel_norm(
+                inputs=latent_vectors,
+                epsilon=self.params["generator_pixel_norm_epsilon"]
+            )
+
+        projection_height = self.params["generator_projection_dims"][0]
+        projection_width = self.params["generator_projection_dims"][1]
+        projection_depth = self.params["generator_projection_dims"][2]
+
+        # shape = (
+        #     batch_size,
+        #     projection_height * projection_width * projection_depth
+        # )
+        projection = self.projection_dense_layer(inputs=latent_vectors)
+
+        projection_leaky_relu = tf.keras.layers.LeakyReLU(
+            alpha=self.params["generator_leaky_relu_alpha"],
+            name="projection_leaky_relu"
+        )(inputs=projection)
+
+        # Reshape projection into "image".
+        # shape = (
+        #     batch_size,
+        #     projection_height,
+        #     projection_width,
+        #     projection_depth
+        # )
+        projected_image = tf.reshape(
+            tensor=projection_leaky_relu,
+            shape=[
+                -1, projection_height, projection_width, projection_depth
+            ],
+            name="projected_image"
+        )
+
+        # Possibly add pixel normalization to image.
+        projected_image = self._maybe_use_pixel_norm(
+            inputs=projected_image,
+            epsilon=self.params["generator_pixel_norm_epsilon"]
+        )
+
+        return projected_image
 
     def _upsample_generator_image(self, image, orig_img_size, block_idx):
         """Upsamples generator intermediate image.
@@ -375,24 +407,46 @@ class Generator(object):
 
         return upsampled_image
 
-    def _build_base_model(self, input_shape, batch_size):
-        """Builds generator base model.
+    def _fused_conv2d_act_pixel_norm_block(
+        self, conv_layer, activation_layer, inputs
+    ):
+        """Fused Conv2D, activation, and pixel norm operation block.
 
         Args:
-            input_shape: tuple, shape of latent vector input of shape
-                [batch_size, latent_size].
-            batch_size: int, fixed number of examples within batch.
+            conv_layer: instance of `Conv2D` layer.
+            activation_layer: instance of `Layer`, such as LeakyRelu layer.
+            inputs: tensor, inputs to fused block.
+
+        Returns:
+            Output tensor of fused block.
+        """
+        # Perform convolution with no activation.
+        network = conv_layer(inputs=inputs)
+
+        # Now apply activation to convolved inputs.
+        network = activation_layer(inputs=network)
+
+        # Possibly add pixel normalization to image.
+        network = self._maybe_use_pixel_norm(
+            inputs=network,
+            epsilon=self.params["generator_pixel_norm_epsilon"]
+        )
+
+        return network
+
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
+
+    def _build_base_model(self):
+        """Builds generator base model.
 
         Returns:
             Instance of `Model` object.
         """
         # Create the input layer to generator.
         # shape = (batch_size, latent_size)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layer
 
         # Project latent vectors.
         network = self._project_latent_vectors(latent_vectors=inputs)
@@ -404,7 +458,7 @@ class Generator(object):
 
         # Pass inputs through layer chain.
         for i in range(len(base_conv_layers)):
-            network = self.fused_conv2d_act_pixel_norm_block(
+            network = self._fused_conv2d_act_pixel_norm_block(
                 conv_layer=base_conv_layers[i],
                 activation_layer=base_leaky_relu_layers[i],
                 inputs=network
@@ -421,15 +475,10 @@ class Generator(object):
 
         return model
 
-    def _build_growth_transition_model(
-        self, input_shape, batch_size, block_idx
-    ):
+    def _build_growth_transition_model(self, block_idx):
         """Builds generator growth transition model.
 
         Args:
-            input_shape: tuple, shape of latent vector input of shape
-                [batch_size, latent_size].
-            batch_size: int, fixed number of examples within batch.
             block_idx: int, current block index of model progression.
 
         Returns:
@@ -437,11 +486,7 @@ class Generator(object):
         """
         # Create the input layer to generator.
         # shape = (batch_size, latent_size)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layer
 
         # Project latent vectors.
         network = self._project_latent_vectors(latent_vectors=inputs)
@@ -456,7 +501,7 @@ class Generator(object):
 
         # Pass inputs through layer chain.
         for i in range(len(base_conv_layers)):
-            network = self.fused_conv2d_act_pixel_norm_block(
+            network = self._fused_conv2d_act_pixel_norm_block(
                 conv_layer=base_conv_layers[i],
                 activation_layer=base_leaky_relu_layers[i],
                 inputs=network
@@ -474,7 +519,7 @@ class Generator(object):
             block_conv_layers = permanent_conv_layers[i]
             block_leaky_relu_layers = permanent_leaky_relu_layers[i]
             for j in range(0, len(block_conv_layers)):
-                network = self.fused_conv2d_act_pixel_norm_block(
+                network = self._fused_conv2d_act_pixel_norm_block(
                     conv_layer=block_conv_layers[j],
                     activation_layer=block_leaky_relu_layers[j],
                     inputs=network
@@ -495,7 +540,7 @@ class Generator(object):
         # Pass inputs through layer chain.
         network = upsampled_block_conv
         for i in range(0, len(growing_conv_layers)):
-            network = self.fused_conv2d_act_pixel_norm_block(
+            network = self._fused_conv2d_act_pixel_norm_block(
                 conv_layer=growing_conv_layers[i],
                 activation_layer=growing_leaky_relu_layers[i],
                 inputs=network
@@ -531,13 +576,10 @@ class Generator(object):
 
         return model
 
-    def _build_growth_stable_model(self, input_shape, batch_size, block_idx):
+    def _build_growth_stable_model(self, block_idx):
         """Builds generator growth stable model.
 
         Args:
-            input_shape: tuple, shape of latent vector input of shape
-                [batch_size, latent_size].
-            batch_size: int, fixed number of examples within batch.
             block_idx: int, current block index of model progression.
 
         Returns:
@@ -545,11 +587,7 @@ class Generator(object):
         """
         # Create the input layer to generator.
         # shape = (batch_size, latent_size)
-        inputs = tf.keras.Input(
-            shape=input_shape,
-            batch_size=batch_size,
-            name="{}_inputs".format(self.name)
-        )
+        inputs = self.input_layer
 
         # Project latent vectors.
         network = self._project_latent_vectors(latent_vectors=inputs)
@@ -564,7 +602,7 @@ class Generator(object):
 
         # Pass inputs through layer chain.
         for i in range(len(base_conv_layers)):
-            network = self.fused_conv2d_act_pixel_norm_block(
+            network = self._fused_conv2d_act_pixel_norm_block(
                 conv_layer=base_conv_layers[i],
                 activation_layer=base_leaky_relu_layers[i],
                 inputs=network
@@ -582,7 +620,7 @@ class Generator(object):
             block_conv_layers = permanent_conv_layers[i]
             block_leaky_relu_layers = permanent_leaky_relu_layers[i]
             for j in range(0, len(block_conv_layers)):
-                network = self.fused_conv2d_act_pixel_norm_block(
+                network = self._fused_conv2d_act_pixel_norm_block(
                     conv_layer=block_conv_layers[j],
                     activation_layer=block_leaky_relu_layers[j],
                     inputs=network
@@ -602,43 +640,42 @@ class Generator(object):
 
         return model
 
-    def get_model(self, input_shape, batch_size, growth_idx):
-        """Returns generator's `Model` object.
+    def _create_models(self, num_growths):
+        """Creates list of generator's `Model` objects for each growth.
 
         Args:
-            input_shape: tuple, shape of latent vector input of shape
-                [batch_size, latent_size].
-            batch_size: int, fixed number of examples within batch.
-            growth_idx: int, index of current growth stage.
-                0 = base,
-                odd = growth transition,
-                even = growth stability.
+            num_growths: int, number of growth phases for model.
 
         Returns:
-            Generator's `Model` object.
+            List of `Generator` `Model` objects.
         """
-        block_idx = (growth_idx + 1) // 2
-        if growth_idx == 0:
-            self.model = self._build_base_model(input_shape, batch_size)
-        elif growth_idx % 2 == 1:
-            self.model = self._build_growth_transition_model(
-                input_shape, batch_size, block_idx
-            )
-        elif growth_idx % 2 == 0:
-            self.model = self._build_growth_stable_model(
-                input_shape, batch_size, block_idx
-            )
-        else:
-            print("ERROR: Bad growth index!")
+        models = []
+        for growth_idx in range(num_growths):
+            block_idx = (growth_idx + 1) // 2
+            input_shape = (self.params["generator_latent_size"],)
 
-        return self.model
+            if growth_idx == 0:
+                model = self._build_base_model()
+            elif growth_idx % 2 == 1:
+                model = self._build_growth_transition_model(block_idx)
+            elif growth_idx % 2 == 0:
+                model = self._build_growth_stable_model(block_idx)
+
+            models.append(model)
+
+        return models
+
+    ##########################################################################
+    ##########################################################################
+    ##########################################################################
 
     def get_generator_loss(
         self,
         global_batch_size,
         fake_logits,
         global_step,
-        summary_file_writer
+        summary_file_writer,
+        growth_idx
     ):
         """Gets generator loss.
 
@@ -648,6 +685,7 @@ class Generator(object):
                 [batch_size, 1].
             global_step: int, current global step for training.
             summary_file_writer: summary file writer.
+            growth_idx: int, current growth index model has progressed to.
 
         Returns:
             Tensor of generator's total loss of shape [].
@@ -661,7 +699,7 @@ class Generator(object):
 
             # Get regularization losses.
             generator_reg_loss = tf.nn.scale_regularization_loss(
-                regularization_loss=sum(self.model.losses)
+                regularization_loss=sum(self.models[growth_idx].losses)
             )
         else:
             # Calculate base generator loss.
@@ -671,7 +709,7 @@ class Generator(object):
             )
 
             # Get regularization losses.
-            generator_reg_loss = sum(self.model.losses)
+            generator_reg_loss = sum(self.models[growth_idx].losses)
 
         # Combine losses for total losses.
         generator_total_loss = tf.math.add(
@@ -686,9 +724,9 @@ class Generator(object):
                 with tf.summary.record_if(
                     condition=tf.equal(
                         x=tf.math.floormod(
-                            x=global_step,
-                            y=self.params["save_summary_steps"]
-                        ), y=0
+                            x=global_step, y=self.params["save_summary_steps"]
+                        ),
+                        y=0
                     )
                 ):
                     tf.summary.scalar(

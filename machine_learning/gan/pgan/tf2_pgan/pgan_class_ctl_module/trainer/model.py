@@ -23,22 +23,32 @@ class TrainAndEvaluateModel(
         params: dict, user passed parameters.
         network_objects: dict, instances of `Generator` and `Discriminator`
             network objects.
-        network_models: dict, instances of Keras `Model`s for each network.
         optimizers: dict, instances of Keras `Optimizer`s for each network.
         strategy: instance of tf.distribute.strategy.
+        global_batch_size_schedule: list, schedule of ints for the global
+            batch size after summing batch sizes across replicas.
+        train_datasets: list, instances of `Dataset` for each resolution
+            block for training.
+        eval_datasets: list, instances of `Dataset` for each resolution
+            block for evaluation.
         discriminator_train_step_fn: unbound function, function for a
             dicriminator train step using correct strategy and mode.
         generator_train_step_fn: unbound function, function for a
             generator train step using correct strategy and mode.
-        global_batch_size: int, the global batch size after summing batch
-            sizes across replicas.
         global_step: tf.Variable, the global step counter across epochs and
             steps within epoch.
         alpha_var: tf.Variable, used in growth transition network's weighted
             sum.
         summary_file_writer: instance of tf.summary.create_file_writer for
             summaries for TensorBoard.
+        num_growths: int, number of growth phases to train over.
+        num_steps_until_growth_schedule: list, ints representing a schedule of
+            the number of steps/batches until the next growth.
+        unique_trainable_variables: dict, list of unique trainable variables
+         for each model type unioned across all growths.
         growth_idx: int, current growth index model has progressed to.
+        block_idx: int, current growth block/resolution model is in.
+        growth_step: int, current number of steps since last growth.
         epoch_step: int, the current step through current epoch.
         previous_timestamp: float, the previous timestamp for profiling the
             steps/sec rate.
@@ -53,15 +63,16 @@ class TrainAndEvaluateModel(
         self.params = params
 
         self.network_objects = {}
-        self.network_models = {}
         self.optimizers = {}
 
         self.strategy = None
+        self.global_batch_size_schedule = []
+
+        self.train_datasets = []
+        self.eval_datasets = []
 
         self.discriminator_train_step_fn = None
         self.generator_train_step_fn = None
-
-        self.global_batch_size = None
 
         self.global_step = tf.Variable(
             initial_value=tf.zeros(shape=[], dtype=tf.int64),
@@ -75,31 +86,46 @@ class TrainAndEvaluateModel(
             name="alpha_var"
         )
 
+        self.checkpoint_manager = None
         self.summary_file_writer = None
 
+        # Calculate number of growths. Each progression involves 2 growths,
+        # a transition phase and stablization phase.
+        self.num_growths = len(self.params["conv_num_filters"]) * 2 - 1
+        self.num_steps_until_growth_schedule = (
+            self.params["num_steps_until_growth_schedule"]
+        )
+
+        self.unique_trainable_variables = {}
+
         self.growth_idx = 0
+        self.block_idx = 0
+        self.growth_step = 0
         self.epoch_step = 0
         self.previous_timestamp = 0.0
 
-    def get_train_eval_datasets(self, num_replicas):
+    def get_train_eval_datasets(self, num_replicas, block_idx):
         """Gets train and eval datasets.
 
         Args:
             num_replicas: int, number of device replicas.
+            block_idx: int, resolution block index.
 
         Returns:
             Train and eval datasets.
         """
+        train_batch_size = self.params["train_batch_size_schedule"][block_idx]
         train_dataset = inputs.read_dataset(
             filename=self.params["train_file_pattern"],
-            batch_size=self.params["train_batch_size"] * num_replicas,
+            batch_size=train_batch_size * num_replicas,
             params=self.params,
             training=True
         )()
 
+        eval_batch_size = self.params["eval_batch_size_schedule"][block_idx]
         eval_dataset = inputs.read_dataset(
             filename=self.params["eval_file_pattern"],
-            batch_size=self.params["eval_batch_size"] * num_replicas,
+            batch_size=eval_batch_size * num_replicas,
             params=self.params,
             training=False
         )()
@@ -108,26 +134,18 @@ class TrainAndEvaluateModel(
 
         return train_dataset, eval_dataset
 
-    def train_block(self, train_dataset, eval_dataset):
+    def train_block(self):
         """Training block setups training, then loops through datasets.
-
-        Args:
-            train_dataset: instance of `Dataset` for training data.
-            eval_dataset: instance of `Dataset` for evaluation data.
         """
         # Create iterators of datasets.
-        train_dataset_iter = iter(train_dataset)
-        eval_dataset_iter = iter(eval_dataset)
-
-        steps_per_epoch = (
-            self.params["train_dataset_length"] // self.global_batch_size
-        )
+        self.train_datasets = [iter(x) for x in self.train_datasets]
+        self.eval_datasets = [iter(x) for x in self.eval_datasets]
 
         # Instantiate models, create checkpoints, create summary file writer.
         self.prepare_training_components()
 
         # Run training loop.
-        self.training_loop(steps_per_epoch, train_dataset_iter)
+        self.training_loop()
 
         # Save model at end of training loop.
         self.training_loop_end_save_model()
@@ -153,43 +171,54 @@ class TrainAndEvaluateModel(
             )
 
             # Set global batch size for training.
-            self.global_batch_size = (
-                self.params["train_batch_size"] * self.strategy.num_replicas_in_sync
-            )
+            self.global_batch_size_schedule = [
+                x * self.strategy.num_replicas_in_sync
+                for x in self.params["train_batch_size_schedule"]
+            ]
+
+            # Shorten growth schedule due to parallel work from replicas.
+            self.num_steps_until_growth_schedule = [
+                x // self.strategy.num_replicas_in_sync
+                for x in self.params["num_steps_until_growth_schedule"]
+            ]
 
             # Get input datasets. Batch size is split evenly between replicas.
-            train_dataset, eval_dataset = self.get_train_eval_datasets(
-                num_replicas=self.strategy.num_replicas_in_sync
-            )
+            num_blocks = (self.num_growths + 1) // 2
+            for block_idx in range(num_blocks):
+                train_dataset, eval_dataset = self.get_train_eval_datasets(
+                    num_replicas=self.strategy.num_replicas_in_sync,
+                    block_idx=block_idx
+                )
+                self.train_datasets.append(train_dataset)
+                self.eval_datasets.append(eval_dataset)
 
             with self.strategy.scope():
                 # Create distributed datasets.
-                train_dist_dataset = (
-                    self.strategy.experimental_distribute_dataset(
-                        dataset=train_dataset
-                    )
-                )
-                eval_dist_dataset = (
-                    self.strategy.experimental_distribute_dataset(
-                        dataset=eval_dataset
-                    )
-                )
+                self.train_datasets = [
+                    self.strategy.experimental_distribute_dataset(dataset=x)
+                    for x in self.train_datasets
+                ]
+
+                self.eval_datasets = [
+                    self.strategy.experimental_distribute_dataset(dataset=x)
+                    for x in self.eval_datasets
+                ]
 
                 # Training block setups training, then loops through datasets.
-                self.train_block(
-                    train_dataset=train_dist_dataset,
-                    eval_dataset=eval_dist_dataset
-                )
+                self.train_block()
         else:
             # Set global batch size for training.
-            self.global_batch_size = self.params["train_batch_size"]
+            self.global_batch_size_schedule = self.params["train_batch_size_schedule"]
 
             # Get input datasets.
-            train_dataset, eval_dataset = self.get_train_eval_datasets(
-                num_replicas=1
-            )
+            num_blocks = (self.num_growths + 1) // 2
+            for block_idx in range(num_blocks):
+                train_dataset, eval_dataset = self.get_train_eval_datasets(
+                    num_replicas=1,
+                    block_idx=block_idx
+                )
+                self.train_datasets.append(train_dataset)
+                self.eval_datasets.append(eval_dataset)
 
             # Training block setups training, then loops through datasets.
-            self.train_block(
-                train_dataset=train_dataset, eval_dataset=eval_dataset
-            )
+            self.train_block()

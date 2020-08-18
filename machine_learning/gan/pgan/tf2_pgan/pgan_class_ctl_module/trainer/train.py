@@ -22,7 +22,9 @@ class Train(object):
             Lists of network's variables and gradients.
         """
         # Get trainable variables.
-        variables = self.network_models[scope].trainable_variables
+        variables = (
+            self.network_objects[scope].models[self.growth_idx].trainable_variables
+        )
 
         # Get gradients from gradient tape.
         gradients = gradient_tape.gradient(
@@ -173,16 +175,17 @@ class Train(object):
                 height * (2 ** block_idx), width * (2 ** block_idx)
             ],
             method="nearest",
-            name="resized_image_{}".format(self.growth_idx)
+            name="resized_real_image_{}".format(self.growth_idx)
         )
 
         return resized_image
 
-    def train_discriminator(self, features):
+    def train_discriminator(self, features, growth_idx):
         """Trains discriminator network.
 
         Args:
             features: dict, feature tensors from input function.
+            growth_idx: int, current growth index model has progressed to.
 
         Returns:
             Discriminator loss tensor.
@@ -202,11 +205,12 @@ class Train(object):
 
         return loss
 
-    def train_generator(self, features):
+    def train_generator(self, features, growth_idx):
         """Trains generator network.
 
         Args:
             features: dict, feature tensors from input function.
+            growth_idx: int, current growth index model has progressed to.
 
         Returns:
             Generator loss tensor.
@@ -235,26 +239,12 @@ class Train(object):
         )
         checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 
-        max_growth_idx = (len(self.params["conv_num_filters"]) - 1) * 2
-        image_multiplier = 2 ** ((max_growth_idx + 1) // 2)
-        height, width = self.params["generator_projection_dims"][0:2]
-
         checkpoint = tf.train.Checkpoint(
-            generator_model=self.network_objects["generator"].get_model(
-                input_shape=(self.params["generator_latent_size"]),
-                batch_size=1,
-                growth_idx=max_growth_idx
+            generator_model=(
+                self.network_objects["generator"].models[self.num_growths - 1]
             ),
             discriminator_model=(
-                self.network_objects["discriminator"].get_model(
-                    input_shape=(
-                        height * image_multiplier,
-                        width * image_multiplier,
-                        self.params["depth"]
-                    ),
-                    batch_size=1,
-                    growth_idx=max_growth_idx
-                )
+                self.network_objects["discriminator"].models[self.num_growths - 1]
             ),
             generator_optimizer=self.optimizers["generator"],
             discriminator_optimizer=self.optimizers["discriminator"]
@@ -287,31 +277,4 @@ class Train(object):
         self.summary_file_writer = tf.summary.create_file_writer(
             logdir=os.path.join(self.params["output_dir"], "summaries"),
             name="summary_file_writer"
-        )
-
-    def set_active_network_models(self):
-        """Sets active network models for current growth phase.
-        """
-        self.network_models["generator"] = (
-            self.network_objects["generator"].get_model(
-                input_shape=(self.params["generator_latent_size"]),
-                batch_size=self.params["train_batch_size"],
-                growth_idx=self.growth_idx
-            )
-        )
-
-        image_multiplier = 2 ** ((self.growth_idx + 1) // 2)
-        height = (
-            self.params["generator_projection_dims"][0] * image_multiplier
-        )
-        width = (
-            self.params["generator_projection_dims"][1] * image_multiplier
-        )
-        self.network_models["discriminator"] = (
-            self.network_objects["discriminator"].get_model(
-                    input_shape=(height, width, self.params["depth"]
-                ),
-                batch_size=self.params["train_batch_size"],
-                growth_idx=self.growth_idx
-            )
         )
