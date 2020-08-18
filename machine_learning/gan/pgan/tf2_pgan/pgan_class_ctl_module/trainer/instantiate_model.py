@@ -77,7 +77,7 @@ class InstantiateModel(object):
         )
 
         # Instantiate discriminator.
-        self.network_objects["discriminator"] = discriminator.Discriminator(
+        self.network_objects["discriminator"] = discriminators.Discriminator(
             kernel_regularizer=tf.keras.regularizers.l1_l2(
                 l1=self.params["discriminator_l1_regularization_scale"],
                 l2=self.params["discriminator_l2_regularization_scale"]
