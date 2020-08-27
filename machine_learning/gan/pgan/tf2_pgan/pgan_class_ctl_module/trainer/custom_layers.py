@@ -9,48 +9,51 @@ class WeightScaledDense(tf.keras.layers.Dense):
             equalize learning rate each forward pass.
     """
     def __init__(
-            self,
-            units,
-            activation=None,
-            use_bias=True,
-            kernel_initializer=None,
-            bias_initializer=tf.zeros_initializer(),
-            kernel_regularizer=None,
-            bias_regularizer=None,
-            activity_regularizer=None,
-            kernel_constraint=None,
-            bias_constraint=None,
-            trainable=True,
-            use_equalized_learning_rate=False,
-            name=None,
-            **kwargs):
+        self,
+        units,
+        activation=None,
+        use_bias=True,
+        kernel_initializer=None,
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        use_equalized_learning_rate=False,
+        name=None,
+        **kwargs
+    ):
         """Initializes `Dense` layer.
         Args:
             units: Integer or Long, dimensionality of the output space.
-            activation: Activation function (callable). Set it to None to maintain a
-              linear activation.
+            activation: Activation function (callable). Set it to None to
+                maintain a linear activation.
             use_bias: Boolean, whether the layer uses a bias.
             kernel_initializer: Initializer function for the weight matrix.
-              If `None` (default), weights are initialized using the default
-              initializer used by `tf.compat.v1.get_variable`.
+                If `None` (default), weights are initialized using the default
+                initializer used by `tf.compat.v1.get_variable`.
             bias_initializer: Initializer function for the bias.
             kernel_regularizer: Regularizer function for the weight matrix.
             bias_regularizer: Regularizer function for the bias.
             activity_regularizer: Regularizer function for the output.
-            kernel_constraint: An optional projection function to be applied to the
-                kernel after being updated by an `Optimizer` (e.g. used to implement
-                norm constraints or value constraints for layer weights). The function
-                must take as input the unprojected variable and must return the
-                projected variable (which must have the same shape). Constraints are
-                not safe to use when doing asynchronous distributed training.
-            bias_constraint: An optional projection function to be applied to the
-                bias after being updated by an `Optimizer`.
-            trainable: Boolean, if `True` also add variables to the graph collection
-              `GraphKeys.TRAINABLE_VARIABLES` (see `tf.Variable`).
-            use_equalized_learning_rate: bool, if want to scale layer weights to
-                equalize learning rate each forward pass.
+            kernel_constraint: An optional projection function to be applied to
+                the kernel after being updated by an `Optimizer` (e.g. used to
+                implement norm constraints or value constraints for layer
+                weights). The function must take as input the unprojected
+                variable and must return the projected variable (which must
+                have the same shape). Constraints are not safe to use when
+                doing asynchronous distributed training.
+            bias_constraint: An optional projection function to be applied to
+                the bias after being updated by an `Optimizer`.
+            trainable: Boolean, if `True` also add variables to the graph
+                collection `GraphKeys.TRAINABLE_VARIABLES` (see `tf.Variable`).
+            use_equalized_learning_rate: bool, if want to scale layer weights
+                to equalize learning rate each forward pass.
             name: String, the name of the layer. Layers with the same name will
-              share weights, but to avoid mistakes we require reuse=True in such cases.
+                share weights, but to avoid mistakes we require reuse=True in
+                such cases.
         """
         super().__init__(
             units=units,
@@ -119,73 +122,79 @@ class WeightScaledConv2D(tf.keras.layers.Conv2D):
             equalize learning rate each forward pass.
     """
     def __init__(
-            self,
-            filters,
-            kernel_size,
-            strides=(1, 1),
-            padding="valid",
-            data_format="channels_last",
-            dilation_rate=(1, 1),
-            activation=None,
-            use_bias=True,
-            kernel_initializer=None,
-            bias_initializer=tf.zeros_initializer(),
-            kernel_regularizer=None,
-            bias_regularizer=None,
-            activity_regularizer=None,
-            kernel_constraint=None,
-            bias_constraint=None,
-            trainable=True,
-            use_equalized_learning_rate=False,
-            name=None,
-            **kwargs):
+        self,
+        filters,
+        kernel_size,
+        strides=(1, 1),
+        padding="valid",
+        data_format="channels_last",
+        dilation_rate=(1, 1),
+        activation=None,
+        use_bias=True,
+        kernel_initializer=None,
+        bias_initializer=tf.zeros_initializer(),
+        kernel_regularizer=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        kernel_constraint=None,
+        bias_constraint=None,
+        trainable=True,
+        use_equalized_learning_rate=False,
+        name=None,
+        **kwargs
+    ):
         """Initializes `Conv2D` layer.
         Args:
-            filters: Integer, the dimensionality of the output space (i.e. the number
-              of filters in the convolution).
+            filters: Integer, the dimensionality of the output space (i.e. the
+                number of filters in the convolution).
             kernel_size: An integer or tuple/list of 2 integers, specifying the
-              height and width of the 2D convolution window.
-              Can be a single integer to specify the same value for
-              all spatial dimensions.
+                height and width of the 2D convolution window.
+                Can be a single integer to specify the same value for
+                all spatial dimensions.
             strides: An integer or tuple/list of 2 integers,
-              specifying the strides of the convolution along the height and width.
-              Can be a single integer to specify the same value for
-              all spatial dimensions.
-              Specifying any stride value != 1 is incompatible with specifying
-              any `dilation_rate` value != 1.
+                specifying the strides of the convolution along the height and
+                width.
+                Can be a single integer to specify the same value for
+                all spatial dimensions.
+                Specifying any stride value != 1 is incompatible with
+                specifying any `dilation_rate` value != 1.
             padding: One of `"valid"` or `"same"` (case-insensitive).
-            data_format: A string, one of `channels_last` (default) or `channels_first`.
-              The ordering of the dimensions in the inputs.
-              `channels_last` corresponds to inputs with shape
-              `(batch, height, width, channels)` while `channels_first` corresponds to
-              inputs with shape `(batch, channels, height, width)`.
+            data_format: A string, one of `channels_last` (default) or
+                `channels_first`.
+                The ordering of the dimensions in the inputs.
+                `channels_last` corresponds to inputs with shape
+                `(batch, height, width, channels)` while `channels_first`
+                corresponds to inputs with shape
+                `(batch, channels, height, width)`.
             dilation_rate: An integer or tuple/list of 2 integers, specifying
-              the dilation rate to use for dilated convolution.
-              Can be a single integer to specify the same value for
-              all spatial dimensions.
-              Currently, specifying any `dilation_rate` value != 1 is
-              incompatible with specifying any stride value != 1.
+                the dilation rate to use for dilated convolution.
+                Can be a single integer to specify the same value for
+                all spatial dimensions.
+                Currently, specifying any `dilation_rate` value != 1 is
+                incompatible with specifying any stride value != 1.
             activation: Activation function. Set it to None to maintain a
-              linear activation.
+                linear activation.
             use_bias: Boolean, whether the layer uses a bias.
             kernel_initializer: An initializer for the convolution kernel.
-            bias_initializer: An initializer for the bias vector. If None, the default
-              initializer will be used.
-            kernel_regularizer: Optional regularizer for the convolution kernel.
+            bias_initializer: An initializer for the bias vector. If None, the
+                default initializer will be used.
+            kernel_regularizer: Optional regularizer for the convolution
+                kernel.
             bias_regularizer: Optional regularizer for the bias vector.
             activity_regularizer: Optional regularizer function for the output.
-            kernel_constraint: Optional projection function to be applied to the
-                kernel after being updated by an `Optimizer` (e.g. used to implement
-                norm constraints or value constraints for layer weights). The function
-                must take as input the unprojected variable and must return the
-                projected variable (which must have the same shape). Constraints are
-                not safe to use when doing asynchronous distributed training.
+            kernel_constraint: Optional projection function to be applied to
+                the kernel after being updated by an `Optimizer` (e.g. used to
+                implement norm constraints or value constraints for layer
+                weights). The function must take as input the unprojected
+                variable and must return the projected variable (which must
+                have the same shape). Constraints are not safe to use when
+                doing asynchronous distributed training.
             bias_constraint: Optional projection function to be applied to the
                 bias after being updated by an `Optimizer`.
-            trainable: Boolean, if `True` also add variables to the graph collection
-              `GraphKeys.TRAINABLE_VARIABLES` (see `tf.Variable`).
-            use_equalized_learning_rate: bool, if want to scale layer weights to
-                equalize learning rate each forward pass.
+            trainable: Boolean, if `True` also add variables to the graph
+                collection `GraphKeys.TRAINABLE_VARIABLES` (see `tf.Variable`).
+            use_equalized_learning_rate: bool, if want to scale layer weights
+                to equalize learning rate each forward pass.
             name: A string, the name of the layer.
         """
         super().__init__(
@@ -279,3 +288,243 @@ class PixelNormalization(tf.keras.layers.Layer):
                 y=self.epsilon
             )
         )
+
+
+class MiniBatchStdDev(tf.keras.layers.Layer):
+    """Adds minibatch's stddev as a additional filter to images.
+
+    Attributes:
+        params: dict, user passed parameters.
+    """
+    def __init__(self, params):
+        super().__init__()
+        self.params = params
+
+    def _minibatch_stddev_common(self, variance, tile_multiples):
+        """Adds minibatch stddev feature map to image using grouping.
+
+        This is the code that is common between the grouped and ungroup
+        minibatch stddev functions.
+
+        Args:
+            variance: tensor, variance of minibatch or minibatch groups.
+            tile_multiples: list, length 4, used to tile input to final shape
+                input_dims[i] * mutliples[i].
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [batch_size, image_height, image_width, 1].
+        """
+        # Calculate standard deviation over the group plus small epsilon.
+        # shape = (
+        #     {"grouped": batch_size / group_size, "ungrouped": 1},
+        #     image_size,
+        #     image_size,
+        #     num_channels
+        # )
+        stddev = tf.sqrt(x=variance + 1e-8, name="minibatch_stddev")
+
+        # Take average over feature maps and pixels.
+        if self.params["use_averaging"]:
+            # grouped shape = (batch_size / group_size, 1, 1, 1)
+            # ungrouped shape = (1, 1, 1, 1)
+            stddev = tf.reduce_mean(
+                input_tensor=stddev,
+                axis=[1, 2, 3],
+                keepdims=True,
+                name="minibatch_stddev_average"
+            )
+
+        # Replicate over group and pixels.
+        # shape = (batch_size, image_size, image_size, 1)
+        stddev_feature_map = tf.tile(
+            input=stddev,
+            multiples=tile_multiples,
+            name="minibatch_stddev_feature_map"
+        )
+
+        return stddev_feature_map
+
+    def _grouped_minibatch_stddev(self, inputs, batch_size, group_size):
+        """Adds minibatch stddev feature map to image using grouping.
+
+        Args:
+            inputs: tf.float32 tensor, image of shape
+                [batch_size, image_height, image_width, num_channels].
+            batch_size: tf.int64 tensor, the dynamic batch size (in case
+                of partial batch).
+            group_size: int, size of image groups.
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [batch_size, image_height, image_width, 1].
+        """
+        # The group size should be less than or equal to the batch size.
+        group_size = tf.minimum(x=group_size, y=batch_size)
+
+        # Split minibatch into M groups of size group_size, rank 5 tensor.
+        # shape = (
+        #     group_size,
+        #     batch_size / group_size,
+        #     image_size,
+        #     image_size,
+        #     num_channels
+        # )
+        grouped_image = tf.reshape(
+            tensor=inputs,
+            shape=[group_size, -1] + list(inputs.shape[1:]),
+            name="grouped_image"
+        )
+
+        # Find the mean of each group.
+        # shape = (
+        #     1,
+        #     batch_size / group_size,
+        #     image_size,
+        #     image_size,
+        #     num_channels
+        # )
+        grouped_mean = tf.reduce_mean(
+            input_tensor=grouped_image,
+            axis=0,
+            keepdims=True,
+            name="grouped_mean"
+        )
+
+        # Center each group using the mean.
+        # shape = (
+        #     group_size,
+        #     batch_size / group_size,
+        #     image_size,
+        #     image_size,
+        #     num_channels
+        # )
+        centered_grouped_image = tf.subtract(
+            x=grouped_image, y=grouped_mean, name="centered_grouped_image"
+        )
+
+        # Calculate variance over group.
+        # shape = (
+        #     batch_size / group_size, image_size, image_size, num_channels
+        # )
+        grouped_variance = tf.reduce_mean(
+            input_tensor=tf.square(x=centered_grouped_image),
+            axis=0,
+            name="grouped_variance"
+        )
+
+        # Get stddev image using ops common to both grouped & ungrouped.
+        tile_multiples = [group_size] + list(inputs.shape[1:3]) + [1]
+        stddev_feature_map = self._minibatch_stddev_common(
+            variance=grouped_variance, tile_multiples=tile_multiples
+        )
+
+        return stddev_feature_map
+
+    def _ungrouped_minibatch_stddev(self, inputs, batch_size):
+        """Adds minibatch stddev feature map added to image channels.
+
+        Args:
+            inputs: tensor, image of shape
+                [batch_size, image_height, image_width, num_channels].
+            batch_size: tf.int64 tensor, the dynamic batch size (in case
+                of partial batch).
+
+        Returns:
+            Minibatch standard deviation feature map image added to
+                channels of shape
+                [batch_size, image_height, image_width, 1].
+        """
+        # Find the mean of each group.
+        # shape = (1, image_size, image_size, num_channels)
+        mean = tf.reduce_mean(
+            input_tensor=inputs, axis=0, keepdims=True, name="mean"
+        )
+
+        # Center each group using the mean.
+        # shape = (batch_size, image_size, image_size, num_channels)
+        centered_image = tf.subtract(
+            x=inputs, y=mean, name="centered_image"
+        )
+
+        # Calculate variance over group.
+        # shape = (1, image_size, image_size, num_channels)
+        variance = tf.reduce_mean(
+            input_tensor=tf.square(x=centered_image),
+            axis=0,
+            keepdims=True,
+            name="variance"
+        )
+
+        # Get stddev image using ops common to both grouped & ungrouped.
+        tile_multiples = [batch_size] + list(inputs.shape[1:3]) + [1]
+        stddev_feature_map = self._minibatch_stddev_common(
+            variance=variance, tile_multiples=tile_multiples
+        )
+
+        return stddev_feature_map
+
+    @tf.function
+    def _minibatch_stddev(self, inputs, training):
+        """Adds minibatch stddev feature map added to image.
+
+        Args:
+            inputs: tensor, image of shape
+                [batch_size, image_height, image_width, num_channels].
+            training: bool, whether training or not.
+
+        Returns:
+            Image with minibatch standard deviation feature map added to
+                channels of shape
+                [batch_size, image_height, image_width, num_channels + 1].
+        """
+        # Get batch size.
+        batch_size = tf.shape(inputs)[0]
+
+        # Get group size.
+        group_size = (
+            self.params["group_size"] if self.params["group_size"] > 0 else 4
+        )
+
+        if batch_size % group_size == 0 or batch_size < group_size:
+            stddev_feature_map = self._grouped_minibatch_stddev(
+                inputs=inputs,
+                batch_size=batch_size,
+                group_size=group_size
+            )
+        else:
+            stddev_feature_map = self._ungrouped_minibatch_stddev(
+                inputs=inputs, batch_size=batch_size
+            )
+
+        # Append new feature map to image.
+        # shape = (batch_size, image_height, image_width, num_channels + 1)
+        appended_image = tf.concat(
+            values=[inputs, stddev_feature_map],
+            axis=-1,
+            name="appended_image"
+        )
+
+        return appended_image
+
+    def call(self, inputs, training):
+        """Calls minibatch stddev layer with inputs and training flag.
+
+        Args:
+            inputs: tensor, image of shape
+                [batch_size, image_height, image_width, num_channels].
+            training: bool, whether training or not.
+
+        Returns:
+            Image possibly with minibatch standard deviation feature map added
+                to channels of shape
+                [batch_size, image_height, image_width, num_channels + 1].
+        """
+        if self.params["use_minibatch_stddev"]:
+            return self._minibatch_stddev(
+                inputs, training
+            )
+
+        return inputs
