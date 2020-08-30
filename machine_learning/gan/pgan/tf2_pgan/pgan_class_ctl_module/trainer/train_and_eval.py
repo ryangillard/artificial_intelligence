@@ -9,11 +9,10 @@ class TrainAndEval(object):
         """
         pass
 
-    def generator_loss_phase(self, mode, training):
+    def generator_loss_phase(self, training):
         """Gets fake logits and loss for generator.
 
         Args:
-            mode: str, what mode currently in: TRAIN or EVAL.
             training: bool, if model should be training.
 
         Returns:
@@ -25,7 +24,7 @@ class TrainAndEval(object):
         block_idx = (self.growth_idx + 1) // 2
         batch_size = (
             self.params["train_batch_size_schedule"][block_idx]
-            if mode == "TRAIN"
+            if training
             else self.params["eval_batch_size"]
         )
 
@@ -44,7 +43,7 @@ class TrainAndEval(object):
             )
         )
 
-        if self.params["write_summaries"] and mode == "TRAIN":
+        if self.params["write_summaries"] and training:
             # Add summaries for TensorBoard.
             with self.summary_file_writer.as_default():
                 with tf.summary.record_if(

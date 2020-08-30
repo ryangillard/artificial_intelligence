@@ -516,7 +516,7 @@ if __name__ == "__main__":
         default=4
     )
     parser.add_argument(
-        "--discriminator_minibatch_stddev_averaging",
+        "--discriminator_minibatch_stddev_use_averaging",
         help="If want to average across feature maps and pixels for minibatch stddev.",
         type=str,
         default="True"

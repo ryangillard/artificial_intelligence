@@ -91,24 +91,21 @@ class Train(object):
                             )
                     self.summary_file_writer.flush()
 
-    def get_select_loss_variables_and_gradients(self, real_images, scope):
-        """Gets selected network's loss, variables, and gradients.
+    def get_network_losses_variables_and_gradients(self, real_images):
+        """Gets losses, variables, and gradients for each network.
 
         Args:
             real_images: tensor, real images of shape
-                [batch_size, height * width * depth].
-            scope: str, the name of the network of interest.
+                [batch_size, height, width, depth].
 
         Returns:
-            Selected network's loss, variables, and gradients.
+            Dictionaries of network losses, variables, and gradients.
         """
         with tf.GradientTape() as gen_tape, tf.GradientTape() as dis_tape:
             # Get fake logits from generator.
             (fake_images,
              fake_logits,
-             generator_loss) = self.generator_loss_phase(
-                mode="TRAIN", training=True
-            )
+             generator_loss) = self.generator_loss_phase(training=True)
 
             # Get discriminator loss.
             _, discriminator_loss = self.discriminator_loss_phase(
@@ -141,19 +138,19 @@ class Train(object):
                 variables, gradients, scope_name
             )
 
-        return loss_dict[scope], vars_dict[scope], grads_dict[scope]
+        return loss_dict, vars_dict, grads_dict
 
     def train_network(self, variables, gradients, scope):
         """Trains network variables using gradients with optimizer.
 
         Args:
-            variables: list, network's trainable variables.
-            gradients: list, gradients of network's trainable variables wrt.
-                loss.
+            variables: dict, lists for each network's trainable variables.
+            gradients: dict, lists for each network's gradients of loss wrt
+                network's trainable variables.
             scope: str, the name of the network of interest.
         """
         # Zip together gradients and variables.
-        grads_and_vars = zip(gradients, variables)
+        grads_and_vars = zip(gradients[scope], variables[scope])
 
         # Applying gradients to variables using optimizer.
         self.optimizers[scope].apply_gradients(grads_and_vars=grads_and_vars)
@@ -188,22 +185,20 @@ class Train(object):
             growth_idx: int, current growth index model has progressed to.
 
         Returns:
-            Discriminator loss tensor.
+            Dictionary of scalar losses for each network.
         """
         # Extract real images from features dictionary.
         real_images = self.resize_real_images(images=features["image"])
 
         # Get gradients for training by running inputs through networks.
-        loss, variables, gradients = (
-            self.get_select_loss_variables_and_gradients(
-                real_images, scope="discriminator"
-            )
+        losses, variables, gradients = (
+            self.get_network_losses_variables_and_gradients(real_images)
         )
 
         # Train discriminator network.
         self.train_network(variables, gradients, scope="discriminator")
 
-        return loss
+        return losses
 
     def train_generator(self, features, growth_idx):
         """Trains generator network.
@@ -213,22 +208,20 @@ class Train(object):
             growth_idx: int, current growth index model has progressed to.
 
         Returns:
-            Generator loss tensor.
+            Dictionary of scalar losses for each network.
         """
         # Extract real images from features dictionary.
         real_images = self.resize_real_images(images=features["image"])
 
         # Get gradients for training by running inputs through networks.
-        loss, variables, gradients = (
-            self.get_select_loss_variables_and_gradients(
-                real_images, scope="generator"
-            )
+        losses, variables, gradients = (
+            self.get_network_losses_variables_and_gradients(real_images)
         )
 
         # Train generator network.
         self.train_network(variables, gradients, scope="generator")
 
-        return loss
+        return losses
 
     def create_checkpoint_machinery(self):
         """Creates checkpoint machinery needed to save & restore checkpoints.

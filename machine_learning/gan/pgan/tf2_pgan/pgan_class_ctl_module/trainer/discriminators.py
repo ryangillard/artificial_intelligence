@@ -25,6 +25,9 @@ class Discriminator(object):
             branch.
         shrinking_downsample_layers: list, `AveragePooling2D` layers for
             shrinking branch.
+        minibatch_stddev_layer: `MiniBatchStdDev` layer, applies minibatch
+            stddev to image to add an additional feature channel based on the
+            sample.
         flatten_layer: `Flatten` layer, flattens image for logits layer.
         logits_layer: `Dense` layer, used for calculating logits.
         models: list, instances of discriminator `Model`s for each growth.
