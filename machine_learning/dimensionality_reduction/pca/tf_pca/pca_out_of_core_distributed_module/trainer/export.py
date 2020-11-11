@@ -35,6 +35,9 @@ class Export(object):
             )
         )
 
+        # Calculate eigenvectors from final covariance matrix.
+        self.pca_model.calculate_eigenvalues_and_eigenvectors()
+
         # Project ResNet feature vectors using PCA eigenvectors.
         pca_projections = tf.identity(
             input=self.pca_model.pca_projection_to_top_k_pc(
